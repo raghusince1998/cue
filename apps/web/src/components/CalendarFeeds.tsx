@@ -85,22 +85,15 @@ function historyLabel(days: number | null | undefined): string {
  */
 export function CalendarFeeds() {
   const [feeds, setFeeds] = useState<FeedDTO[] | null>(null)
-  const [encryptionReady, setEncryptionReady] = useState(true)
-  const [url, setUrl] = useState('')
-  const [label, setLabel] = useState('')
-  const [remind, setRemind] = useState(true)
-  const [history, setHistory] = useState<number | null>(365)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [adding, setAdding] = useState(false)
 
   async function load() {
     try {
-      const r = await api<{ feeds: FeedDTO[]; encryptionReady: boolean }>('/calendar-feeds')
+      const r = await api<{ feeds: FeedDTO[] }>('/calendar-feeds')
       setFeeds(r.feeds)
-      setEncryptionReady(r.encryptionReady)
     } catch (err) {
       setError((err as Error).message)
     }
@@ -110,53 +103,30 @@ export function CalendarFeeds() {
     void load()
   }, [])
 
-  async function add() {
-    setBusy(true)
-    setError(null)
-    setMessage(null)
-    try {
-      const r = await api<{ report: SyncReport }>('/calendar-feeds', {
-        method: 'POST',
-        body: { url: url.trim(), label: label.trim() || 'Google Calendar', remind, historyDays: history },
-      })
-      setMessage(`Connected — ${describe(r.report)}.`)
-      setNote(explainWindow(r.report))
-      setUrl('')
-      setLabel('')
-      setAdding(false)
-      await load()
-    } catch (err) {
-      // The server sends a plain-language reason; it is more use than the code.
-      setError(
-        err instanceof ApiError
-          ? ((err.data as { message?: string })?.message ?? err.message)
-          : (err as Error).message,
-      )
-    } finally {
-      setBusy(false)
-    }
-  }
-
   /**
-   * Importing an exported .ics.
+   * A newer export for a calendar that was added from a file.
    *
-   * The route that always works. A Workspace admin can switch off external
-   * sharing, which removes the secret iCal address altogether — and then this
-   * is the only way in.
+   * Adding calendars this way is no longer offered, but one added before still
+   * has to be refreshable — a file never updates on its own.
+   *
+   * The feed's own settings go with it. The server applies `historyDays` on a
+   * replace whenever it differs from the stored value, so sending a default
+   * here would quietly reset a calendar set to "all history" back to a year on
+   * every upload.
    */
-  async function upload(file: File, intoFeedId?: string) {
+  async function replaceFile(file: File, feed: FeedDTO) {
     setBusy(true)
     setError(null)
     setMessage(null)
     try {
       const text = await file.text()
       const params = new URLSearchParams({
-        label: label.trim() || file.name.replace(/\.ics$/i, '') || 'My calendar',
+        feedId: feed.id,
+        label: feed.label,
         fileName: file.name,
-        remind: String(remind),
-        historyDays: history === null ? 'all' : String(history),
+        remind: String(feed.remind),
+        historyDays: feed.historyDays === null ? 'all' : String(feed.historyDays ?? 365),
       })
-      if (intoFeedId) params.set('feedId', intoFeedId)
 
       const res = await fetch(`${API_BASE}/calendar-feeds/upload?${params}`, {
         method: 'POST',
@@ -171,8 +141,6 @@ export function CalendarFeeds() {
 
       setMessage(`Imported ${file.name} — ${describe(data.report as SyncReport)}.`)
       setNote(explainWindow(data.report as SyncReport))
-      setLabel('')
-      setAdding(false)
       await load()
     } catch (err) {
       setError((err as Error).message)
@@ -262,17 +230,10 @@ export function CalendarFeeds() {
 
       <ConnectedCalendars onChanged={() => void load()} />
 
-      {!encryptionReady && (
-        <p className="error small">
-          Set ENCRYPTION_KEY on the server before connecting a calendar — the address is a
-          password in disguise and is not stored without it.
-        </p>
-      )}
-
-      {feeds.length === 0 && !adding && (
+      {feeds.length === 0 && (
         <p className="muted small">
-          Nothing connected yet. Connecting an account above is the quick way — a secret
-          address or an exported file still works for anything else.
+          Nothing connected yet. Connect Google or Microsoft above and your meetings appear here
+          and count towards clashes.
         </p>
       )}
 
@@ -337,7 +298,7 @@ export function CalendarFeeds() {
                     const f = e.target.files?.[0]
                     // Cleared so picking the same filename twice still fires.
                     e.target.value = ''
-                    if (f) void upload(f, feed.id)
+                    if (f) void replaceFile(f, feed)
                   }}
                 />
               </label>
@@ -353,115 +314,10 @@ export function CalendarFeeds() {
         </div>
       ))}
 
-      {adding ? (
-        <>
-          <label>
-            Secret iCal address
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
-              autoFocus
-            />
-          </label>
-          <label>
-            Call it
-            <input
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="Google Calendar"
-            />
-          </label>
-          <label className="checkbox">
-            <input type="checkbox" checked={remind} onChange={(e) => setRemind(e.target.checked)} />
-            <span>Remind me about these too</span>
-          </label>
-          <label>
-            How much history to bring in
-            <select
-              value={history === null ? 'all' : String(history)}
-              onChange={(e) => setHistory(e.target.value === 'all' ? null : Number(e.target.value))}
-            >
-              {HISTORY_CHOICES.map((c) => (
-                <option key={c.label} value={c.value === null ? 'all' : String(c.value)}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p className="muted small">
-            In Google Calendar: <strong>Settings</strong> → pick your calendar under{' '}
-            <strong>Settings for my calendars</strong> → <strong>Integrate calendar</strong> →
-            copy <strong>Secret address in iCal format</strong>. Treat it like a password: anyone
-            with that link can read the calendar.
-          </p>
-          <div className="row">
-            <button className="primary" onClick={() => void add()} disabled={busy || url.length < 10}>
-              {busy ? 'Reading…' : 'Connect'}
-            </button>
-            <button className="ghost" onClick={() => setAdding(false)} disabled={busy}>
-              Cancel
-            </button>
-          </div>
-
-          <hr className="rule" />
-
-          <span className="label-text">No secret address available?</span>
-          <p className="muted small">
-            A work account&rsquo;s administrator can switch off external sharing, which removes
-            that address entirely — and a calendar you do not own never had one. Exporting a file
-            always works. In Google Calendar: <strong>Settings</strong> →{' '}
-            <strong>Import &amp; export</strong> → <strong>Export</strong>. You get a .zip; unzip
-            it and upload the .ics inside.
-          </p>
-          <label className="ghost small-btn file-btn">
-            {busy ? 'Reading…' : 'Upload an .ics file'}
-            <input
-              type="file"
-              accept=".ics,text/calendar"
-              disabled={busy}
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                e.target.value = ''
-                if (f) void upload(f)
-              }}
-            />
-          </label>
-        </>
-      ) : (
-        /*
-         * Folded away rather than removed.
-         *
-         * Connecting an account is the path that works, so it is the only one
-         * on screen. But a secret address is still the only way in for Apple
-         * Calendar, for a calendar somebody shared with you, and for a work
-         * account whose administrator has switched off third-party apps —
-         * which is the exact wall this app hit before OAuth existed. Deleting
-         * it would be tidying away the fallback that was needed most.
-         */
-        <details className="more-ways">
-          <summary className="muted small">Another kind of calendar?</summary>
-          <p className="muted small">
-            Apple, a shared calendar, or a work account that blocks sign-in apps — those publish
-            a secret address instead, or export a file.
-          </p>
-          <button
-            className="ghost small-btn"
-            onClick={() => setAdding(true)}
-            disabled={busy || !encryptionReady}
-          >
-            Use an address or a file
-          </button>
-        </details>
-      )}
-
       {message && <p className="muted small">{message}</p>}
       {note && <p className="muted small">{note}</p>}
       {error && <p className="error small">{error}</p>}
 
-      <p className="muted small">
-        Read-only, and one way: Cue never writes to your calendar.
-      </p>
     </div>
   )
 }

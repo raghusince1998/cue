@@ -2463,26 +2463,6 @@ button:disabled {
   display: block;
 }
 
-/* A disclosure that stays quiet until someone needs it. */
-.more-ways summary {
-  cursor: pointer;
-  padding: 6px 0;
-  list-style: none;
-}
-
-.more-ways summary::-webkit-details-marker {
-  display: none;
-}
-
-.more-ways summary::before {
-  content: '+ ';
-  color: var(--muted);
-}
-
-.more-ways[open] summary::before {
-  content: '– ';
-}
-
 @media (max-width: 480px) {
   .photo-row {
     align-items: flex-start;
