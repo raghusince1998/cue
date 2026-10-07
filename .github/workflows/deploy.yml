@@ -75,7 +75,7 @@ jobs:
       - run: npm test
 
   deploy:
-    name: Deploy to the server
+    name: Build and deploy
     needs: check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -85,7 +85,39 @@ jobs:
     environment: production
 
     steps:
-      - name: Deploy over SSH
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The build happens here, not on the server.
+      #
+      # The server is a 1 GB instance. Vite is the heaviest thing in this
+      # project and running it there needs swap to avoid being OOM-killed, so
+      # it runs on the runner instead — which also means the server never
+      # installs vite, typescript, esbuild or drizzle-kit at all, and never
+      # needs read access to the repository.
+      - run: npm ci --include=dev
+      - run: npm run build
+
+      # Exactly what the server runs, and nothing else.
+      #
+      # There is no compiled backend to ship: the API executes TypeScript
+      # directly through tsx, so its source *is* the artifact. Only the web app
+      # compiles, into apps/web/dist.
+      #
+      # apps/web/package.json is included although its source is not: npm
+      # validates the lockfile against every workspace, and a missing one makes
+      # `npm ci` fail on the server.
+      - name: Package the release
+        run: |
+          set -euo pipefail
+          tar -czf release.tar.gz             package.json package-lock.json             apps/web/dist apps/web/package.json             apps/api/src apps/api/scripts apps/api/migrations apps/api/package.json             packages/shared/src packages/shared/package.json
+          ls -lh release.tar.gz
+
+      - name: Ship it and restart
         env:
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           HOST: ${{ vars.DEPLOY_HOST }}
@@ -98,9 +130,13 @@ jobs:
             echo "DEPLOY_HOST and DEPLOY_USER must be set as repository variables." >&2
             exit 1
           fi
+          APP_DIR="${APP_DIR:-/srv/cue}"
 
           mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          # echo rather than printf: a PEM key must end with a newline, and
+          # echo adds exactly one without needing an escape sequence that has
+          # to survive YAML, the shell, and whatever wrote this file.
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
           # Trust on first use, every run. Good enough for a single server you
@@ -109,45 +145,36 @@ jobs:
           # that here instead of scanning.
           ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$USER@$HOST" \
-            APP_DIR="${APP_DIR:-/srv/cue}" 'bash -seu' <<'REMOTE'
-          # First-time provisioning is deliberately not automatic: bootstrapping a
-          # production server from CI means writing secrets and trusting hosts
-          # from inside a job nobody is watching. Say what is missing instead.
-          if [ ! -d "$APP_DIR/.git" ]; then
-            echo "No checkout at $APP_DIR." >&2
-            echo "Deploys update an existing clone; the first one is set up by hand." >&2
-            echo "See 'Deploying' in the README — in short, on the server:" >&2
-            echo "  sudo mkdir -p $APP_DIR && sudo chown \$USER:\$USER $APP_DIR" >&2
-            echo "  git clone <repo> $APP_DIR && cd $APP_DIR" >&2
-            echo "  cp .env.example .env   # then fill it in" >&2
-            echo "  npm ci --include=dev && npm run db:migrate && npm start" >&2
-            exit 1
-          fi
+          SSH="ssh -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes $USER@$HOST"
 
-          cd "$APP_DIR"
+          # The tarball goes over stdin, so the remote command is written
+          # inline rather than as a heredoc — a heredoc would take stdin for
+          # itself and the archive would never arrive.
+          #
+          # Stale files are cleared first: extracting over the top would leave
+          # a module deleted in this commit still sitting there, importable.
+          $SSH "set -eu
+            mkdir -p '$APP_DIR'
+            cd '$APP_DIR'
+            rm -rf apps/web/dist apps/api/src apps/api/scripts apps/api/migrations packages/shared/src
+            tar -xzf -" < release.tar.gz
 
-          # Match the commit exactly rather than merging. A deploy that depends
-          # on the server's working tree is a deploy nobody can reproduce.
-          # `reset --hard` leaves untracked files alone, so .env survives.
-          git fetch --prune origin
-          git reset --hard origin/main
+          $SSH "bash -seu" <<REMOTE
+          cd '$APP_DIR'
 
-          npm ci --include=dev
+          # Runtime dependencies only. tsx is one of them — it is what runs the
+          # API — so this is deliberately not --production-by-accident.
+          npm ci --omit=dev
 
-          # Build before migrating so the window where new schema meets old
-          # code is as short as possible. Migrations are forward-only and
-          # additive, so that window is safe, but shorter is still better.
-          npm run build
           npm run db:migrate
-
           sudo systemctl restart cue
 
-          # Fail the deploy loudly if the thing that came back is not healthy.
-          # Without this a crash-looping service reports a green tick.
-          for i in $(seq 1 15); do
+          # Fail the deploy loudly if what came back is not healthy. Without
+          # this a crash-looping service reports a green tick and the first you
+          # hear of it is that reminders stopped.
+          for i in \$(seq 1 20); do
             if curl -fsS --max-time 5 http://127.0.0.1:3002/health > /dev/null; then
-              echo "healthy after ${i}s"
+              echo "healthy after \${i}s"
               exit 0
             fi
             sleep 1
