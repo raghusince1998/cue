@@ -77,7 +77,13 @@ jobs:
   deploy:
     name: Build and deploy
     needs: check
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # workflow_dispatch is offered as a trigger, so it has to be honoured here
+    # too. Listing only 'push' meant pressing "Run workflow" ran the checks,
+    # skipped this job without a word, and reported the whole run green having
+    # deployed nothing — the most expensive kind of green there is.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     # Attach a GitHub Environment named "production" to require an approval
     # before this job runs. Optional, and worth it once other people depend on
