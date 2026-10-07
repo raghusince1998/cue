@@ -1,0 +1,135 @@
+name: Check and deploy
+
+# Every push and pull request is checked. Only main deploys, and only after the
+# checks pass — a deploy job that could run alongside a failing test job is a
+# pipeline that will eventually ship a broken build at 2am.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# One deploy at a time. Two overlapping runs would race on git reset, npm ci and
+# the migration, and the loser would leave the server in a state neither commit
+# describes.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Typecheck and tests
+    runs-on: ubuntu-latest
+
+    # The API tests run against real PostgreSQL rather than a mock, because
+    # every API bug found by hand in this project lived in the layer a mock
+    # would have faked away: a unique index that collided, a check constraint
+    # that fired, a cascade that did or did not reach.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Each test file builds its own throwaway schema inside this database and
+      # drops it afterwards, so one plain database serves the whole suite.
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      # Required at import time. Never a real secret — nothing here is signed
+      # for anything that outlives the job.
+      JWT_SECRET: ci-not-a-real-secret
+      ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # --include=dev because vite and tsx are devDependencies and the whole
+      # job is build tools.
+      - run: npm ci --include=dev
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+  deploy:
+    name: Deploy to the server
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Attach a GitHub Environment named "production" to require an approval
+    # before this job runs. Optional, and worth it once other people depend on
+    # the site staying up.
+    environment: production
+
+    steps:
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ vars.DEPLOY_HOST }}
+          USER: ${{ vars.DEPLOY_USER }}
+          APP_DIR: ${{ vars.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${HOST:-}" ] || [ -z "${USER:-}" ]; then
+            echo "DEPLOY_HOST and DEPLOY_USER must be set as repository variables." >&2
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # Trust on first use, every run. Good enough for a single server you
+          # control; to remove the window entirely, put the output of
+          # `ssh-keyscan your-host` into a DEPLOY_KNOWN_HOSTS secret and write
+          # that here instead of scanning.
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$USER@$HOST" \
+            APP_DIR="${APP_DIR:-/srv/cue}" 'bash -seu' <<'REMOTE'
+          cd "$APP_DIR"
+
+          # Match the commit exactly rather than merging. A deploy that depends
+          # on the server's working tree is a deploy nobody can reproduce.
+          # `reset --hard` leaves untracked files alone, so .env survives.
+          git fetch --prune origin
+          git reset --hard origin/main
+
+          npm ci --include=dev
+
+          # Build before migrating so the window where new schema meets old
+          # code is as short as possible. Migrations are forward-only and
+          # additive, so that window is safe, but shorter is still better.
+          npm run build
+          npm run db:migrate
+
+          sudo systemctl restart cue
+
+          # Fail the deploy loudly if the thing that came back is not healthy.
+          # Without this a crash-looping service reports a green tick.
+          for i in $(seq 1 15); do
+            if curl -fsS --max-time 5 http://127.0.0.1:3002/health > /dev/null; then
+              echo "healthy after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Service did not become healthy. Recent logs:" >&2
+          sudo journalctl -u cue -n 50 --no-pager >&2
+          exit 1
+          REMOTE

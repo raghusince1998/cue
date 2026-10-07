@@ -1,0 +1,35 @@
+{
+  "name": "cue",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "db:setup": "powershell -ExecutionPolicy Bypass -File scripts/setup-db.ps1",
+    "db:push": "npm run db:push -w @cue/api",
+    "db:migrate": "npm run db:migrate -w @cue/api",
+    "db:studio": "npm run db:studio -w @cue/api",
+    "vapid": "npm run vapid -w @cue/api",
+    "check:oauth": "npm run check:oauth -w @cue/api",
+    "seed": "npm run seed -w @cue/api",
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev -w @cue/api",
+    "dev:web": "npm run dev -w @cue/web",
+    "build": "npm run build -w @cue/web",
+    "typecheck": "npm run typecheck -w @cue/api && npm run typecheck -w @cue/web",
+    "test": "npm run test:unit && npm run test:api",
+    "start": "npm run build && npm start -w @cue/api",
+    "test:unit": "tsx --test packages/shared/src/*.test.ts",
+    "test:api": "tsx --test --test-concurrency=1 apps/api/src/**/*.test.ts"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.2"
+  }
+}
