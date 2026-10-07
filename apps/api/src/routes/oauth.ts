@@ -78,7 +78,12 @@ export async function oauthRoutes(app: FastifyInstance) {
       .where(eq(schema.oauthAccounts.userId, userId))
       .orderBy(asc(schema.oauthAccounts.createdAt))
 
-    const countOf = await calendarCountsFor(userId)
+    // The counts are a convenience on top of the list. If they cannot be read,
+    // the accounts still can, and a list without counts beats no list.
+    const countOf = await calendarCountsFor(userId).catch((err: unknown) => {
+      req.log.error(err, 'could not count calendars per account')
+      return new Map<string, number>()
+    })
 
     return {
       providers: PROVIDERS.map((p) => ({

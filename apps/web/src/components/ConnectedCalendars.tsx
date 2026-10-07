@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
 
 /**
@@ -91,12 +91,14 @@ export function ConnectedCalendars({
   const [error, setError] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<{ text: string; bad: boolean } | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const root = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async () => {
     try {
       const r = await api<{ providers: ProviderInfo[]; accounts: Account[] }>('/oauth/status')
       setProviders(r.providers)
       setAccounts(r.accounts)
+      setError(null)
       return r.accounts
     } catch (err) {
       setError(messageOf(err))
@@ -130,6 +132,9 @@ export function ConnectedCalendars({
     if (!code) return
 
     setOutcome(OUTCOME[code] ?? { text: 'That did not work. Try connecting again.', bad: true })
+    // The answer to "did it connect?" is the first thing to see, not
+    // something to scroll down a sheet for.
+    requestAnimationFrame(() => root.current?.scrollIntoView({ block: 'start' }))
     params.delete('connected')
     const rest = params.toString()
     window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : ''))
@@ -212,13 +217,31 @@ export function ConnectedCalendars({
     }
   }
 
-  if (accounts === null) return null
+  // Still loading, or it failed. Rendering nothing for both made a failure
+  // look like an empty account: no list, no Connect buttons, no reason.
+  if (accounts === null) {
+    return (
+      <div className="stack tight" ref={root}>
+        {outcome && <p className={outcome.bad ? 'error small' : 'muted small'}>{outcome.text}</p>}
+        {error ? (
+          <>
+            <p className="error small">Could not load your connected accounts: {error}</p>
+            <button className="ghost small-btn fit-btn" onClick={() => void load()}>
+              Try again
+            </button>
+          </>
+        ) : (
+          <p className="muted small">Loading your connected accounts…</p>
+        )}
+      </div>
+    )
+  }
 
   const offerable = providers.filter((p) => p.configured)
   const unconfigured = providers.filter((p) => !p.configured)
 
   return (
-    <div className="stack tight">
+    <div className="stack tight" ref={root}>
       {outcome && <p className={outcome.bad ? 'error small' : 'muted small'}>{outcome.text}</p>}
       {note && <p className="muted small">{note}</p>}
 

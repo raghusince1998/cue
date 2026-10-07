@@ -27,7 +27,13 @@ function label(hour: number): string {
 type Tab = 'profile' | 'settings'
 
 export function Settings({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<Tab>('profile')
+  // Back from Google or Microsoft's sign-in, the result and the calendars to
+  // choose are on the Settings tab. Opening on Profile showed a name and a
+  // password box instead, and a connection that had worked looked like one
+  // that had not.
+  const [tab, setTab] = useState<Tab>(() =>
+    new URLSearchParams(window.location.search).has('connected') ? 'settings' : 'profile',
+  )
   const [me, setMe] = useState<Me | null>(null)
   const [name, setName] = useState('')
   const [nameSaved, setNameSaved] = useState(false)
