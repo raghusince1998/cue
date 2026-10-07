@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CalendarFeeds } from './CalendarFeeds.tsx'
+import { ProfilePhoto } from './ProfilePhoto.tsx'
 import { api } from '../lib/api.ts'
 
 interface AiSettings {
@@ -11,6 +12,13 @@ interface AiSettings {
   hasKey: boolean
   keyHint: string | null
   encryptionAvailable: boolean
+}
+
+interface Me {
+  id: string
+  name: string
+  email: string
+  avatarUpdatedAt: string | null
 }
 
 interface Preferences {
@@ -26,10 +34,11 @@ function label(hour: number): string {
   return `${twelve}${suffix}`
 }
 
-type Tab = 'you' | 'account'
+type Tab = 'profile' | 'settings' | 'account'
 
 export function Settings({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<Tab>('you')
+  const [tab, setTab] = useState<Tab>('profile')
+  const [me, setMe] = useState<Me | null>(null)
   const [name, setName] = useState('')
   const [nameSaved, setNameSaved] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
@@ -46,7 +55,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     void api<Preferences>('/me/preferences').then(setPrefs)
-    void api<{ name: string }>('/auth/me').then((u) => setName(u.name))
+    void loadMe()
     void api<AiSettings>('/ai/settings').then((r) => {
       setAi(r)
       setEndpointDraft(r.endpoint ?? 'http://127.0.0.1:11434')
@@ -170,6 +179,12 @@ export function Settings({ onClose }: { onClose: () => void }) {
     )
   }
 
+  async function loadMe() {
+    const u = await api<Me>('/auth/me')
+    setMe(u)
+    setName(u.name)
+  }
+
   const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
   async function saveName() {
@@ -218,25 +233,36 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="stack tight">
-      {isOwner && (
-        <div className="viewswitch">
-          <button
-            className={tab === 'you' ? 'selected' : ''}
-            onClick={() => setTab('you')}
-          >
-            You
-          </button>
-          <button
-            className={tab === 'account' ? 'selected' : ''}
-            onClick={() => setTab('account')}
-          >
+      <div className="viewswitch">
+        <button className={tab === 'profile' ? 'selected' : ''} onClick={() => setTab('profile')}>
+          Profile
+        </button>
+        <button className={tab === 'settings' ? 'selected' : ''} onClick={() => setTab('settings')}>
+          Settings
+        </button>
+        {isOwner && (
+          <button className={tab === 'account' ? 'selected' : ''} onClick={() => setTab('account')}>
             Account
           </button>
-        </div>
+        )}
+      </div>
+
+      {/* Who you are: the photo, the name, the password. Nothing here changes
+          how the app behaves, which is exactly why it is not in Settings. */}
+      {tab === 'profile' && (
+      <>
+      {me && (
+        <ProfilePhoto
+          userId={me.id}
+          name={me.name}
+          avatarKey={me.avatarUpdatedAt}
+          onChanged={() => void loadMe()}
+        />
       )}
 
-      {tab === 'you' && (
-      <>
+      <p className="muted small">{me?.email}</p>
+
+      <hr className="rule" />
       <span className="label-text">Your name</span>
       <div className="row">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
@@ -271,8 +297,12 @@ export function Settings({ onClose }: { onClose: () => void }) {
         Change it
       </button>
       {passwordNote && <p className="muted small">{passwordNote}</p>}
+      </>
+      )}
 
-      <hr className="rule" />
+      {/* How the app behaves: when it nudges, and which calendars it reads. */}
+      {tab === 'settings' && (
+      <>
       <label className="checkbox">
         <input
           type="checkbox"

@@ -2431,3 +2431,61 @@ button:disabled {
   background: color-mix(in srgb, var(--good) 15%, transparent);
   color: var(--good);
 }
+
+/* The photo and its buttons, side by side. */
+.photo-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.avatar-lg {
+  flex: 0 0 auto;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--muted);
+  /* Initials are a fallback, not a label — they should not invite selection. */
+  user-select: none;
+}
+
+.avatar-lg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* A disclosure that stays quiet until someone needs it. */
+.more-ways summary {
+  cursor: pointer;
+  padding: 6px 0;
+  list-style: none;
+}
+
+.more-ways summary::-webkit-details-marker {
+  display: none;
+}
+
+.more-ways summary::before {
+  content: '+ ';
+  color: var(--muted);
+}
+
+.more-ways[open] summary::before {
+  content: '– ';
+}
+
+@media (max-width: 480px) {
+  .photo-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

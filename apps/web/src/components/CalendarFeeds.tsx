@@ -429,13 +429,30 @@ export function CalendarFeeds() {
           </label>
         </>
       ) : (
-        <button
-          className="ghost small-btn"
-          onClick={() => setAdding(true)}
-          disabled={busy || !encryptionReady}
-        >
-          Connect a calendar
-        </button>
+        /*
+         * Folded away rather than removed.
+         *
+         * Connecting an account is the path that works, so it is the only one
+         * on screen. But a secret address is still the only way in for Apple
+         * Calendar, for a calendar somebody shared with you, and for a work
+         * account whose administrator has switched off third-party apps —
+         * which is the exact wall this app hit before OAuth existed. Deleting
+         * it would be tidying away the fallback that was needed most.
+         */
+        <details className="more-ways">
+          <summary className="muted small">Another kind of calendar?</summary>
+          <p className="muted small">
+            Apple, a shared calendar, or a work account that blocks sign-in apps — those publish
+            a secret address instead, or export a file.
+          </p>
+          <button
+            className="ghost small-btn"
+            onClick={() => setAdding(true)}
+            disabled={busy || !encryptionReady}
+          >
+            Use an address or a file
+          </button>
+        </details>
       )}
 
       {message && <p className="muted small">{message}</p>}
@@ -443,9 +460,7 @@ export function CalendarFeeds() {
       {error && <p className="error small">{error}</p>}
 
       <p className="muted small">
-        Read-only, and one way: Cue never writes to your calendar. Google refreshes this
-        address slowly — usually within a few hours, sometimes a day — so it is for seeing your
-        week, not for something you booked minutes ago.
+        Read-only, and one way: Cue never writes to your calendar.
       </p>
     </div>
   )

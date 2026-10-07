@@ -62,6 +62,15 @@ export const users = pgTable(
     timezone: text('timezone').notNull().default('Asia/Kolkata'),
     /** Whoever registered owns the org; invited people are members. */
     role: userRole('role').notNull().default('member'),
+    /**
+     * Kept in the database rather than on disk: a deploy replaces the
+     * application directory and the instance itself is replaceable, either of
+     * which would quietly take uploaded files with it.
+     */
+    avatar: bytea('avatar'),
+    avatarMime: text('avatar_mime'),
+    /** Also the cache key — the URL carries it, so a new photo is a new URL. */
+    avatarUpdatedAt: timestamp('avatar_updated_at', { withTimezone: true }),
     dailyNudgeEnabled: boolean('daily_nudge_enabled').notNull().default(true),
     /** Local hour, 0-23. */
     dailyNudgeHour: integer('daily_nudge_hour').notNull().default(19),

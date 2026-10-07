@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import bcrypt from 'bcryptjs'
 import { createHash, randomBytes } from 'node:crypto'
 import { and, eq, isNull, lt } from 'drizzle-orm'
+import { z } from 'zod'
 import {
   changePasswordInput,
   forgotPasswordInput,
@@ -93,6 +94,9 @@ export async function authRoutes(app: FastifyInstance) {
         email: schema.users.email,
         orgId: schema.users.orgId,
         orgName: schema.orgs.name,
+        role: schema.users.role,
+        /** Null when there is none; otherwise the cache key for the image URL. */
+        avatarUpdatedAt: schema.users.avatarUpdatedAt,
       })
       .from(schema.users)
       .innerJoin(schema.orgs, eq(schema.orgs.id, schema.users.orgId))
@@ -225,6 +229,82 @@ export async function authRoutes(app: FastifyInstance) {
       .where(eq(schema.users.id, userId))
 
     return { ok: true }
+  })
+
+  /**
+   * The avatar, as a raw body rather than multipart.
+   *
+   * One blob and no other fields, so multipart would buy a parser and a
+   * dependency for nothing — the same call voice notes make.
+   *
+   * The browser resizes and re-encodes before sending, so this limit is a
+   * backstop against something that skipped that, not the normal path.
+   */
+  const AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+  const MAX_AVATAR_BYTES = 512 * 1024
+
+  app.addContentTypeParser(
+    AVATAR_TYPES,
+    { parseAs: 'buffer', bodyLimit: MAX_AVATAR_BYTES },
+    (_req, body, done) => done(null, body),
+  )
+
+  app.post('/auth/avatar', { onRequest: app.authenticate }, async (req, reply) => {
+    const { sub: userId } = scope(req)
+
+    const mime = (req.headers['content-type'] ?? '').split(';')[0]!.trim().toLowerCase()
+    if (!AVATAR_TYPES.includes(mime)) {
+      return reply.code(415).send({ error: 'unsupported_image_type', got: mime })
+    }
+
+    const image = req.body
+    if (!Buffer.isBuffer(image) || image.length === 0) {
+      return reply.code(400).send({ error: 'empty_image' })
+    }
+
+    const updatedAt = new Date()
+    await db
+      .update(schema.users)
+      .set({ avatar: image, avatarMime: mime, avatarUpdatedAt: updatedAt })
+      .where(eq(schema.users.id, userId))
+
+    return { ok: true, avatarUpdatedAt: updatedAt.toISOString() }
+  })
+
+  app.delete('/auth/avatar', { onRequest: app.authenticate }, async (req) => {
+    const { sub: userId } = scope(req)
+    await db
+      .update(schema.users)
+      .set({ avatar: null, avatarMime: null, avatarUpdatedAt: null })
+      .where(eq(schema.users.id, userId))
+    return { ok: true }
+  })
+
+  /**
+   * Serving it.
+   *
+   * Authenticated like everything else: an avatar is a photograph of somebody,
+   * and a URL that hands it to anyone who guesses a user id is a different
+   * thing from one that does not. Cached hard because the URL changes whenever
+   * the picture does.
+   */
+  app.get('/auth/avatar/:id', { onRequest: app.authenticate }, async (req, reply) => {
+    const { orgId } = scope(req)
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params)
+
+    const [row] = await db
+      .select({ avatar: schema.users.avatar, mime: schema.users.avatarMime })
+      .from(schema.users)
+      // Scoped to the caller's own org, so a guessed id cannot reach across.
+      .where(and(eq(schema.users.id, id), eq(schema.users.orgId, orgId)))
+      .limit(1)
+
+    if (!row?.avatar || !row.mime) return reply.code(404).send({ error: 'no_avatar' })
+
+    return reply
+      .header('content-type', row.mime)
+      .header('cache-control', 'private, max-age=31536000, immutable')
+      .send(row.avatar)
   })
 
   /** Your own name and timezone. */
