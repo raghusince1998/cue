@@ -489,27 +489,38 @@ export default function LogVisit() {
 
   if (mode === 'upcoming') {
     return (
-      <div className="stack">
+      <div className="stack page-form">
         {modeSwitch}
 
         {/* One line and Enter is the path almost everything takes. The full
             form stays for what a sentence genuinely cannot carry — a place
-            from your saved list, a specific person, an all-day span. */}
-        <QuickAdd onSaved={() => setQuickSaves((n) => n + 1)} />
+            from your saved list, a specific person, an all-day span.
 
+            One or the other, never both. The detailed form opens with its own
+            "type it in plain words" box, and showing the quick one above it
+            meant two inputs for the same sentence, each with its own Dictate
+            button, and no way to tell which one would save. */}
         {fullForm ? (
-          <UpcomingForm key={quickSaves} />
+          <>
+            <button className="quick-more" onClick={() => setFullForm(false)}>
+              Back to one line
+            </button>
+            <UpcomingForm key={quickSaves} />
+          </>
         ) : (
-          <button className="quick-more" onClick={() => setFullForm(true)}>
-            Set it up in detail instead
-          </button>
+          <>
+            <QuickAdd onSaved={() => setQuickSaves((n) => n + 1)} />
+            <button className="quick-more" onClick={() => setFullForm(true)}>
+              Set it up in detail instead
+            </button>
+          </>
         )}
       </div>
     )
   }
 
   return (
-    <div className="stack">
+    <div className="stack page-form">
       {modeSwitch}
 
       {showRepeat && suggestion && (

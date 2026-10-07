@@ -97,7 +97,7 @@ function NewTrip({ onCreated }: { onCreated: () => void }) {
 
   if (!open) {
     return (
-      <button className="primary" onClick={() => setOpen(true)}>
+      <button className="primary fit-btn" onClick={() => setOpen(true)}>
         Plan a trip
       </button>
     )
@@ -223,12 +223,15 @@ function Wishlist({ onChanged }: { onChanged: () => void }) {
   }
 
   return (
-    <section className="card">
-      <h2 className="section-title">Saved for when you go</h2>
-      <p className="muted small">
-        Things with no date — they wait until a trip to that place exists.
-      </p>
+    <section className="card saved-for-trip">
+      <div className="saved-intro">
+        <h2 className="section-title">Saved for when you go</h2>
+        <p className="muted small">
+          Things with no date — they wait until a trip to that place exists.
+        </p>
+      </div>
 
+      <div className="saved-form">
       <div className="row">
         <input
           className="grow"
@@ -255,14 +258,16 @@ function Wishlist({ onChanged }: { onChanged: () => void }) {
         ))}
       </div>
       <button
-        className="primary small-btn"
+        className="primary small-btn fit-btn"
         disabled={busy || !title.trim() || !placeLabel.trim()}
         onClick={add}
       >
         Save it for there
       </button>
       {note && <p className="muted small">{note}</p>}
+      </div>
 
+      <div className="saved-list">
       {[...byPlace.entries()].map(([place, list]) => (
         <div key={place}>
           <span className="label-text">{place}</span>
@@ -281,6 +286,7 @@ function Wishlist({ onChanged }: { onChanged: () => void }) {
           </ul>
         </div>
       ))}
+      </div>
     </section>
   )
 }

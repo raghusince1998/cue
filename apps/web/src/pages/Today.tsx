@@ -56,6 +56,7 @@ function Card({
     <li
       className={`card commitment tone-edge tone-${cardTone(commitment, overdue)}${overdue ? ' is-overdue' : ''}`}
     >
+      <div className="commitment-main">
       <div className="commitment-head">
         <div>
           <p className="commitment-title">{commitment.title}</p>
@@ -84,8 +85,9 @@ function Card({
           {commitment.escalationCount === 1 ? 'time' : 'times'}
         </p>
       )}
+      </div>
 
-      <div className="row">
+      <div className="row commitment-actions">
         <button className="primary small-btn" onClick={() => onDone(commitment.id)}>
           Done
         </button>
@@ -316,7 +318,15 @@ export default function Today() {
   }
 
   return (
-    <div className="stack">
+    /*
+     * Three regions rather than one long column.
+     *
+     * On a phone they stack: search, then what the app noticed, then the
+     * plans. On a wide screen the summary moves to its own column on the right
+     * and the plans take the main one — a single 800px column on a 1440px
+     * screen left two thirds of it empty and made the day 4,500px tall.
+     */
+    <div className="today">
       {/* Opened from the brief, which is the only thing that raises it. */}
       {params.get('triage') === '1' && (
         <Modal
@@ -357,14 +367,19 @@ export default function Today() {
 
       {/* Above the brief, where people look for it. Quiet until used: no
           helper text and no results, so it costs one line and nothing else. */}
-      <Search variant="inline" />
+      <div className="today-search">
+        <Search variant="inline" />
+      </div>
 
-      <NearbyIntentions />
       {/* What the app noticed, before what it was told. */}
-      <DayBrief refreshKey={calendarKey} onNavigate={(href) => navigate(href)} />
-      <InstallButton />
-      <PushBanner />
+      <aside className="today-aside stack">
+        <NearbyIntentions />
+        <DayBrief refreshKey={calendarKey} onNavigate={(href) => navigate(href)} />
+        <InstallButton />
+        <PushBanner />
+      </aside>
 
+      <div className="today-main stack">
       <div className="row spread">
         <div className="viewswitch">
           {(['agenda', 'week', 'month'] as const).map((v) => (
@@ -522,6 +537,7 @@ export default function Today() {
           </p>
         </div>
       )}
+      </div>
 
       {editingId && (
         <Modal title="Edit follow-up" onClose={() => setEditingId(null)}>

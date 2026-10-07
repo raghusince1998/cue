@@ -260,11 +260,11 @@ export function Settings({ onClose }: { onClose: () => void }) {
         />
       )}
 
-      <p className="muted small">{me?.email}</p>
+      <p className="account-email">{me?.email}</p>
 
       <hr className="rule" />
       <span className="label-text">Your name</span>
-      <div className="row">
+      <div className="row inline-field-row">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
         <button className="ghost small-btn" onClick={() => void saveName()} disabled={busy || !name.trim()}>
           Save
@@ -499,11 +499,6 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
       {message && <p className="muted small">{message}</p>}
 
-      <div className="row">
-        <button className="ghost" onClick={onClose}>
-          Close
-        </button>
-      </div>
     </div>
   )
 }

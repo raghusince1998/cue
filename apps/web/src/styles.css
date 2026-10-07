@@ -1160,9 +1160,11 @@ button:disabled {
 
 @media (min-width: 900px) {
   .app {
-    max-width: 1100px;
+    max-width: 1200px;
+    padding-left: 32px;
+    padding-right: 32px;
     /* No fixed bar to leave room for any more. */
-    padding-bottom: 48px;
+    padding-bottom: 56px;
   }
 
   /* The tab bar comes up out of the bottom and becomes real navigation. */
@@ -1183,15 +1185,6 @@ button:disabled {
     max-width: none;
     padding: 8px 16px;
     font-size: 14px;
-  }
-
-  /* Prose and cards stay at a readable width; the calendar takes the room. */
-  .stack > * {
-    max-width: 800px;
-  }
-
-  .stack > .cal {
-    max-width: none;
   }
 
   .banner {
@@ -2350,7 +2343,10 @@ button:disabled {
 
 .checklist-row {
   display: flex;
+  flex-direction: row;
   align-items: center;
+  color: var(--text);
+  font-weight: 450;
   gap: 9px;
   padding: 5px 2px;
   cursor: pointer;
@@ -2524,5 +2520,260 @@ button:disabled {
 @media (max-width: 560px) {
   .addbtn {
     padding: 8px 13px 8px 10px;
+  }
+}
+
+/* =====================================================================
+   Wide screens.
+
+   Everything above was built for a phone and then capped at 800px on a
+   desktop, which left a narrow column in the left two thirds of the screen,
+   a header wider than anything under it, cards that spent four lines on one
+   plan, and a 4,500px Today. This section gives the wide screen layouts of
+   its own instead of a stretched phone.
+   ===================================================================== */
+
+/* ---- Today: search, a summary column, and the plans ------------------ */
+
+.today {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'search'
+    'aside'
+    'main';
+}
+
+.today-search {
+  grid-area: search;
+}
+
+.today-aside {
+  grid-area: aside;
+}
+
+.today-main {
+  grid-area: main;
+  min-width: 0;
+}
+
+@media (min-width: 1000px) {
+  .today {
+    /* The plans get the room; what the app noticed sits beside them, which is
+       where a glance lands without scrolling past it first. */
+    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-areas:
+      'search aside'
+      'main   aside';
+    /* The search row keeps its own height. Without this, when the summary
+       column is taller than the plans — a short week, a calendar view — the
+       grid shares the difference across both rows, and a gap opens up between
+       the search box and everything under it. */
+    grid-template-rows: auto 1fr;
+    column-gap: 28px;
+    row-gap: 16px;
+    align-items: start;
+  }
+
+  .today-aside {
+    /* Its own column, so it starts level with the search box. */
+    grid-row: 1 / span 2;
+  }
+}
+
+/* ---- A plan, on one line ------------------------------------------- */
+
+/*
+ * The title and its details on the left, what you can do about it on the
+ * right. Stacked, a single plan took four lines — title, time, a note, then a
+ * row of buttons with Edit stranded at the far edge. Side by side it takes one
+ * or two.
+ */
+.commitment-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Title and its time read as one unit. Default paragraph margins had pushed
+   them ~36px apart, which made every card look like three separate things. */
+.commitment-main p {
+  margin: 0;
+}
+
+.commitment-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .card.commitment {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 20px;
+    row-gap: 10px;
+    padding: 13px 16px;
+  }
+
+  .commitment-main {
+    flex: 1 1 280px;
+  }
+
+  .commitment-actions {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  /* Edit belongs with the other actions, not at the far edge of the card. */
+  .commitment-actions .push-right {
+    margin-left: 6px;
+  }
+
+  /* A note is context, not content: two lines, then the editor has the rest. */
+  .card.commitment .notes {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin: 0;
+  }
+
+  /* A list, or the "move it" panel, gets the card's full width below. */
+  .card.commitment > .checklist,
+  .card.commitment > .moveit {
+    flex: 1 1 100%;
+    margin-top: 0;
+  }
+
+  .commitment-title {
+    font-size: 15px;
+  }
+}
+
+/* ---- The list screens ---------------------------------------------- */
+
+/*
+ * As many columns as fit, rather than one stretched across the screen. Each
+ * card is a compact block with its date or initials as the anchor, which reads
+ * well at around 340px and badly at 1,100.
+ */
+@media (min-width: 900px) {
+  .tiles,
+  .tiles.two-up {
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 12px;
+  }
+}
+
+/* ---- Forms --------------------------------------------------------- */
+
+/*
+ * A form is read top to bottom, one field at a time, so it keeps one column —
+ * centred, at a width where a line of text is comfortable, instead of sitting
+ * in the left of a wide page with the rest of the screen empty.
+ */
+@media (min-width: 900px) {
+  .page-form {
+    width: 100%;
+    max-width: 760px;
+    margin-inline: auto;
+  }
+}
+
+/* An input with its button beside it, rather than the button wrapping below. */
+.inline-field-row {
+  flex-wrap: nowrap;
+  align-items: stretch;
+}
+
+.inline-field-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.account-email {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---- Modals on a wide screen --------------------------------------- */
+
+@media (min-width: 900px) {
+  /* Room for a form without it becoming a wall of text. */
+  .modal {
+    max-width: 600px;
+    max-height: 86dvh;
+    box-shadow: 0 24px 70px rgb(0 0 0 / 0.45);
+  }
+
+  .modal-body {
+    padding: 20px 22px 22px;
+  }
+
+  .modal-head {
+    padding: 16px 22px;
+  }
+}
+
+/* ---- Trips --------------------------------------------------------- */
+
+.saved-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Spaced on every screen: the places used to be separated by the card's own
+   gap, and grouping them under one wrapper took that away on a phone. */
+.saved-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (min-width: 900px) {
+  /* A button sized to its label rather than stretched across the page. On a
+     phone the full-width version is easier to hit, so it stays there. */
+  .fit-btn {
+    align-self: flex-start;
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+
+  /*
+   * The form beside the list it adds to, instead of both stretched across the
+   * full page — where each "Remove" ended up a thousand pixels from the thing
+   * it removes.
+   */
+  .saved-for-trip {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'intro intro'
+      'form  list';
+    column-gap: 36px;
+    row-gap: 14px;
+    align-items: start;
+  }
+
+  .saved-intro {
+    grid-area: intro;
+  }
+
+  .saved-form {
+    grid-area: form;
+  }
+
+  .saved-list {
+    grid-area: list;
+    padding-left: 36px;
+    border-left: 1px solid var(--border);
   }
 }
