@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   DEFAULT_DURATION_MINUTES,
   DURATION_CHOICES,
@@ -18,29 +17,50 @@ import {
 import { ApiError, api } from '../lib/api.ts'
 import { formatDistance, getFix, type Fix } from '../lib/geo.ts'
 import { duePresets, formatDateTime, toLocalInputValue } from '../lib/time.ts'
-import { ConflictWarning } from '../components/ConflictWarning.tsx'
-import { VoiceNotes } from '../components/VoiceNotes.tsx'
+import { ConflictWarning } from './ConflictWarning.tsx'
+import { VoiceNotes } from './VoiceNotes.tsx'
 import { loadContacts, loadPlaces, matchPlacesLocally } from '../lib/cache.ts'
 import { enqueueVisit, newId, type PendingClip } from '../lib/outbox.ts'
 import { useOnline } from '../lib/online.ts'
-import { RepeatVisitCard, suggestedDueAt } from '../components/RepeatVisitCard.tsx'
-import { UpcomingForm } from '../components/UpcomingForm.tsx'
-import { QuickAdd } from '../components/QuickAdd.tsx'
-import { DictateButton } from '../components/DictateButton.tsx'
+import { RepeatVisitCard, suggestedDueAt } from './RepeatVisitCard.tsx'
+import { UpcomingForm } from './UpcomingForm.tsx'
+import { QuickAdd } from './QuickAdd.tsx'
+import { DictateButton } from './DictateButton.tsx'
+import { announceChange } from '../lib/changes.ts'
 
-export default function LogVisit() {
-  const navigate = useNavigate()
-  // Two things belong on this screen: something that already happened, and
-  // something that has not. They were previously the same screen with only the
-  // first half built.
-  const [mode, setMode] = useState<'past' | 'upcoming'>('upcoming')
-  // The detailed form is opt-in, and stays open once asked for. ?full=1 is how
-  // the quick box hands over a sentence it could not read.
-  const [fullForm, setFullForm] = useState(
-    () => new URLSearchParams(window.location.search).get('full') === '1',
-  )
+/**
+ * Everything there is to add, in the sheet the header's Add button opens.
+ *
+ * This was a page of its own, behind an "Add" tab and a header button that
+ * opened only the one-line box with a link to "more options" on that page.
+ * Two ways in, one of them half the feature. Now the button opens all of it,
+ * over whatever screen you are on, and closes back to that screen.
+ */
+export function AddPanel({
+  onDone,
+  initialMode = 'upcoming',
+  initialFull = false,
+}: {
+  /** Saved, or abandoned: either way the sheet's job is over. */
+  onDone: () => void
+  initialMode?: 'past' | 'upcoming'
+  initialFull?: boolean
+}) {
+  // Two things belong here: something that already happened, and something
+  // that has not.
+  const [mode, setMode] = useState<'past' | 'upcoming'>(initialMode)
+  // The detailed form is opt-in, and stays open once asked for.
+  const [fullForm, setFullForm] = useState(initialFull)
+  /** A sentence the quick box could not read, carried into the detailed form. */
+  const [handedOver, setHandedOver] = useState('')
   /** Remounts the detailed form after a quick save, so it starts clean. */
   const [quickSaves, setQuickSaves] = useState(0)
+
+  /** Something was saved: show it wherever it belongs, and get out of the way. */
+  function finish() {
+    announceChange()
+    onDone()
+  }
 
   const [fix, setFix] = useState<Fix | null>(null)
   const [locating, setLocating] = useState(false)
@@ -308,11 +328,11 @@ export default function LogVisit() {
     try {
       if (!online) {
         await enqueueVisit(body, [])
-        navigate('/')
+        finish()
         return
       }
       await api('/visits', { method: 'POST', body })
-      navigate('/')
+      finish()
     } catch (err) {
       // The usual slot is taken. Shifting to the next free one keeps this a
       // one-tap action instead of dumping the user into the full form.
@@ -325,7 +345,7 @@ export default function LogVisit() {
               method: 'POST',
               body: { ...body, commitment: { ...body.commitment, dueAt: freeSlot } },
             })
-            navigate('/')
+            finish()
             return
           } catch {
             /* fall through to the form */
@@ -339,7 +359,7 @@ export default function LogVisit() {
 
       if (!(err instanceof ApiError)) {
         await enqueueVisit(body, [])
-        navigate('/')
+        finish()
         return
       }
       setError((err as Error).message)
@@ -424,12 +444,12 @@ export default function LogVisit() {
       // no point waiting on a request that cannot leave the device.
       if (!online) {
         await enqueueVisit(body, pendingClips)
-        navigate('/')
+        finish()
         return
       }
 
       await api('/visits', { method: 'POST', body })
-      navigate('/')
+      finish()
     } catch (err) {
       // Something claimed the slot between the pre-check and the save.
       if (err instanceof ApiError && err.status === 409) {
@@ -445,7 +465,7 @@ export default function LogVisit() {
       if (!(err instanceof ApiError)) {
         try {
           await enqueueVisit(bodyRef.current!, pendingClips)
-          navigate('/')
+          finish()
           return
         } catch {
           setError('Could not reach the server and could not save locally either.')
@@ -464,13 +484,6 @@ export default function LogVisit() {
 
   const modeSwitch = (
     <>
-      <div className="page-head">
-        <h1 className="page-title">Add</h1>
-        <span className="page-count">
-          {mode === 'upcoming' ? 'something that has not happened yet' : 'something that already did'}
-        </span>
-      </div>
-
       {/* A segmented control rather than two big buttons: these are two shapes
           of the same action, not two destinations. */}
       <div className="viewswitch">
@@ -489,7 +502,7 @@ export default function LogVisit() {
 
   if (mode === 'upcoming') {
     return (
-      <div className="stack page-form">
+      <div className="stack add-panel">
         {modeSwitch}
 
         {/* One line and Enter is the path almost everything takes. The full
@@ -505,11 +518,18 @@ export default function LogVisit() {
             <button className="quick-more" onClick={() => setFullForm(false)}>
               Back to one line
             </button>
-            <UpcomingForm key={quickSaves} />
+            <UpcomingForm key={quickSaves} initialQuick={handedOver} onDone={finish} />
           </>
         ) : (
           <>
-            <QuickAdd onSaved={() => setQuickSaves((n) => n + 1)} />
+            <QuickAdd
+              onSaved={() => setQuickSaves((n) => n + 1)}
+              onDone={onDone}
+              onFillIn={(text) => {
+                setHandedOver(text)
+                setFullForm(true)
+              }}
+            />
             <button className="quick-more" onClick={() => setFullForm(true)}>
               Set it up in detail instead
             </button>
@@ -520,7 +540,7 @@ export default function LogVisit() {
   }
 
   return (
-    <div className="stack page-form">
+    <div className="stack add-panel">
       {modeSwitch}
 
       {showRepeat && suggestion && (

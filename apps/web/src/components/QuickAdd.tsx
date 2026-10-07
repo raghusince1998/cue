@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { ApiError, api } from '../lib/api.ts'
 import { DictateButton } from './DictateButton.tsx'
 import { announceChange } from '../lib/changes.ts'
@@ -63,13 +62,14 @@ const WHEN_CHIPS = ['tomorrow 10am', 'tomorrow 3pm', 'friday 11am', 'next monday
 export function QuickAdd({
   onSaved,
   onDone,
+  onFillIn,
 }: {
   onSaved: () => void
-  /** Called by "Done". Without it, Done goes to Today — right on the Add page,
-   *  wrong inside the header's sheet, where it should simply close. */
-  onDone?: () => void
+  /** Called by "Done": the sheet this lives in closes. */
+  onDone: () => void
+  /** "Fill it in myself" — hands the sentence to the detailed form. */
+  onFillIn: (text: string) => void
 }) {
-  const navigate = useNavigate()
   const [text, setText] = useState('')
   const [plan, setPlan] = useState<Plan | null>(null)
   const [saved, setSaved] = useState<Saved | null>(null)
@@ -283,7 +283,7 @@ export function QuickAdd({
           {plan.problem ? (
             <>
               <strong>{plan.problem}</strong>
-              <button className="ghost small-btn" onClick={() => navigate('/log?full=1')}>
+              <button className="ghost small-btn" onClick={() => onFillIn(text)}>
                 Fill it in myself
               </button>
             </>
@@ -343,7 +343,7 @@ export function QuickAdd({
             <button className="ghost small-btn" onClick={() => void undo()} disabled={busy}>
               Undo
             </button>
-            <button className="ghost small-btn" onClick={() => (onDone ? onDone() : navigate('/'))}>
+            <button className="ghost small-btn" onClick={onDone}>
               Done
             </button>
           </div>

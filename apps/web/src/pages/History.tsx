@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 /**
  * Three things that are all, in plain terms, "what happened": a visit you
  * logged, a plan you completed, and a plan you decided against.
@@ -38,6 +37,7 @@ const KIND_TAG: Record<Entry['kind'], { label: string; className: string }> = {
  */
 const tagFor = (kind: Entry['kind']) => KIND_TAG[kind] ?? { label: kind, className: '' }
 import { api } from '../lib/api.ts'
+import { openAdd } from '../lib/addSheet.ts'
 import { relativeDay } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { VisitEditor } from '../components/VisitEditor.tsx'
@@ -46,7 +46,6 @@ import { CommitmentEditor } from '../components/CommitmentEditor.tsx'
 type Editing = { type: 'visit'; id: string } | { type: 'commitment'; id: string } | null
 
 export default function History() {
-  const navigate = useNavigate()
   const [visits, setVisits] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Editing>(null)
@@ -107,9 +106,9 @@ export default function History() {
           <p>
             Everything you finish, log or decide against ends up here — ticked plans, meetings
             you recorded, and the things you let go. Tick something off on <strong>Today</strong>,
-            or record a meeting from <strong>Add</strong> &rarr; <strong>Already happened</strong>.
+            or record a meeting with <strong>+ Add</strong> &rarr; <strong>Already happened</strong>.
           </p>
-          <button className="primary small-btn" onClick={() => navigate('/log')}>
+          <button className="primary small-btn" onClick={() => openAdd({ mode: 'past' })}>
             Record something
           </button>
         </div>

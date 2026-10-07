@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './lib/auth.tsx'
 import { startSyncLoop } from './lib/online.ts'
@@ -6,12 +6,12 @@ import { SyncStatus } from './components/SyncStatus.tsx'
 import { Modal } from './components/Modal.tsx'
 import { Settings } from './components/Settings.tsx'
 import { Search } from './components/Search.tsx'
-import { QuickAdd } from './components/QuickAdd.tsx'
+import { AddPanel } from './components/AddPanel.tsx'
 import { api } from './lib/api.ts'
+import { useOpenAdd, type AddOptions } from './lib/addSheet.ts'
 import Login from './pages/Login.tsx'
 import ResetPassword from './pages/ResetPassword.tsx'
 import Today from './pages/Today.tsx'
-import LogVisit from './pages/LogVisit.tsx'
 import Places from './pages/Places.tsx'
 import Trips from './pages/Trips.tsx'
 import Repeating from './pages/Repeating.tsx'
@@ -38,9 +38,9 @@ function Nav({
         </div>
         <div className="topbar-right">
           {/* The one thing this app is for, so the one button that is always
-              there. It opens the one-line capture over whatever is on screen —
-              type "dentist friday 6pm", press Enter, carry on — rather than
-              leaving the page for a form. */}
+              there, and the only way in. It opens everything adding can do —
+              the one line, the detailed form, a visit that already happened —
+              over whatever is on screen, rather than leaving it for a page. */}
           <button className="addbtn" onClick={onOpenAdd} title="Add something (N)">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <line x1="12" y1="5" x2="12" y2="19" />
@@ -69,11 +69,10 @@ function Nav({
       </header>
 
       <nav className="tabs">
+        {/* No Add tab: it went to the same place as the Add button beside
+            the logo, so it was one destination taking two slots. */}
         <NavLink to="/" end>
           Today
-        </NavLink>
-        <NavLink to="/log" className="tab-primary">
-          Add
         </NavLink>
         <NavLink to="/history">History</NavLink>
         <NavLink to="/trips">Trips</NavLink>
@@ -95,12 +94,37 @@ export default function App() {
   )
   const [searchOpen, setSearchOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const [addOptions, setAddOptions] = useState<AddOptions>({})
   const location = useLocation()
   const navigate = useNavigate()
+  /** Set while turning an old /log link into the sheet, so the redirect that
+   *  follows does not close the sheet it just opened. */
+  const openedFromLink = useRef(false)
 
-  // Anything inside the sheet that navigates — "Fill it in myself", a link —
-  // has left the sheet behind, so it closes.
+  const showAdd = useCallback((options: AddOptions = {}) => {
+    setAddOptions(options)
+    setAddOpen(true)
+  }, [])
+
+  // History's "Record something", and anything else that wants to add.
+  useOpenAdd(showAdd)
+
   useEffect(() => {
+    // Adding used to be a page at /log. Bookmarks, an installed app's saved
+    // start URL and old links still point there, so it opens the sheet on Today.
+    if (location.pathname === '/log') {
+      const query = new URLSearchParams(location.search)
+      showAdd({ mode: query.get('mode') === 'past' ? 'past' : 'upcoming', full: query.get('full') === '1' })
+      openedFromLink.current = true
+      navigate('/', { replace: true })
+      return
+    }
+    if (openedFromLink.current) {
+      openedFromLink.current = false
+      return
+    }
+    // Anything inside the sheet that navigates — a saved trip opening Trips —
+    // has left the sheet behind, so it closes.
     setAddOpen(false)
   }, [location.pathname])
 
@@ -121,12 +145,12 @@ export default function App() {
       // no modifier, so it never eats a letter somebody was typing.
       if (e.key.toLowerCase() === 'n' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault()
-        setAddOpen(true)
+        showAdd()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [showAdd])
 
   // Drains anything captured offline as soon as there is a connection again.
   useEffect(() => {
@@ -169,13 +193,14 @@ export default function App() {
       <Nav
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
-        onOpenAdd={() => setAddOpen(true)}
+        onOpenAdd={() => showAdd()}
       />
       <main className="content">
         <SyncStatus />
         <Routes>
           <Route path="/" element={<Today />} />
-          <Route path="/log" element={<LogVisit />} />
+          {/* Opens the Add sheet and moves to Today; see the effect above. */}
+          <Route path="/log" element={null} />
           <Route path="/history" element={<History />} />
           <Route path="/trips" element={<Trips />} />
           <Route path="/repeating" element={<Repeating />} />
@@ -186,17 +211,12 @@ export default function App() {
       </main>
 
       {addOpen && (
-        <Modal title="Add" onClose={() => setAddOpen(false)}>
-          <QuickAdd onSaved={() => undefined} onDone={() => setAddOpen(false)} />
-          <button
-            className="link small more-options"
-            onClick={() => {
-              setAddOpen(false)
-              navigate('/log')
-            }}
-          >
-            More options — a visit that already happened, a place, a contact
-          </button>
+        <Modal title="Add" onClose={() => setAddOpen(false)} closeOnBackdrop={false}>
+          <AddPanel
+            initialMode={addOptions.mode}
+            initialFull={addOptions.full}
+            onDone={() => setAddOpen(false)}
+          />
         </Modal>
       )}
 

@@ -31,6 +31,7 @@ import {
   titleFrom,
 } from '@cue/shared'
 import { ApiError, api } from '../lib/api.ts'
+import { announceChange } from '../lib/changes.ts'
 import { loadContacts, loadPlaces } from '../lib/cache.ts'
 import { duePresets, formatDateTime, formatSpan, toDateInputValue, toLocalInputValue } from '../lib/time.ts'
 import { ConflictWarning } from './ConflictWarning.tsx'
@@ -108,7 +109,15 @@ function planRepeat(
  * rest of life, where half of what you need to remember is simply an
  * appointment somebody gave you.
  */
-export function UpcomingForm() {
+export function UpcomingForm({
+  onDone,
+  initialQuick = '',
+}: {
+  /** Saved or cancelled: the sheet this lives in closes. */
+  onDone: () => void
+  /** A sentence the one-line box could not read, so it is not typed twice. */
+  initialQuick?: string
+}) {
   const navigate = useNavigate()
 
   const [title, setTitle] = useState('')
@@ -146,7 +155,7 @@ export function UpcomingForm() {
   const [placeLabel, setPlaceLabel] = useState('')
   const [allDay, setAllDay] = useState(false)
   const [endsOn, setEndsOn] = useState<Date>(() => new Date())
-  const [quick, setQuick] = useState('')
+  const [quick, setQuick] = useState(initialQuick)
   const [aiProvider, setAiProvider] = useState<string>('none')
   const [reviewing, setReviewing] = useState<string | null>(null)
   const [conflict, setConflict] = useState<ConflictReport | null>(null)
@@ -269,7 +278,7 @@ export function UpcomingForm() {
           allowConflict,
         },
       })
-      navigate('/')
+      onDone()
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         // They committed to this time by pressing save, so from here it blocks.
@@ -329,6 +338,8 @@ export function UpcomingForm() {
           : `Saved. It will surface the moment you plan a trip to ${asIntention.placeLabel}.`,
       )
       setQuick('')
+      // The sheet stays open on its note, so the page behind it is told now.
+      announceChange()
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -362,6 +373,7 @@ export function UpcomingForm() {
         },
       )
       setQuick('')
+      announceChange()
       setSaveNote(
         `${r.recurrence.summary} — ${r.recurrence.upcomingCount} booked in, and it keeps going.`,
       )
@@ -388,6 +400,7 @@ export function UpcomingForm() {
         },
       })
       setQuick('')
+      announceChange()
       if (r.waiting.length > 0) {
         setSaveNote(
           `Trip saved — you have ${r.waiting.length} things saved for ${asTrip.placeLabel}: ${r.waiting.map((w) => w.title).join(', ')}`,
@@ -872,7 +885,7 @@ ${original}` : original))
             onCancel={() => setReviewing(null)}
             onDone={(added) => {
               setReviewing(null)
-              if (added > 0) navigate('/')
+              if (added > 0) onDone()
             }}
           />
         </Modal>
@@ -895,8 +908,8 @@ ${original}` : original))
           onClick={() => {
             // Only worth confirming when there is something to lose.
             const started = title.trim() || notes.trim() || quick.trim()
-            if (started && !window.confirm('Discard this and go back?')) return
-            navigate('/')
+            if (started && !window.confirm('Discard this?')) return
+            onDone()
           }}
           disabled={saving}
         >

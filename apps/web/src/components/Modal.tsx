@@ -1,29 +1,51 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+
+/**
+ * Open modals, oldest first. Escape closes only the newest: the Add sheet can
+ * open "Is this what you meant?" over itself, and one key press used to close
+ * both and throw away the half-filled form underneath.
+ */
+const openModals: object[] = []
 
 export function Modal({
   title,
   onClose,
   children,
+  closeOnBackdrop = true,
 }: {
   title: string
   onClose: () => void
   children: ReactNode
+  /**
+   * False for a sheet holding a form worth keeping, where a click that misses
+   * the sheet by a few pixels should not discard it. Close and Escape still do.
+   */
+  closeOnBackdrop?: boolean
 }) {
+  // Read through a ref so the effect below runs once per modal: re-running it
+  // on every render would move this modal to the top of the stack each time
+  // its parent re-rendered.
+  const close = useRef(onClose)
+  close.current = onClose
+
   useEffect(() => {
+    const self = {}
+    openModals.push(self)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && openModals[openModals.length - 1] === self) close.current()
     }
     window.addEventListener('keydown', onKey)
     // Stop the page behind from scrolling while the sheet is open.
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
+      openModals.splice(openModals.indexOf(self), 1)
       window.removeEventListener('keydown', onKey)
       document.body.style.overflow = previous
     }
-  }, [onClose])
+  }, [])
 
   /*
    * Rendered at the end of <body>, not where the component is used.
@@ -37,7 +59,7 @@ export function Modal({
    * layout, including ones nobody has written yet.
    */
   return createPortal(
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={closeOnBackdrop ? onClose : undefined}>
       <div
         className="modal"
         role="dialog"

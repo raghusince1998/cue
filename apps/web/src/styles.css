@@ -136,11 +136,6 @@ body {
   background: var(--bg);
 }
 
-.tabs a.tab-primary.active {
-  background: var(--accent);
-  color: var(--accent-text);
-}
-
 .content {
   padding-top: 4px;
 }
@@ -2510,13 +2505,6 @@ button:disabled {
   stroke-linecap: round;
 }
 
-/* The link under the one-line box, to the full form for everything else. */
-.more-options {
-  display: block;
-  margin-top: 14px;
-  text-align: left;
-}
-
 /*
  * On a phone it keeps its label. Search shrinks to an icon there, and two bare
  * icons side by side would make the most important button the easiest to miss.
@@ -2676,19 +2664,6 @@ button:disabled {
 }
 
 /* ---- Forms --------------------------------------------------------- */
-
-/*
- * A form is read top to bottom, one field at a time, so it keeps one column —
- * centred, at a width where a line of text is comfortable, instead of sitting
- * in the left of a wide page with the rest of the screen empty.
- */
-@media (min-width: 900px) {
-  .page-form {
-    width: 100%;
-    max-width: 760px;
-    margin-inline: auto;
-  }
-}
 
 /* An input with its button beside it, rather than the button wrapping below. */
 .inline-field-row {
@@ -2947,5 +2922,29 @@ button:disabled {
   .today {
     grid-template-columns: minmax(0, 1fr) 380px;
     column-gap: 32px;
+  }
+}
+
+/* ---- The Add sheet ------------------------------------------------- */
+
+/*
+ * Everything the Add page did, in the sheet. The two kinds of adding are the
+ * first thing in it, split evenly across the sheet so neither reads as the
+ * secondary option.
+ */
+.add-panel > .viewswitch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.add-panel > .viewswitch button {
+  text-align: center;
+}
+
+@media (min-width: 900px) {
+  /* The visit form is the longest thing in the app; a little more width
+     keeps its paired fields side by side. */
+  .modal:has(.add-panel) {
+    max-width: 660px;
   }
 }
