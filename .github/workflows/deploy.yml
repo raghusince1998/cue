@@ -111,6 +111,20 @@ jobs:
 
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$USER@$HOST" \
             APP_DIR="${APP_DIR:-/srv/cue}" 'bash -seu' <<'REMOTE'
+          # First-time provisioning is deliberately not automatic: bootstrapping a
+          # production server from CI means writing secrets and trusting hosts
+          # from inside a job nobody is watching. Say what is missing instead.
+          if [ ! -d "$APP_DIR/.git" ]; then
+            echo "No checkout at $APP_DIR." >&2
+            echo "Deploys update an existing clone; the first one is set up by hand." >&2
+            echo "See 'Deploying' in the README — in short, on the server:" >&2
+            echo "  sudo mkdir -p $APP_DIR && sudo chown \$USER:\$USER $APP_DIR" >&2
+            echo "  git clone <repo> $APP_DIR && cd $APP_DIR" >&2
+            echo "  cp .env.example .env   # then fill it in" >&2
+            echo "  npm ci --include=dev && npm run db:migrate && npm start" >&2
+            exit 1
+          fi
+
           cd "$APP_DIR"
 
           # Match the commit exactly rather than merging. A deploy that depends
