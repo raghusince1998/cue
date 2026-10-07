@@ -21,6 +21,9 @@ interface Account {
   email: string
   status: string
   lastError: string | null
+  createdAt: string
+  /** How many of its calendars Cue is reading. */
+  calendarCount: number
 }
 
 interface Calendar {
@@ -49,6 +52,13 @@ const OUTCOME: Record<string, { text: string; bad: boolean }> = {
     bad: true,
   },
   bad_state: { text: 'That sign-in link had already been used. Start again.', bad: true },
+  // You signed in, but the provider would not hand the connection over. With
+  // a sign-in that otherwise works, this is almost always the server's client
+  // id or secret for that provider being wrong or swapped.
+  exchange_failed: {
+    text: 'You signed in, but the provider would not hand the connection to Cue. The client id or secret this server has for it is probably wrong.',
+    bad: true,
+  },
   expired_state: { text: 'That sign-in took too long. Start again.', bad: true },
   not_configured: { text: 'This server has no credentials for that provider.', bad: true },
 }
@@ -60,7 +70,19 @@ function messageOf(err: unknown): string {
   return (err as Error).message
 }
 
-export function ConnectedCalendars({ onChanged }: { onChanged: () => void }) {
+function calendarsLine(n: number): string {
+  if (n === 0) return 'no calendars chosen yet'
+  return `reading ${n} calendar${n === 1 ? '' : 's'}`
+}
+
+export function ConnectedCalendars({
+  onChanged,
+  refreshKey,
+}: {
+  onChanged: () => void
+  /** Changes when a calendar is added or removed below, so the counts follow. */
+  refreshKey: string
+}) {
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [accounts, setAccounts] = useState<Account[] | null>(null)
   const [openFor, setOpenFor] = useState<string | null>(null)
@@ -97,7 +119,7 @@ export function ConnectedCalendars({ onChanged }: { onChanged: () => void }) {
 
   useEffect(() => {
     void load()
-  }, [load])
+  }, [load, refreshKey])
 
   // Read the result of a round trip exactly once, then take it out of the URL
   // so a refresh does not replay a message about something that happened
@@ -157,9 +179,14 @@ export function ConnectedCalendars({ onChanged }: { onChanged: () => void }) {
 
   async function disconnect(account: Account) {
     const label = providers.find((p) => p.id === account.provider)?.label ?? account.provider
+    const n = account.calendarCount
     if (
       !window.confirm(
-        `Disconnect ${account.email}? Everything mirrored from its calendars is removed, and Cue gives up its ${label} permission.`,
+        `Remove ${account.email} from Cue?\n\n` +
+          (n > 0
+            ? `The ${n} calendar${n === 1 ? '' : 's'} read from it, and everything brought in from them, will be removed from Cue. `
+            : '') +
+          `Your ${label} calendar itself is not touched.`,
       )
     ) {
       return
@@ -195,75 +222,96 @@ export function ConnectedCalendars({ onChanged }: { onChanged: () => void }) {
       {outcome && <p className={outcome.bad ? 'error small' : 'muted small'}>{outcome.text}</p>}
       {note && <p className="muted small">{note}</p>}
 
-      {accounts.map((account) => {
-        const label = providers.find((p) => p.id === account.provider)?.label ?? account.provider
-        return (
-          <div className="parsed-preview" key={account.id}>
-            <div>
-              <p className="commitment-title">{account.email}</p>
-              <p className="muted small">
-                {account.status === 'revoked' ? (
-                  <span className="error">
-                    Access was withdrawn — connect again to keep mirroring.
-                  </span>
-                ) : account.lastError ? (
-                  <span className="error">{account.lastError}</span>
-                ) : (
-                  label
-                )}
-              </p>
-            </div>
-            <div className="row">
-              <button
-                className="ghost small-btn"
-                onClick={() =>
-                  openFor === account.id ? setOpenFor(null) : void openCalendars(account.id)
-                }
-                disabled={busy}
-              >
-                {openFor === account.id ? 'Hide' : 'Calendars'}
-              </button>
-              <button
-                className="ghost small-btn"
-                onClick={() => void disconnect(account)}
-                disabled={busy}
-              >
-                Disconnect
-              </button>
-            </div>
-          </div>
-        )
-      })}
+      {/* Every account this user has connected, counted, each removable. The
+          list was there before but read like more calendar cards, with
+          nothing saying how many accounts there were or which was which. */}
+      <div className="accounts-head">
+        <span className="label-text">Connected accounts</span>
+        <span className="accounts-count">{accounts.length}</span>
+      </div>
 
-      {openFor && (
-        <div className="stack tight">
-          {calendars === null && <p className="muted small">Reading your calendars…</p>}
-          {calendars?.length === 0 && (
-            <p className="muted small">No calendars this account can read.</p>
-          )}
-          {calendars?.map((calendar) => (
-            <div className="parsed-preview" key={calendar.id}>
-              <div>
-                <p className="commitment-title">{calendar.name}</p>
-                <p className="muted small">
-                  {calendar.primary ? 'Your main calendar' : calendar.accessRole}
-                  {calendar.hidden ? ' · hidden at the source' : ''}
-                </p>
-              </div>
-              {calendar.added ? (
-                <span className="tag is-live">Added</span>
-              ) : (
-                <button
-                  className="ghost small-btn"
-                  onClick={() => void addCalendar(openFor, calendar)}
-                  disabled={busy}
-                >
-                  Add
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+      {accounts.length === 0 && (
+        <p className="muted small">None yet. Connect Google or Microsoft to bring your meetings in.</p>
+      )}
+
+      {accounts.length > 0 && (
+        <ul className="account-list">
+          {accounts.map((account) => {
+            const label =
+              providers.find((p) => p.id === account.provider)?.label ?? account.provider
+            const open = openFor === account.id
+            return (
+              <li className="account-row" key={account.id}>
+                <div className="account-line">
+                  <span className={`provider-mark is-${account.provider}`} aria-hidden>
+                    {label.charAt(0)}
+                  </span>
+                  <div className="account-info">
+                    <p className="account-address">{account.email}</p>
+                    <p className="muted small">
+                      {account.status === 'revoked' ? (
+                        <span className="error">
+                          Access was withdrawn — connect again to keep reading it.
+                        </span>
+                      ) : account.lastError ? (
+                        <span className="error">{account.lastError}</span>
+                      ) : (
+                        `${label} · ${calendarsLine(account.calendarCount)}`
+                      )}
+                    </p>
+                  </div>
+                  <div className="row account-actions">
+                    <button
+                      className="ghost small-btn"
+                      onClick={() => (open ? setOpenFor(null) : void openCalendars(account.id))}
+                      disabled={busy}
+                    >
+                      {open ? 'Hide' : 'Calendars'}
+                    </button>
+                    <button
+                      className="ghost small-btn danger"
+                      onClick={() => void disconnect(account)}
+                      disabled={busy}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+
+                {open && (
+                  <div className="account-calendars">
+                    {calendars === null && <p className="muted small">Reading your calendars…</p>}
+                    {calendars?.length === 0 && (
+                      <p className="muted small">No calendars this account can read.</p>
+                    )}
+                    {calendars?.map((calendar) => (
+                      <div className="account-calendar" key={calendar.id}>
+                        <div>
+                          <p className="account-address">{calendar.name}</p>
+                          <p className="muted small">
+                            {calendar.primary ? 'Your main calendar' : calendar.accessRole}
+                            {calendar.hidden ? ' · hidden at the source' : ''}
+                          </p>
+                        </div>
+                        {calendar.added ? (
+                          <span className="tag is-live">Reading</span>
+                        ) : (
+                          <button
+                            className="ghost small-btn"
+                            onClick={() => void addCalendar(account.id, calendar)}
+                            disabled={busy}
+                          >
+                            Read this
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
       )}
 
       {offerable.length > 0 && (
@@ -275,7 +323,7 @@ export function ConnectedCalendars({ onChanged }: { onChanged: () => void }) {
               onClick={() => void connect(provider.id)}
               disabled={busy}
             >
-              Connect {provider.label}
+              + Connect {provider.label}
             </button>
           ))}
         </div>

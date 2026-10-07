@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { and, eq, lt } from 'drizzle-orm'
+import { and, eq, lt, sql } from 'drizzle-orm'
 import { db } from '../db/index.ts'
 import * as schema from '../db/schema.ts'
 import { decryptSecret, encryptSecret } from '../secrets.ts'
@@ -23,6 +23,24 @@ import { configFor, type Provider } from './oauthProviders.ts'
  * a handful of endpoints and parameters, and those live in `oauthProviders.ts`.
  * Two copies of this file would drift apart the first time one was fixed.
  */
+
+/**
+ * How many calendars each of this person's accounts is being read for.
+ *
+ * Settings lists the accounts, and "Google · reading 2 calendars" is what
+ * tells two Gmail addresses apart at a glance, and says what removing one
+ * would take with it.
+ */
+export async function calendarCountsFor(userId: string): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ accountId: schema.calendarFeeds.oauthAccountId, n: sql<number>`count(*)::int` })
+    .from(schema.calendarFeeds)
+    .where(eq(schema.calendarFeeds.userId, userId))
+    .groupBy(schema.calendarFeeds.oauthAccountId)
+  const counts = new Map<string, number>()
+  for (const row of rows) if (row.accountId) counts.set(row.accountId, row.n)
+  return counts
+}
 
 /** A consent screen left open overnight is not a session worth resuming. */
 const STATE_TTL_MS = 10 * 60 * 1000

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CalendarFeeds } from './CalendarFeeds.tsx'
 import { ProfilePhoto } from './ProfilePhoto.tsx'
+import { InfoTip } from './InfoTip.tsx'
 import { api } from '../lib/api.ts'
 
 interface Me {
@@ -195,20 +196,23 @@ export function Settings({ onClose }: { onClose: () => void }) {
       {/* How the app behaves: when it nudges, and which calendars it reads. */}
       {tab === 'settings' && (
       <>
-      <label className="checkbox">
-        <input
-          type="checkbox"
-          checked={prefs.dailyNudgeEnabled}
-          disabled={busy}
-          onChange={(e) => void update({ dailyNudgeEnabled: e.target.checked })}
-        />
-        <span>Ask me each evening if I logged everything</span>
-      </label>
-
-      <p className="muted small">
-        Nothing can tell that you visited a clinic and never logged it — a browser cannot watch
-        your location in the background. This is the app asking instead.
-      </p>
+      {/* The why sits behind the icon: worth reading once, not every time
+          Settings opens. Outside the label, so tapping it never ticks the box. */}
+      <div className="setting-row has-infotip">
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={prefs.dailyNudgeEnabled}
+            disabled={busy}
+            onChange={(e) => void update({ dailyNudgeEnabled: e.target.checked })}
+          />
+          <span>Ask me each evening if I logged everything</span>
+        </label>
+        <InfoTip label="Why ask each evening?">
+          Nothing can tell that you visited a clinic and never logged it — a browser cannot watch
+          your location in the background. This is the app asking instead.
+        </InfoTip>
+      </div>
 
       {prefs.dailyNudgeEnabled && (
         <>

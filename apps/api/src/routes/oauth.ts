@@ -6,6 +6,7 @@ import { scope } from '../auth.ts'
 import { env } from '../env.ts'
 import {
   beginConsent,
+  calendarCountsFor,
   completeConsent,
   OAuthError,
   revokeAccount,
@@ -26,7 +27,7 @@ import { FeedError, syncFeed } from '../services/calendarFeed.ts'
  * is why it is single-use and stored server side rather than signed into a URL.
  */
 
-function accountDTO(row: AccountRow) {
+function accountDTO(row: AccountRow, calendarCount = 0) {
   return {
     id: row.id,
     provider: row.provider,
@@ -34,6 +35,8 @@ function accountDTO(row: AccountRow) {
     status: row.status,
     lastError: row.lastError,
     createdAt: row.createdAt.toISOString(),
+    /** How many of its calendars are being read, so the list can say so. */
+    calendarCount,
   }
 }
 
@@ -75,13 +78,15 @@ export async function oauthRoutes(app: FastifyInstance) {
       .where(eq(schema.oauthAccounts.userId, userId))
       .orderBy(asc(schema.oauthAccounts.createdAt))
 
+    const countOf = await calendarCountsFor(userId)
+
     return {
       providers: PROVIDERS.map((p) => ({
         id: p,
         label: configFor(p).label,
         configured: providerConfigured(p),
       })),
-      accounts: accounts.map(accountDTO),
+      accounts: accounts.map((a) => accountDTO(a, countOf.get(a.id) ?? 0)),
     }
   })
 

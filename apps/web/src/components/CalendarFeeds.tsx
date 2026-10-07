@@ -209,13 +209,13 @@ export function CalendarFeeds() {
 
   async function remove(feed: FeedDTO) {
     const ok = window.confirm(
-      `Disconnect "${feed.label}"?\n\nEverything it brought in will be removed from Cue. Your Google Calendar is not touched.`,
+      `Stop reading "${feed.calendarName ?? feed.label}"?\n\nEverything it brought in will be removed from Cue. The calendar itself is not touched.`,
     )
     if (!ok) return
     setBusy(true)
     try {
       await api(`/calendar-feeds/${feed.id}`, { method: 'DELETE' })
-      setMessage('Disconnected.')
+      setMessage('Stopped reading it.')
       await load()
     } finally {
       setBusy(false)
@@ -226,14 +226,20 @@ export function CalendarFeeds() {
 
   return (
     <div className="stack tight">
-      <span className="label-text">Calendars I read</span>
+      <ConnectedCalendars
+        onChanged={() => void load()}
+        refreshKey={feeds.map((f) => f.id).join(',')}
+      />
 
-      <ConnectedCalendars onChanged={() => void load()} />
+      <div className="accounts-head">
+        <span className="label-text">Calendars I read</span>
+        <span className="accounts-count">{feeds.length}</span>
+      </div>
 
       {feeds.length === 0 && (
         <p className="muted small">
-          Nothing connected yet. Connect Google or Microsoft above and your meetings appear here
-          and count towards clashes.
+          None yet. Connect an account above, then choose which of its calendars to read — their
+          events appear in Cue and count towards clashes.
         </p>
       )}
 
@@ -308,7 +314,7 @@ export function CalendarFeeds() {
               </button>
             )}
             <button className="ghost small-btn" onClick={() => void remove(feed)} disabled={busy}>
-              Disconnect
+              Stop reading
             </button>
           </div>
         </div>

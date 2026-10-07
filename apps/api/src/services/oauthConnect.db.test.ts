@@ -329,3 +329,32 @@ test('a consent round trip is bound to the person who began it', async () => {
   assert.equal(b.user_id, other.userId)
   assert.notEqual(a.org_id, b.org_id)
 })
+
+test('each account says how many of its calendars are being read, and only its own', async () => {
+  await h.sql`delete from calendar_feeds`
+  const account = async (who: Seeded, email: string) => {
+    const [row] = await h.sql<{ id: string }[]>`
+      insert into oauth_accounts (org_id, user_id, provider, email)
+      values (${who.orgId}, ${who.userId}, 'google', ${email}) returning id`
+    return row!.id
+  }
+  const read = async (who: Seeded, accountId: string, name: string) => {
+    await h.sql`
+      insert into calendar_feeds (org_id, user_id, label, source, oauth_account_id, external_calendar_id)
+      values (${who.orgId}, ${who.userId}, ${name}, 'google', ${accountId}, ${name})`
+  }
+
+  const work = await account(me, 'work@okruti.com')
+  const personal = await account(me, 'personal@gmail.com')
+  const theirs = await account(other, 'theirs@gmail.com')
+  await read(me, work, 'Work')
+  await read(me, work, 'Holidays')
+  await read(other, theirs, 'Theirs')
+
+  const counts = await auth.calendarCountsFor(me.userId)
+  assert.equal(counts.get(work), 2)
+  // Connected but nothing chosen yet: absent, which the route reads as 0.
+  assert.equal(counts.get(personal), undefined)
+  // Somebody else's account never appears in my counts.
+  assert.equal(counts.has(theirs), false)
+})

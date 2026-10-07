@@ -2948,3 +2948,195 @@ button:disabled {
     max-width: 660px;
   }
 }
+
+/* ---- Settings: an explanation behind an icon ------------------------ */
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.has-infotip {
+  position: relative;
+}
+
+.infotip-btn {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  font-style: italic;
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1;
+}
+
+.infotip-btn:hover,
+.infotip.is-open .infotip-btn {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.infotip-bubble {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 450;
+  line-height: 1.5;
+}
+
+.infotip.is-open .infotip-bubble {
+  display: block;
+}
+
+@media (hover: hover) {
+  .infotip:hover .infotip-bubble {
+    display: block;
+  }
+}
+
+/* ---- Settings: connected accounts ---------------------------------- */
+
+.accounts-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.accounts-count {
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.account-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.account-row + .account-row {
+  border-top: 1px solid var(--border);
+}
+
+.account-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.provider-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 750;
+  color: #fff;
+  background: var(--muted);
+}
+
+.provider-mark.is-google {
+  background: #4285f4;
+}
+
+.provider-mark.is-microsoft {
+  background: #0078d4;
+}
+
+.account-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.account-info p,
+.account-calendar p {
+  margin: 0;
+}
+
+.account-address {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.account-calendars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 12px 12px 54px;
+}
+
+.account-calendar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+@media (max-width: 480px) {
+  .account-line {
+    flex-wrap: wrap;
+  }
+
+  .account-actions {
+    width: 100%;
+    padding-left: 42px;
+  }
+
+  .account-calendars {
+    padding-left: 12px;
+  }
+}
+
+/* A calendar being read. "How much history" is a <label>, and the global
+   label rule stacks its children in a centred column — the same trap the
+   checklist rows fell into — so it sat centred under the card's text. */
+.inline-field {
+  flex-direction: row;
+}
+
+.parsed-preview > .stack.tight .small-btn {
+  white-space: nowrap;
+}
