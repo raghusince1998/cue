@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError, api } from '../lib/api.ts'
 import { DictateButton } from './DictateButton.tsx'
+import { announceChange } from '../lib/changes.ts'
 
 /**
  * Type it, press Enter, it is planned.
@@ -59,7 +60,15 @@ const KIND_WORD: Record<Plan['kind'], string> = {
 /** One tap each, rather than a date picker for a question this small. */
 const WHEN_CHIPS = ['tomorrow 10am', 'tomorrow 3pm', 'friday 11am', 'next monday 10am']
 
-export function QuickAdd({ onSaved }: { onSaved: () => void }) {
+export function QuickAdd({
+  onSaved,
+  onDone,
+}: {
+  onSaved: () => void
+  /** Called by "Done". Without it, Done goes to Today — right on the Add page,
+   *  wrong inside the header's sheet, where it should simply close. */
+  onDone?: () => void
+}) {
   const navigate = useNavigate()
   const [text, setText] = useState('')
   const [plan, setPlan] = useState<Plan | null>(null)
@@ -108,6 +117,7 @@ export function QuickAdd({ onSaved }: { onSaved: () => void }) {
         setText('')
         setPlan(null)
         onSaved()
+        announceChange()
         inputRef.current?.focus()
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
@@ -140,6 +150,7 @@ export function QuickAdd({ onSaved }: { onSaved: () => void }) {
       setText(saved.title)
       setSaved(null)
       onSaved()
+      announceChange()
     } finally {
       setBusy(false)
     }
@@ -332,7 +343,7 @@ export function QuickAdd({ onSaved }: { onSaved: () => void }) {
             <button className="ghost small-btn" onClick={() => void undo()} disabled={busy}>
               Undo
             </button>
-            <button className="ghost small-btn" onClick={() => navigate('/')}>
+            <button className="ghost small-btn" onClick={() => (onDone ? onDone() : navigate('/'))}>
               Done
             </button>
           </div>

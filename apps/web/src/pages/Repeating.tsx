@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { RecurrenceDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { dayLabel, relativeDay } from '../lib/time.ts'
+import { useOnChange } from '../lib/changes.ts'
 
 /**
  * Everything that repeats.
@@ -28,6 +29,9 @@ export default function Repeating() {
   useEffect(() => {
     void load()
   }, [])
+
+  // "gym every mon wed fri at 7" typed from the header lands here.
+  useOnChange(() => void load())
 
   async function stop(item: RecurrenceDTO) {
     // Worth a confirm: it removes every future occurrence in one go.

@@ -903,15 +903,17 @@ export default function LogVisit() {
 
       {error && <p className="error">{error}</p>}
 
-      <button className="primary sticky" onClick={save} disabled={!canSave || saving}>
-        {saving
-          ? 'Saving…'
-          : blockedByConflict
-            ? 'Resolve the clash above'
-            : online
-              ? 'Save'
-              : 'Save on this device'}
-      </button>
+      <div className="form-actions">
+        <button className="primary" onClick={save} disabled={!canSave || saving}>
+          {saving
+            ? 'Saving…'
+            : blockedByConflict
+              ? 'Resolve the clash above'
+              : online
+                ? 'Save'
+                : 'Save on this device'}
+        </button>
+      </div>
     </div>
   )
 }

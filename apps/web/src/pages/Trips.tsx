@@ -13,6 +13,7 @@ import { api } from '../lib/api.ts'
 import { spanLabel, toDateInputValue } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { TripDetail } from '../components/TripDetail.tsx'
+import { useOnChange } from '../lib/changes.ts'
 
 function whenLabel(trip: TripDTO): string {
   const { daysUntil, nights } = trip
@@ -297,6 +298,9 @@ export default function Trips() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // "going to Agra 2 to 4 Oct" typed from the header lands here.
+  useOnChange(() => void load())
 
   if (loading) {
     return (

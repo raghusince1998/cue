@@ -15,6 +15,7 @@ import { Checklist } from '../components/Checklist.tsx'
 import { Triage } from '../components/Triage.tsx'
 import { Search } from '../components/Search.tsx'
 import { CalendarView, type CalendarMode } from '../components/CalendarView.tsx'
+import { useOnChange } from '../lib/changes.ts'
 
 interface Agenda {
   overdue: CommitmentDTO[]
@@ -210,6 +211,10 @@ export default function Today() {
     setLoading(false)
     setCalendarKey((k) => k + 1)
   }, [])
+
+  // Something added from the header, over this page: show it now rather than
+  // at the next minute's poll.
+  useOnChange(() => void load())
 
   useEffect(() => {
     void load()

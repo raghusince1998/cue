@@ -882,7 +882,7 @@ ${original}` : original))
 
       {/* Sticky as a pair: abandoning a half-filled form should be as reachable
           as finishing it, rather than a scroll back up to the nav. */}
-      <div className="sticky-actions">
+      <div className="form-actions">
         <button
           className="primary"
           onClick={save}

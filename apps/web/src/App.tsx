@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './lib/auth.tsx'
 import { startSyncLoop } from './lib/online.ts'
 import { SyncStatus } from './components/SyncStatus.tsx'
 import { Modal } from './components/Modal.tsx'
 import { Settings } from './components/Settings.tsx'
 import { Search } from './components/Search.tsx'
+import { QuickAdd } from './components/QuickAdd.tsx'
 import { api } from './lib/api.ts'
 import Login from './pages/Login.tsx'
 import ResetPassword from './pages/ResetPassword.tsx'
@@ -20,11 +21,13 @@ import People from './pages/People.tsx'
 function Nav({
   onOpenSettings,
   onOpenSearch,
+  onOpenAdd,
 }: {
   onOpenSettings: () => void
   onOpenSearch: () => void
+  onOpenAdd: () => void
 }) {
-  const { me, logout } = useAuth()
+  const { logout } = useAuth()
 
   return (
     <>
@@ -34,6 +37,17 @@ function Nav({
           Cue
         </div>
         <div className="topbar-right">
+          {/* The one thing this app is for, so the one button that is always
+              there. It opens the one-line capture over whatever is on screen —
+              type "dentist friday 6pm", press Enter, carry on — rather than
+              leaving the page for a form. */}
+          <button className="addbtn" onClick={onOpenAdd} title="Add something (N)">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <span>Add</span>
+          </button>
           {/* A bordered control rather than a fourth text link. Search was
               there all along and nobody could find it, because next to
               "Settings" and "Sign out" it read as more chrome. */}
@@ -45,7 +59,6 @@ function Nav({
             <span>Search</span>
             <kbd>Ctrl K</kbd>
           </button>
-          <span className="org">{me?.orgName}</span>
           <button className="link" onClick={onOpenSettings}>
             Settings
           </button>
@@ -81,6 +94,15 @@ export default function App() {
     () => new URLSearchParams(window.location.search).has('connected'),
   )
   const [searchOpen, setSearchOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // Anything inside the sheet that navigates — "Fill it in myself", a link —
+  // has left the sheet behind, so it closes.
+  useEffect(() => {
+    setAddOpen(false)
+  }, [location.pathname])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -93,6 +115,13 @@ export default function App() {
       if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') || (e.key === '/' && !typing)) {
         e.preventDefault()
         setSearchOpen(true)
+      }
+
+      // "n" for new, the same way "/" is search. Only outside a field and with
+      // no modifier, so it never eats a letter somebody was typing.
+      if (e.key.toLowerCase() === 'n' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault()
+        setAddOpen(true)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -140,6 +169,7 @@ export default function App() {
       <Nav
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
+        onOpenAdd={() => setAddOpen(true)}
       />
       <main className="content">
         <SyncStatus />
@@ -154,6 +184,21 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+
+      {addOpen && (
+        <Modal title="Add" onClose={() => setAddOpen(false)}>
+          <QuickAdd onSaved={() => undefined} onDone={() => setAddOpen(false)} />
+          <button
+            className="link small more-options"
+            onClick={() => {
+              setAddOpen(false)
+              navigate('/log')
+            }}
+          >
+            More options — a visit that already happened, a place, a contact
+          </button>
+        </Modal>
+      )}
 
       {searchOpen && (
         <Modal title="Search" onClose={() => setSearchOpen(false)}>
