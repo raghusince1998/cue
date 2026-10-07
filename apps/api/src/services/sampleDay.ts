@@ -19,6 +19,15 @@ import { scheduleFirstReminder } from './reminders.ts'
 const MARK = '[sample]'
 const DAY_MS = 86_400_000
 
+/**
+ * The marker goes after any real note, on its own line, so the web app can
+ * strip it and show the note. The marker is bookkeeping for removal, not
+ * something anyone should have to read under every plan.
+ */
+function notesWith(note?: string): string {
+  return note ? `${note}\n${MARK}` : MARK
+}
+
 function at(base: Date, dayOffset: number, hour: number, minute = 0): Date {
   const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + dayOffset, hour, minute)
   return d
@@ -59,6 +68,7 @@ export async function loadSampleDay(
       flexibility?: string
       window?: string | null
       remind?: boolean
+      note?: string
     } = {},
   ) {
     const [row] = await db
@@ -76,7 +86,7 @@ export async function loadSampleDay(
         preferredWindow: opts.window ?? null,
         status: opts.status ?? 'pending',
         completedAt: opts.completedAt ?? null,
-        notes: MARK,
+        notes: notesWith(opts.note),
       })
       .returning({ id: schema.commitments.id })
 
@@ -102,30 +112,48 @@ export async function loadSampleDay(
   const lateInTheDay = now.getHours() >= 18
   const day1 = lateInTheDay ? 1 : 0
 
+  const sprint = { minutes: 60, note: 'Carry-over stories, team capacity, the sprint goal' }
+  const oneOnOne = { minutes: 30, note: 'Feedback on the launch, goals for next quarter' }
+  const budget = {
+    minutes: 90,
+    priority: 'high',
+    note: 'Revenue against target and the five largest cost lines',
+  }
   if (lateInTheDay) {
-    await plan('Sprint planning', at(now, 1, 10), { minutes: 60 })
-    await plan('1:1 with Ananya', at(now, 1, 11, 30), { minutes: 30 })
-    await plan('Review the Q3 numbers', at(now, 1, 15), { minutes: 90, priority: 'high' })
+    await plan('Sprint planning', at(now, 1, 10), sprint)
+    await plan('1:1 with Ananya', at(now, 1, 11, 30), oneOnOne)
+    await plan('Review the Q3 budget report', at(now, 1, 15), budget)
   } else {
-    await plan('Sprint planning', soon(1), { minutes: 60 })
-    await plan('1:1 with Ananya', soon(2.5), { minutes: 30 })
-    await plan('Review the Q3 numbers', soon(4), { minutes: 90, priority: 'high' })
+    await plan('Sprint planning', soon(1), sprint)
+    await plan('1:1 with Ananya', soon(2.5), oneOnOne)
+    await plan('Review the Q3 budget report', soon(4), budget)
   }
 
-  // Something with no set time, to show the flexible/fixed split.
-  await plan('Call the plumber', at(now, day1, 15), {
-    kind: 'callback',
-    minutes: 15,
-    flexibility: 'flexible',
-    window: 'afternoon',
-    remind: false,
-  })
+  // Something with no set time, to show the flexible/fixed split — in a
+  // window that is still ahead. Pinned to the afternoon, a demo opened at 4pm
+  // listed it under "You dropped these" the moment it was made.
+  const flexWindow = !lateInTheDay && now.getHours() >= 15 ? 'evening' : 'afternoon'
+  await plan(
+    'Call the CA about the advance-tax instalment',
+    at(now, day1, flexWindow === 'evening' ? 20 : 16),
+    {
+      kind: 'callback',
+      minutes: 15,
+      flexibility: 'flexible',
+      window: flexWindow,
+      remind: false,
+    },
+  )
 
   // ------------------------- the one a calendar cannot catch: an impossible day
-  // Two real appointments, 200km apart, an hour between them. This is the
+  // Two real appointments, 150km apart, an hour between them. This is the
   // single clearest demonstration that the app is reasoning, not storing.
-  await plan('Client review at Volkswagen', at(now, day1 + 2, 13), { minutes: 90, place: 'Pune' })
-  await plan('Site walkthrough', at(now, day1 + 2, 15, 30), { minutes: 60, place: 'Mumbai' })
+  await plan('Quarterly client review', at(now, day1 + 2, 13), {
+    minutes: 90,
+    place: 'Pune',
+    note: 'Bring the renewal proposal and the usage report',
+  })
+  await plan('Vendor site visit', at(now, day1 + 2, 15, 30), { minutes: 60, place: 'Mumbai' })
 
   // ---------------------------------------------- things that were dropped
   // Clustered on one weekday on purpose, so the pattern is real rather than
@@ -135,13 +163,30 @@ export async function loadSampleDay(
     const back = (d.getDay() - 5 + 7) % 7
     return new Date(d.getFullYear(), d.getMonth(), d.getDate() - back, 17, 0)
   }
-  await plan('Send the revised quote', lastFriday(1), { kind: 'task', minutes: 30, remind: false })
-  await plan('Call the accountant', lastFriday(2), { kind: 'callback', minutes: 15, remind: false })
-  await plan('Chase the vendor invoice', lastFriday(3), { kind: 'task', minutes: 30, remind: false })
-  await plan('Book the annual health check', lastFriday(4), { kind: 'task', minutes: 30, remind: false })
+  await plan('Send the revised quotation to the client', lastFriday(1), {
+    kind: 'task',
+    minutes: 30,
+    remind: false,
+  })
+  await plan('Submit the monthly expense report', lastFriday(2), {
+    kind: 'task',
+    minutes: 30,
+    remind: false,
+  })
+  await plan('Follow up on the pending vendor invoice', lastFriday(3), {
+    kind: 'callback',
+    minutes: 15,
+    remind: false,
+  })
+  await plan('Book the annual health check-up', lastFriday(4), {
+    kind: 'task',
+    minutes: 15,
+    remind: false,
+  })
 
   // ------------------------------------------------------- what went well
-  for (const [i, title] of ['Dentist', 'Submit the tax filing', 'Ring Amma'].entries()) {
+  const finished = ['Dentist appointment', 'File the GST return', 'Renew the car insurance']
+  for (const [i, title] of finished.entries()) {
     await plan(title, at(now, -(i + 1), 11), {
       status: 'done',
       completedAt: at(now, -(i + 1), 11, 30),
@@ -156,7 +201,7 @@ export async function loadSampleDay(
     .values({
       orgId,
       userId,
-      placeLabel: 'Mathura',
+      placeLabel: 'Bengaluru',
       startsOn: ymd(tripStart),
       endsOn: ymd(at(now, 7, 0)),
       strictness: 'flexible',
@@ -165,11 +210,18 @@ export async function loadSampleDay(
     .returning({ id: schema.trips.id })
   if (trip) report.trips += 1
 
-  for (const title of ['Buy peda for the office', 'Visit Banke Bihari temple', 'Meet Ramesh uncle']) {
+  const waiting: Array<[place: string, title: string]> = [
+    ['Bengaluru', 'Meet the regional sales team'],
+    ['Bengaluru', 'Collect the signed contract from the client'],
+    ['Bengaluru', 'Walk through the new office space'],
+    // Somewhere with no trip yet, so the "waiting on a trip" case appears too.
+    ['Hyderabad', 'Meet the new recruitment partner'],
+  ]
+  for (const [placeLabel, title] of waiting) {
     await db.insert(schema.intentions).values({
       orgId,
       userId,
-      placeLabel: 'Mathura',
+      placeLabel,
       title,
       notes: MARK,
       status: 'saved',
@@ -177,41 +229,64 @@ export async function loadSampleDay(
     report.intentions += 1
   }
 
-  // Somewhere with no trip yet, so the "waiting on a trip" case appears too.
-  await db.insert(schema.intentions).values({
-    orgId,
-    userId,
-    placeLabel: 'Jaipur',
-    title: 'Pick up the block-print fabric',
-    notes: MARK,
-    status: 'saved',
-  })
-  report.intentions += 1
-
-  // --------------------------------------------------------- the repeater
-  const [series] = await db
-    .insert(schema.recurrences)
-    .values({
+  // ------------------------------------------------------- the repeaters
+  // The three shapes a repeat usually takes: every working day, every day at
+  // the same time, and once a week.
+  const fromTomorrow = ymd(at(now, 1, 0))
+  // Tonight's dose only if tonight is still ahead; otherwise the first one
+  // would be born overdue.
+  const medicineFrom = now.getHours() < 21 ? ymd(now) : fromTomorrow
+  const series: Array<typeof schema.recurrences.$inferInsert> = [
+    {
       orgId,
       userId,
-      title: 'Team standup',
+      title: 'Daily standup',
       kind: 'meeting',
-      notes: MARK,
+      notes: notesWith('Yesterday, today, anything blocking'),
       durationMinutes: 15,
       freq: 'weekly',
       interval: 1,
       byWeekday: [1, 2, 3, 4, 5],
-      startsOn: ymd(at(now, 1, 0)),
+      startsOn: fromTomorrow,
       hour: 9,
       minute: 30,
-    })
-    .returning()
+    },
+    {
+      orgId,
+      userId,
+      title: 'Take evening medicines',
+      kind: 'task',
+      notes: notesWith('After dinner'),
+      durationMinutes: 5,
+      freq: 'daily',
+      interval: 1,
+      startsOn: medicineFrom,
+      hour: 21,
+      minute: 0,
+    },
+    {
+      orgId,
+      userId,
+      title: 'Weekly review with your manager',
+      kind: 'meeting',
+      notes: notesWith('Wins, risks, priorities for next week'),
+      durationMinutes: 30,
+      freq: 'weekly',
+      interval: 1,
+      byWeekday: [5],
+      startsOn: fromTomorrow,
+      hour: 16,
+      minute: 0,
+    },
+  ]
 
-  if (series) {
+  for (const values of series) {
+    const [row] = await db.insert(schema.recurrences).values(values).returning()
+    if (!row) continue
     report.series += 1
     // A short horizon: a demo does not need four months of standups, and a
     // hundred identical rows would bury everything else on the calendar.
-    await materialise(series, { now, horizonDays: 21 })
+    await materialise(row, { now, horizonDays: 21 })
   }
 
   return report

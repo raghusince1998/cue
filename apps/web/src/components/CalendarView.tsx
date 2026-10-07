@@ -142,11 +142,18 @@ export function CalendarView({
   mode,
   onOpen,
   refreshKey,
+  compact = false,
 }: {
   mode: CalendarMode
   onOpen: (id: string) => void
   /** Changes when something is saved elsewhere, so the grid refetches. */
   refreshKey: number
+  /**
+   * The at-a-glance version that sits beside the list: dots instead of titles,
+   * short cells, no legend. A week stays one row of seven days instead of
+   * turning into a list of them, which would only repeat the list it sits by.
+   */
+  compact?: boolean
 }) {
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()))
   const [items, setItems] = useState<CommitmentDTO[]>([])
@@ -155,7 +162,8 @@ export function CalendarView({
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
 
-  const [calRef, narrow] = useNarrow()
+  const [calRef, measuredNarrow] = useNarrow()
+  const narrow = measuredNarrow || compact
   const now = new Date()
   const { from, to } = useMemo(() => windowFor(mode, anchor), [mode, anchor])
 
@@ -253,7 +261,7 @@ export function CalendarView({
   const selectedItems = selected ? (byDay.get(selected) ?? []) : []
 
   return (
-    <div className="cal" ref={calRef}>
+    <div className={`cal${compact ? ' is-compact' : ''}`} ref={calRef}>
       <div className="cal-head">
         <strong className="cal-title">{heading}</strong>
         <button
@@ -278,7 +286,7 @@ export function CalendarView({
 
       {error && <p className="error small">{error}</p>}
 
-      {mode === 'week' && narrow ? (
+      {mode === 'week' && narrow && !compact ? (
         <ul className="cal-daylist">
           {days.map((day) => {
             const list = byDay.get(keyOf(day)) ?? []
@@ -316,7 +324,7 @@ export function CalendarView({
       <div
         className={`cal-grid${mode === 'week' ? ' is-week' : ''}${narrow ? ' is-dots' : ''}${loading ? ' is-loading' : ''}`}
       >
-        {(mode === 'week' ? WEEKDAY_SHORT : WEEKDAY_LETTER).map((label, i) => (
+        {(mode === 'week' && !compact ? WEEKDAY_SHORT : WEEKDAY_LETTER).map((label, i) => (
           <div className="cal-dow" key={i}>
             {label}
           </div>
@@ -328,7 +336,7 @@ export function CalendarView({
           const outside = mode === 'month' && day.getMonth() !== anchor.getMonth()
           // A week column shows everything; a month cell would overflow, so it
           // shows a few and says how many more there are.
-          const visible = mode === 'week' ? list : list.slice(0, narrow ? 4 : 3)
+          const visible = mode === 'week' && !narrow ? list : list.slice(0, narrow ? 4 : 3)
 
           return (
             <button
@@ -369,8 +377,8 @@ export function CalendarView({
       </div>
       )}
 
-      {narrow && mode === 'month' && !selected && (
-        <p className="muted small">Tap a day to see what is on it.</p>
+      {narrow && !selected && (mode === 'month' || compact) && (
+        <p className="muted small cal-hint">Tap a day to see what is on it.</p>
       )}
 
       {selected && (
@@ -407,6 +415,7 @@ export function CalendarView({
         </div>
       )}
 
+      {!compact && (
       <p className="muted small cal-legend">
         <span className="cal-dot tone-overdue" /> overdue
         <span className="cal-dot tone-critical" /> critical
@@ -416,6 +425,7 @@ export function CalendarView({
         <span className="cal-dot tone-done" /> done
         <span className="cal-dot tone-cancelled" /> cancelled
       </p>
+      )}
     </div>
   )
 }

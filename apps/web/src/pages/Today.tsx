@@ -16,6 +16,7 @@ import { Triage } from '../components/Triage.tsx'
 import { Search } from '../components/Search.tsx'
 import { CalendarView, type CalendarMode } from '../components/CalendarView.tsx'
 import { useOnChange } from '../lib/changes.ts'
+import { readNotes } from '../lib/sample.ts'
 
 interface Agenda {
   overdue: CommitmentDTO[]
@@ -51,6 +52,7 @@ function Card({
   onMoved: () => void
 }) {
   const [moving, setMoving] = useState(false)
+  const { notes, sample } = readNotes(commitment.notes)
 
   return (
     <li
@@ -59,7 +61,10 @@ function Card({
       <div className="commitment-main">
       <div className="commitment-head">
         <div>
-          <p className="commitment-title">{commitment.title}</p>
+          <p className="commitment-title">
+            {commitment.title}
+            {sample && <span className="sample-tag">Sample</span>}
+          </p>
           <p className="muted small">
             {commitment.flexibility === 'flexible' && commitment.preferredWindow
               ? `${WINDOW_LABELS[commitment.preferredWindow]} — no set time`
@@ -77,7 +82,7 @@ function Card({
         {commitment.priority === 'critical' && <span className="badge">Critical</span>}
       </div>
 
-      {commitment.notes && <p className="notes">{commitment.notes}</p>}
+      {notes && <p className="notes">{notes}</p>}
 
       {commitment.escalationCount > 0 && (
         <p className="muted small">
@@ -190,6 +195,31 @@ function PushBanner() {
   )
 }
 
+/**
+ * Whether the page is in its two-column layout. The same breakpoint as the
+ * stylesheet, because it decides what the calendar beside the list shows: a
+ * month has room in the side column, but above a phone's list only a week
+ * does.
+ */
+const WIDE = '(min-width: 1000px)'
+
+function useWide(): boolean {
+  const [wide, setWide] = useState(() => window.matchMedia(WIDE).matches)
+  useEffect(() => {
+    const query = window.matchMedia(WIDE)
+    const update = () => setWide(query.matches)
+    query.addEventListener('change', update)
+    // Both, as in CalendarView: change events do not always arrive when the
+    // viewport is driven externally, and a resize does.
+    window.addEventListener('resize', update)
+    return () => {
+      query.removeEventListener('change', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+  return wide
+}
+
 export default function Today() {
   const [agenda, setAgenda] = useState<Agenda>(EMPTY)
   const [loading, setLoading] = useState(true)
@@ -206,6 +236,7 @@ export default function Today() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const handledDeepLink = useRef(false)
+  const wide = useWide()
 
   const load = useCallback(async () => {
     const { from, to } = dayBounds()
@@ -374,7 +405,24 @@ export default function Today() {
       {/* What the app noticed, before what it was told. */}
       <aside className="today-aside stack">
         <NearbyIntentions />
-        <DayBrief refreshKey={calendarKey} onNavigate={(href) => navigate(href)} />
+        <DayBrief
+          refreshKey={calendarKey}
+          onNavigate={(href) => navigate(href)}
+          preview={wide ? 2 : 1}
+        />
+        {/* The list and the calendar in one view. The list says what to do
+            next; this says how the weeks around it are shaped, which a list
+            cannot. Left out when the main column is a calendar already. */}
+        {view === 'agenda' && (
+          <section className="card today-cal">
+            <CalendarView
+              compact
+              mode={wide ? 'month' : 'week'}
+              onOpen={setEditingId}
+              refreshKey={calendarKey}
+            />
+          </section>
+        )}
         <InstallButton />
         <PushBanner />
       </aside>

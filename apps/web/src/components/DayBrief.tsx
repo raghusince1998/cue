@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
+import { announceChange } from '../lib/changes.ts'
 
 /**
  * What the app noticed, above what the app was told.
@@ -56,9 +57,12 @@ function clock(iso: string): string {
 export function DayBrief({
   refreshKey,
   onNavigate,
+  preview = 2,
 }: {
   refreshKey: number
   onNavigate: (href: string) => void
+  /** How many insights show before "N more". A phone has room for one. */
+  preview?: number
 }) {
   const [data, setData] = useState<{
     insights: Insight[]
@@ -87,6 +91,11 @@ export function DayBrief({
     try {
       await api('/sample-day', { method: load ? 'POST' : 'DELETE' })
       setReloads((n) => n + 1)
+      // The brief is not the only thing showing it. Without this, "Clear it"
+      // emptied the brief and left every sample plan sitting in the list
+      // below until the next minute's poll — and the calendar beside it, and
+      // Trips and Repeating, until they were reopened.
+      announceChange()
       onNavigate('/')
     } finally {
       setBusy(false)
@@ -97,7 +106,7 @@ export function DayBrief({
 
   const { summary } = data
   const visible = data.insights.filter((i) => !dismissed.includes(i.id))
-  const shown = expanded ? visible : visible.slice(0, 2)
+  const shown = expanded ? visible : visible.slice(0, preview)
 
   const now = new Date()
   const ahead = summary.subject === 'tomorrow'
@@ -219,9 +228,9 @@ export function DayBrief({
             </article>
           ))}
 
-          {visible.length > 2 && (
+          {visible.length > preview && (
             <button className="insight-more" onClick={() => setExpanded((v) => !v)}>
-              {expanded ? 'Show less' : `${visible.length - 2} more thing${visible.length - 2 === 1 ? '' : 's'} I noticed`}
+              {expanded ? 'Show less' : `${visible.length - preview} more thing${visible.length - preview === 1 ? '' : 's'} I noticed`}
             </button>
           )}
         </div>
