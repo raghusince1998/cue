@@ -1480,6 +1480,60 @@ npm run db:migrate
 sudo apt install -y postgresql nginx certbot python3-certbot-nginx
 ```
 
+> **Choosing the distribution matters more than it looks.** Node's official
+> Linux binaries require **glibc 2.34 or newer**, so anything older simply
+> cannot run them — this is the dynamic loader refusing, not a packaging
+> problem a different repository would solve.
+>
+> **Amazon Linux 2 ships glibc 2.26 and reached end of life on 30 June 2026.**
+> Use Amazon Linux 2023, Ubuntu 22.04+, or Debian 12+. On Amazon Linux the
+> login user is `ec2-user`, not `ubuntu` — which is also what `DEPLOY_USER`
+> has to say.
+
+<details>
+<summary>Amazon Linux 2023 instead of Debian/Ubuntu</summary>
+
+`deb.nodesource.com` is Debian-only; the RPM repository is a different host.
+
+```bash
+sudo dnf install -y tar
+curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash -
+sudo dnf install -y nodejs
+```
+
+Caddy is not in the AL2023 repositories. The static binary has no dependencies
+and no version to pin:
+
+```bash
+curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=amd64" -o /tmp/caddy
+sudo install -m 755 /tmp/caddy /usr/local/bin/caddy
+sudo groupadd --system caddy
+sudo useradd --system --gid caddy --home-dir /var/lib/caddy --create-home --shell /sbin/nologin caddy
+```
+
+Its unit file needs one line the distribution package would have supplied —
+`AmbientCapabilities=CAP_NET_BIND_SERVICE`, which is what lets a non-root
+process bind 80 and 443:
+
+```ini
+[Service]
+User=caddy
+Group=caddy
+ExecStart=/usr/local/bin/caddy run --config /etc/caddy/Caddyfile
+ExecReload=/usr/local/bin/caddy reload --config /etc/caddy/Caddyfile --force
+Restart=on-failure
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+```
+
+`systemctl` and `journalctl` live under `/usr/bin` rather than `/bin`, and
+sudoers matches the literal path, so list both:
+
+```
+ec2-user ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart cue, /bin/systemctl restart cue, /usr/bin/journalctl -u cue *, /bin/journalctl -u cue *
+```
+
+</details>
+
 **2. Create the database.**
 
 ```bash
