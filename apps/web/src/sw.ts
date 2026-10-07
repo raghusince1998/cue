@@ -12,7 +12,15 @@ precacheAndRoute(self.__WB_MANIFEST)
  * cached here — stale visits and reminders would be worse than none, and the
  * outbox handles writes.
  */
-registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')))
+//
+// Except /api/. Some server addresses are reached by navigating, not by fetch:
+// Google and Microsoft send the browser back to /api/oauth/…/callback after
+// "Allow". Answered from here, that page was the app instead of the server —
+// the connection was never saved and the user landed on Today with nothing to
+// show for it, every time, in any browser that already had this worker.
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL('index.html'), { denylist: [/^\/api\//] }),
+)
 
 self.addEventListener('install', () => {
   void self.skipWaiting()
