@@ -8,6 +8,7 @@ import { sql } from 'drizzle-orm'
 import { ZodError } from 'zod'
 import { db } from './db/index.ts'
 import { env, pushConfigured } from './env.ts'
+import { configFor, providerConfigured, PROVIDERS } from './services/oauthProviders.ts'
 import { registerAuth } from './auth.ts'
 import { authRoutes } from './routes/auth.ts'
 import { placeRoutes } from './routes/places.ts'
@@ -174,6 +175,55 @@ if (env.host === '0.0.0.0') {
   // reachable from anywhere except the proxy, and a firewall rule is one
   // console click away from being the only thing standing in the way.
   app.log.info('listening on all interfaces — set HOST=127.0.0.1 when a reverse proxy is in front')
+}
+
+/**
+ * A host that only exists on the machine running the browser.
+ *
+ * The distinction matters because a split between web and API ports is normal
+ * in development and fatal in production: localhost:5173 talking to
+ * localhost:3002 is the documented dev setup, while a public site pointing its
+ * consent screen at localhost is always wrong.
+ */
+function isLocal(host: string): boolean {
+  const name = host.split(':')[0]!
+  return name === 'localhost' || name === '127.0.0.1' || name === '::1' || name.endsWith('.localhost')
+}
+
+/**
+ * Catch an OAuth redirect URI that points somewhere this server is not.
+ *
+ * The redirect is derived from VITE_API_URL when that is set, which is right in
+ * development and catastrophic in production: `.env.example` ships it pointing
+ * at localhost, so copying the file and forgetting to blank one line sends
+ * every consent screen back to a machine the user is not on. Google obeys the
+ * redirect_uri the app *sends*, so registering the correct URI does not save
+ * you — the failure looks like Google misbehaving.
+ *
+ * Nothing can be checked at request time either: by then the browser has
+ * already gone. So it is checked once, here, loudly.
+ */
+for (const provider of PROVIDERS) {
+  if (!providerConfigured(provider)) continue
+  const config = configFor(provider)
+  try {
+    const redirect = new URL(config.redirectUri)
+    const site = new URL(env.webOrigin)
+    // Only the production-broken shape. A dev split across ports is correct,
+    // and warning about it would train everybody to ignore this line.
+    if (!isLocal(site.host) && isLocal(redirect.host)) {
+      app.log.error(
+        `${config.label} sign-in will fail: its redirect points at ${redirect.host} ` +
+          `but this site is ${site.host}.`,
+      )
+      app.log.error(
+        'Set VITE_API_URL= (blank) when the API serves the web app, or set ' +
+          `${provider.toUpperCase()}_REDIRECT_URI explicitly. Run npm run check:oauth to see what is derived.`,
+      )
+    }
+  } catch {
+    app.log.error(`${config.label} redirect URI is not a valid URL: ${config.redirectUri}`)
+  }
 }
 
 if (!pushConfigured) {

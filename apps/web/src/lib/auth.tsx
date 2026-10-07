@@ -15,7 +15,6 @@ interface AuthValue {
   loading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (input: {
-    orgName: string
     name: string
     email: string
     password: string
@@ -62,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const register = useCallback(
-    async (input: { orgName: string; name: string; email: string; password: string }) => {
+    async (input: { name: string; email: string; password: string }) => {
       const res = await api<{ token: string }>('/auth/register', {
         method: 'POST',
         body: input,

@@ -74,6 +74,30 @@ export const users = pgTable(
   (t) => [uniqueIndex('users_email_unique').on(t.email)],
 )
 
+/**
+ * A pending password reset.
+ *
+ * Only the hash of the token lives here. The token itself exists in the email
+ * and the link and nowhere else, so a copy of this table is not a stack of
+ * working resets.
+ */
+export const passwordResets = pgTable(
+  'password_resets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    /** Kept rather than deleted, so a second click can say "already used". */
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    requestedIp: text('requested_ip'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('password_resets_user_idx').on(t.userId, t.createdAt)],
+)
+
 export const places = pgTable(
   'places',
   {

@@ -8,6 +8,7 @@ import { Settings } from './components/Settings.tsx'
 import { Search } from './components/Search.tsx'
 import { api } from './lib/api.ts'
 import Login from './pages/Login.tsx'
+import ResetPassword from './pages/ResetPassword.tsx'
 import Today from './pages/Today.tsx'
 import LogVisit from './pages/LogVisit.tsx'
 import Places from './pages/Places.tsx'
@@ -123,7 +124,16 @@ export default function App() {
     )
   }
 
-  if (!me) return <Login />
+  if (!me) {
+    // Signed out the app is just the sign-in screen — except for a reset link,
+    // which by definition is clicked by somebody who cannot sign in.
+    return (
+      <Routes>
+        <Route path="/reset" element={<ResetPassword />} />
+        <Route path="*" element={<Login />} />
+      </Routes>
+    )
+  }
 
   return (
     <div className="app">

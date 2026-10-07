@@ -86,6 +86,20 @@ export const env = {
       '',
     )}/api/oauth/microsoft/callback`,
 
+  /**
+   * Outgoing mail, used only for password resets.
+   *
+   * Any SMTP service will do — SES, Mailgun, Postmark, a Gmail app password.
+   * Without SMTP_HOST and SMTP_FROM the reset route refuses rather than
+   * showing "check your email" for a message nobody sent.
+   */
+  smtpHost: process.env.SMTP_HOST ?? '',
+  smtpPort: num('SMTP_PORT', 587),
+  smtpUser: process.env.SMTP_USER ?? '',
+  smtpPassword: process.env.SMTP_PASSWORD ?? '',
+  /** The From address. Must be one the provider lets you send as. */
+  smtpFrom: process.env.SMTP_FROM ?? '',
+
   /** Encrypts each org's stored provider key. Without it, BYOK is refused. */
   encryptionKey: process.env.ENCRYPTION_KEY ?? '',
   aiDefaultModel: process.env.AI_DEFAULT_MODEL ?? 'claude-haiku-4-5-20251001',

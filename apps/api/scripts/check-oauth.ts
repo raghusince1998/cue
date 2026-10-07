@@ -14,6 +14,19 @@ import { configFor, providerConfigured, PROVIDERS } from '../src/services/oauthP
  * blaming the provider.
  */
 
+/**
+ * A host that only exists on the machine running the browser.
+ *
+ * The distinction matters because a split between web and API ports is normal
+ * in development and fatal in production: localhost:5173 talking to
+ * localhost:3002 is the documented dev setup, while a public site pointing its
+ * consent screen at localhost is always wrong.
+ */
+function isLocal(host: string): boolean {
+  const name = host.split(':')[0]!
+  return name === 'localhost' || name === '127.0.0.1' || name === '::1' || name.endsWith('.localhost')
+}
+
 const tick = (ok: boolean) => (ok ? 'yes' : 'NO ')
 
 console.log('')
@@ -38,6 +51,24 @@ for (const provider of PROVIDERS) {
   console.log(`  connectable    ${tick(ready)}`)
   console.log('  register this redirect URI, character for character:')
   console.log(`    ${config.redirectUri}`)
+
+  // The failure this exists to catch: a redirect pointing somewhere this
+  // server is not. The provider obeys what the app sends, so the consent
+  // screen comes back to the wrong machine and looks like the provider's fault.
+  try {
+    const redirect = new URL(config.redirectUri)
+    const site = new URL(env.webOrigin)
+    if (!isLocal(site.host) && isLocal(redirect.host)) {
+      console.log('')
+      console.log(`  *** WRONG HOST: this points at ${redirect.host}, the site is ${site.host}.`)
+      console.log('      Every consent screen comes back to a machine nobody is on.')
+      console.log('      Set VITE_API_URL= (blank) in .env, then restart.')
+    } else if (redirect.host !== site.host) {
+      console.log(`  (api on ${redirect.host}, web on ${site.host} — normal in development)`)
+    }
+  } catch {
+    console.log(`  *** Not a valid URL, and WEB_ORIGIN is "${env.webOrigin}".`)
+  }
   if (provider === 'microsoft') {
     console.log(`  tenant         ${env.microsoftTenant}`)
   }

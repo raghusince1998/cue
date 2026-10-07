@@ -26,7 +26,15 @@ function label(hour: number): string {
   return `${twelve}${suffix}`
 }
 
+type Tab = 'you' | 'account'
+
 export function Settings({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<Tab>('you')
+  const [name, setName] = useState('')
+  const [nameSaved, setNameSaved] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [passwordNote, setPasswordNote] = useState<string | null>(null)
   const [prefs, setPrefs] = useState<Preferences | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -38,6 +46,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     void api<Preferences>('/me/preferences').then(setPrefs)
+    void api<{ name: string }>('/auth/me').then((u) => setName(u.name))
     void api<AiSettings>('/ai/settings').then((r) => {
       setAi(r)
       setEndpointDraft(r.endpoint ?? 'http://127.0.0.1:11434')
@@ -163,8 +172,107 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
   const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
+  async function saveName() {
+    setBusy(true)
+    setNameSaved(false)
+    try {
+      await api('/auth/profile', { method: 'PATCH', body: { name: name.trim() } })
+      setNameSaved(true)
+    } catch (err) {
+      setMessage((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function changePassword() {
+    setBusy(true)
+    setPasswordNote(null)
+    try {
+      await api('/auth/change-password', {
+        method: 'POST',
+        body: { currentPassword, password: newPassword },
+      })
+      setCurrentPassword('')
+      setNewPassword('')
+      setPasswordNote('Password changed.')
+    } catch (err) {
+      const code = (err as { code?: string }).code
+      setPasswordNote(
+        code === 'wrong_password'
+          ? 'That is not your current password.'
+          : code === 'invalid_input'
+            ? 'The new password must be at least 8 characters.'
+            : (err as Error).message,
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Configuring a model and storing an API key spend the account's money and
+  // apply to everyone on it — a different kind of act from choosing when your
+  // own evening starts. They live behind their own tab, and only the owner
+  // sees that tab at all.
+  const isOwner = ai?.canEdit === true
+
   return (
     <div className="stack tight">
+      {isOwner && (
+        <div className="viewswitch">
+          <button
+            className={tab === 'you' ? 'selected' : ''}
+            onClick={() => setTab('you')}
+          >
+            You
+          </button>
+          <button
+            className={tab === 'account' ? 'selected' : ''}
+            onClick={() => setTab('account')}
+          >
+            Account
+          </button>
+        </div>
+      )}
+
+      {tab === 'you' && (
+      <>
+      <span className="label-text">Your name</span>
+      <div className="row">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+        <button className="ghost small-btn" onClick={() => void saveName()} disabled={busy || !name.trim()}>
+          Save
+        </button>
+      </div>
+      {nameSaved && <p className="muted small">Saved.</p>}
+
+      <hr className="rule" />
+
+      <span className="label-text">Change password</span>
+      <input
+        type="password"
+        value={currentPassword}
+        onChange={(e) => setCurrentPassword(e.target.value)}
+        placeholder="Current password"
+        autoComplete="current-password"
+      />
+      <input
+        type="password"
+        value={newPassword}
+        onChange={(e) => setNewPassword(e.target.value)}
+        placeholder="New password, at least 8 characters"
+        autoComplete="new-password"
+      />
+      <button
+        className="ghost small-btn"
+        onClick={() => void changePassword()}
+        disabled={busy || !currentPassword || newPassword.length < 8}
+      >
+        Change it
+      </button>
+      {passwordNote && <p className="muted small">{passwordNote}</p>}
+
+      <hr className="rule" />
       <label className="checkbox">
         <input
           type="checkbox"
@@ -216,9 +324,14 @@ export function Settings({ onClose }: { onClose: () => void }) {
         </>
       )}
 
-      {ai && (
+      <hr className="rule" />
+      <CalendarFeeds />
+      </>
+      )}
+
+      {/* Owner-only, and reachable only through its own tab. */}
+      {tab === 'account' && isOwner && ai && (
         <>
-          <hr className="rule" />
           <span className="label-text">Understanding long dictated sentences</span>
           <p className="muted small">
             Simple entries like &ldquo;dentist friday 6pm&rdquo; are always handled on this
@@ -230,14 +343,6 @@ export function Settings({ onClose }: { onClose: () => void }) {
               person's — one credential, one bill, everyone's usage. Someone
               who cannot change them should not be shown the controls at all;
               a disabled form invites a fight they cannot win. */}
-          {!ai.canEdit ? (
-            <p className="muted small">
-              {ai.provider === 'none'
-                ? 'Off. Your account owner can switch it on.'
-                : 'Switched on by your account owner.'}
-            </p>
-          ) : (
-          <>
           <div className="chips">
             {(['none', 'anthropic', 'ollama'] as const).map((p) => (
               <button
@@ -359,15 +464,10 @@ export function Settings({ onClose }: { onClose: () => void }) {
               Test it now
             </button>
           )}
-          </>
-          )}
         </>
       )}
 
       {message && <p className="muted small">{message}</p>}
-
-      <hr className="rule" />
-      <CalendarFeeds />
 
       <div className="row">
         <button className="ghost" onClick={onClose}>

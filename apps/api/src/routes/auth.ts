@@ -1,10 +1,26 @@
 import type { FastifyInstance } from 'fastify'
 import bcrypt from 'bcryptjs'
-import { eq } from 'drizzle-orm'
-import { loginInput, registerInput } from '@cue/shared'
+import { createHash, randomBytes } from 'node:crypto'
+import { and, eq, isNull, lt } from 'drizzle-orm'
+import {
+  changePasswordInput,
+  forgotPasswordInput,
+  loginInput,
+  registerInput,
+  resetPasswordInput,
+  updateProfileInput,
+} from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { takeFirst } from '../db/util.ts'
 import { scope } from '../auth.ts'
+import { env } from '../env.ts'
+import { mailConfigured, MailError, resetEmail, sendMail } from '../services/mail.ts'
+
+/** An hour: long enough to find the mail, short enough not to be a spare key. */
+const RESET_TTL_MINUTES = 60
+
+/** Stored hashed, so a copy of the table is not a stack of working resets. */
+const hashToken = (token: string) => createHash('sha256').update(token).digest('hex')
 
 export async function authRoutes(app: FastifyInstance) {
   app.post('/auth/register', async (req, reply) => {
@@ -26,8 +42,12 @@ export async function authRoutes(app: FastifyInstance) {
     // Registering creates the tenant too. Inviting teammates into an existing
     // org comes later; this keeps the multi-tenant shape correct from day one.
     const { org, user } = await db.transaction(async (tx) => {
+      // Registering still creates the tenant — the multi-tenant shape is
+      // load-bearing throughout — but nobody setting up a personal planner has
+      // a good answer to "what is your organisation called", so it is named
+      // after them and can be changed later.
       const org = takeFirst(
-        await tx.insert(schema.orgs).values({ name: body.orgName }).returning(),
+        await tx.insert(schema.orgs).values({ name: `${body.name}'s account` }).returning(),
         'org',
       )
       const user = takeFirst(
@@ -80,5 +100,152 @@ export async function authRoutes(app: FastifyInstance) {
       .limit(1)
 
     return takeFirst(rows, 'user')
+  })
+
+  /**
+   * Ask for a reset link.
+   *
+   * Always answers the same way, whether or not that address has an account.
+   * Replying "no such user" turns this endpoint into a way to find out who has
+   * one, which is a gift to anyone working through a list of leaked addresses.
+   */
+  app.post('/auth/forgot', async (req, reply) => {
+    const body = forgotPasswordInput.parse(req.body)
+    const email = body.email.toLowerCase().trim()
+
+    // Refusing up front is deliberate. "Check your email" for a message that
+    // was never sent is worse than saying the feature is unavailable: the
+    // person waits, retries, and concludes their account is broken.
+    if (!mailConfigured()) {
+      return reply.code(503).send({
+        error: 'mail_not_configured',
+        message: 'This server cannot send email yet, so password resets are unavailable.',
+      })
+    }
+
+    const [user] = await db
+      .select({ id: schema.users.id, name: schema.users.name })
+      .from(schema.users)
+      .where(eq(schema.users.email, email))
+      .limit(1)
+
+    if (user) {
+      // Housekeeping, and it means an older link stops working the moment a
+      // newer one is asked for.
+      await db
+        .delete(schema.passwordResets)
+        .where(
+          and(eq(schema.passwordResets.userId, user.id), isNull(schema.passwordResets.usedAt)),
+        )
+
+      const token = randomBytes(32).toString('base64url')
+      await db.insert(schema.passwordResets).values({
+        userId: user.id,
+        tokenHash: hashToken(token),
+        expiresAt: new Date(Date.now() + RESET_TTL_MINUTES * 60_000),
+        requestedIp: req.ip,
+      })
+
+      const base = (env.webOrigin || '').replace(/\/$/, '')
+      const link = `${base}/reset?token=${encodeURIComponent(token)}`
+
+      try {
+        await sendMail({ ...resetEmail(link, RESET_TTL_MINUTES), to: email })
+      } catch (err) {
+        // Logged, not surfaced. Telling the caller the send failed would again
+        // reveal that the address exists.
+        if (!(err instanceof MailError)) throw err
+        req.log.error({ code: err.code }, 'reset mail failed')
+      }
+    }
+
+    return { ok: true }
+  })
+
+  /** Spend the link. */
+  app.post('/auth/reset', async (req, reply) => {
+    const body = resetPasswordInput.parse(req.body)
+
+    // Expired rows are cleared on the way past rather than by a timer.
+    await db.delete(schema.passwordResets).where(lt(schema.passwordResets.expiresAt, new Date()))
+
+    const [row] = await db
+      .select()
+      .from(schema.passwordResets)
+      .where(eq(schema.passwordResets.tokenHash, hashToken(body.token)))
+      .limit(1)
+
+    if (!row) {
+      return reply.code(400).send({ error: 'invalid_token' })
+    }
+    if (row.usedAt) {
+      // Distinguished from an unknown token on purpose: "already used" is
+      // something the person can act on, and the token was genuine, so saying
+      // so reveals nothing they did not already hold.
+      return reply.code(400).send({ error: 'token_used' })
+    }
+    if (row.expiresAt.getTime() < Date.now()) {
+      return reply.code(400).send({ error: 'token_expired' })
+    }
+
+    const passwordHash = await bcrypt.hash(body.password, 10)
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.users)
+        .set({ passwordHash })
+        .where(eq(schema.users.id, row.userId))
+      await tx
+        .update(schema.passwordResets)
+        .set({ usedAt: new Date() })
+        .where(eq(schema.passwordResets.id, row.id))
+    })
+
+    return { ok: true }
+  })
+
+  /** Change it while signed in, which needs the current one as proof. */
+  app.post('/auth/change-password', { onRequest: app.authenticate }, async (req, reply) => {
+    const { sub: userId } = scope(req)
+    const body = changePasswordInput.parse(req.body)
+
+    const [user] = await db
+      .select({ passwordHash: schema.users.passwordHash })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1)
+    if (!user) return reply.code(404).send({ error: 'not_found' })
+
+    if (!(await bcrypt.compare(body.currentPassword, user.passwordHash))) {
+      return reply.code(403).send({ error: 'wrong_password' })
+    }
+
+    await db
+      .update(schema.users)
+      .set({ passwordHash: await bcrypt.hash(body.password, 10) })
+      .where(eq(schema.users.id, userId))
+
+    return { ok: true }
+  })
+
+  /** Your own name and timezone. */
+  app.patch('/auth/profile', { onRequest: app.authenticate }, async (req) => {
+    const { sub: userId } = scope(req)
+    const body = updateProfileInput.parse(req.body)
+
+    const [row] = await db
+      .update(schema.users)
+      .set({
+        ...(body.name !== undefined ? { name: body.name.trim() } : {}),
+        ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+      })
+      .where(eq(schema.users.id, userId))
+      .returning({
+        id: schema.users.id,
+        name: schema.users.name,
+        email: schema.users.email,
+        timezone: schema.users.timezone,
+      })
+
+    return takeFirst([row], 'user')
   })
 }

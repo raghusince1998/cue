@@ -303,13 +303,42 @@ export type CommitmentStatus = (typeof COMMITMENT_STATUS)[number]
 
 // ---------------------------------------------------------------- auth
 
+/**
+ * No organisation name. Registering still creates one — the multi-tenant shape
+ * is load-bearing throughout — but asking a person setting up a personal
+ * planner to name their company is a question with no good answer, so it is
+ * derived from their own name instead and can be renamed later.
+ */
 export const registerInput = z.object({
-  orgName: z.string().min(1).max(120),
   name: z.string().min(1).max(120),
   email: z.string().email(),
   password: z.string().min(8).max(200),
 })
 export type RegisterInput = z.infer<typeof registerInput>
+
+export const forgotPasswordInput = z.object({
+  email: z.string().email(),
+})
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordInput>
+
+export const resetPasswordInput = z.object({
+  token: z.string().min(16).max(200),
+  password: z.string().min(8).max(200),
+})
+export type ResetPasswordInput = z.infer<typeof resetPasswordInput>
+
+/** Changing it while signed in, which needs the current one as proof. */
+export const changePasswordInput = z.object({
+  currentPassword: z.string().min(1).max(200),
+  password: z.string().min(8).max(200),
+})
+export type ChangePasswordInput = z.infer<typeof changePasswordInput>
+
+export const updateProfileInput = z.object({
+  name: z.string().min(1).max(120).optional(),
+  timezone: z.string().min(1).max(80).optional(),
+})
+export type UpdateProfileInput = z.infer<typeof updateProfileInput>
 
 export const loginInput = z.object({
   email: z.string().email(),
