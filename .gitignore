@@ -6,3 +6,7 @@ dev-dist/
 *.log
 .DS_Store
 apps/api/drizzle/meta/
+
+# Editor settings, personal to whoever is sitting here.
+.idea/
+.vscode/

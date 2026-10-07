@@ -56,12 +56,17 @@ async function reminders(commitmentId: string) {
     where commitment_id = ${commitmentId} order by attempt, created_at`
 }
 
-/** One pass of the loop, without starting the timer. */
+/**
+ * One pass of the loop, awaited rather than slept through.
+ *
+ * This used to start the real worker and wait 400ms for it to finish. That is
+ * a stopwatch calibrated against a local database: a pass is several queries,
+ * and against a database across a network each one is a round trip, so the
+ * assertions ran before the work was done and the worker looked broken. Now it
+ * waits for the actual thing.
+ */
 async function tick() {
-  const stop = worker.startReminderWorker()
-  // The worker runs once immediately on start; stop the interval right after.
-  await new Promise((r) => setTimeout(r, 400))
-  stop()
+  await worker.runOnce()
 }
 
 test('a due reminder is sent and the next attempt is queued', async () => {

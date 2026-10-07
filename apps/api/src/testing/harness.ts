@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -73,30 +74,52 @@ async function migrate(sql: postgres.Sql): Promise<void> {
   }
 }
 
+/** Unique to this process, so no other run can mistake our schemas for litter. */
+const RUN_ID = randomBytes(4).toString('hex')
+
+/**
+ * Old enough that nothing could still be using it. Deliberately generous: the
+ * cost of waiting is a dead schema sitting around, and the cost of being wrong
+ * is deleting the tables out from under a test that is still running.
+ */
+const STALE_AFTER_MS = 2 * 60 * 60 * 1000
+
+/** Anything before this is not a timestamp, whatever it parses to. */
+const PLAUSIBLE_FROM = Date.UTC(2024, 0, 1)
+
 /**
  * Clears schemas left behind by runs that never finished.
  *
  * The cleanup lives in an `after` hook, which a Ctrl-C or a timeout never
- * reaches, so an interrupted run leaves a full copy of the schema in the
- * developer's database. Left alone they accumulate silently. Only schemas
- * belonging to processes that are gone are dropped, so a concurrent run is
- * never pulled out from under itself.
+ * reaches, so an interrupted run leaves a full copy of the schema behind.
+ *
+ * Staleness is judged by **age**, not by whether a process id still exists.
+ * The process check was right for exactly one machine and silently wrong for
+ * two: a CI runner and a laptop sharing a database have unrelated process ids,
+ * so each would look at the other's schema, find no such process locally,
+ * conclude it was abandoned, and drop it halfway through a live test run. The
+ * failure that produces reads as a flaky test, which is the worst way to spend
+ * an afternoon.
  */
 async function dropStaleSchemas(sql: postgres.Sql): Promise<void> {
   const rows = await sql<{ name: string }[]>`
     select schema_name as name from information_schema.schemata
     where schema_name like 'test\_%'`
 
+  const now = Date.now()
+
   for (const { name } of rows) {
-    const pid = Number(name.split('_').at(-1))
-    if (!Number.isInteger(pid) || pid === process.pid) continue
-    try {
-      // Signal 0 tests for existence without touching the process.
-      process.kill(pid, 0)
-      continue // still running — leave it alone
-    } catch {
-      // No such process: its tests are over and this schema is litter.
+    const parts = name.split('_')
+    if (parts.at(-1) === RUN_ID) continue // ours
+
+    const created = Number.parseInt(parts.at(-2) ?? '', 36)
+    // A name this does not understand is left alone. Being unable to prove
+    // something is litter is not evidence that it is.
+    if (!Number.isFinite(created) || created < PLAUSIBLE_FROM || created > now + 86_400_000) {
+      continue
     }
+    if (now - created < STALE_AFTER_MS) continue
+
     await sql.unsafe(`drop schema if exists "${name}" cascade`)
   }
 }
@@ -106,7 +129,13 @@ async function dropStaleSchemas(sql: postgres.Sql): Promise<void> {
  * without dropping each other's tables halfway through.
  */
 export async function createTestDb(label: string): Promise<Harness> {
-  const schema = `test_${label}_${process.pid}`.toLowerCase().replace(/[^a-z0-9_]/g, '_')
+  // Timestamp then run id: the first says when it may be cleaned up, the
+  // second says whose it is. Both are needed once more than one machine can
+  // point at the same database.
+  const stamp = Date.now().toString(36)
+  const schema = `test_${label}_${stamp}_${RUN_ID}`
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
 
   // Identifiers cannot be parameterised, hence unsafe; `schema` is built here
   // from a fixed alphabet, never from anything a user supplies.

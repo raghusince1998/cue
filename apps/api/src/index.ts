@@ -167,7 +167,14 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   })
 }
 
-await app.listen({ port: env.port, host: '0.0.0.0' })
+await app.listen({ port: env.port, host: env.host })
+
+if (env.host === '0.0.0.0') {
+  // Not wrong, but worth saying once. Behind a proxy this port should not be
+  // reachable from anywhere except the proxy, and a firewall rule is one
+  // console click away from being the only thing standing in the way.
+  app.log.info('listening on all interfaces — set HOST=127.0.0.1 when a reverse proxy is in front')
+}
 
 if (!pushConfigured) {
   app.log.warn('VAPID keys not set — reminders will fire but no push will be delivered.')

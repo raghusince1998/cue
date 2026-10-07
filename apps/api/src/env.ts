@@ -21,6 +21,16 @@ function num(key: string, fallback: number): number {
 export const env = {
   databaseUrl: required('DATABASE_URL'),
   port: num('PORT', 3002),
+  /**
+   * Which interfaces to listen on.
+   *
+   * Behind a reverse proxy on the same machine, set this to 127.0.0.1. The
+   * process then cannot be reached from outside at all — not through a
+   * mistakenly opened firewall port, not from another host in the VPC, not by
+   * anything but the proxy sitting in front of it. The default stays
+   * all-interfaces so a plain `npm start` on a laptop still works.
+   */
+  host: process.env.HOST ?? '0.0.0.0',
   webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
   jwtSecret: required('JWT_SECRET'),
 

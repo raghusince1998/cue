@@ -1410,6 +1410,35 @@ stop working on plain `http`:
 `localhost` is exempt, which is why development works. A bare IP address is not.
 Get a domain and a free Let's Encrypt certificate.
 
+### What is exposed, and what is not
+
+**Only the proxy faces the internet.** Caddy (or nginx) holds 80 and 443; the
+app listens on 3002 and that port is never opened in the firewall. Set
+`HOST=127.0.0.1` in production and the process is not merely firewalled off —
+it is not listening on any interface that could carry a packet from outside,
+so a mistakenly opened security-group rule does not expose it either.
+
+**The API cannot be hidden, and should not be.** The phone in someone's pocket
+is the client: it has to reach `/api` or the app does nothing. What protects it
+is authentication, not obscurity — every route but `/health`, the auth routes
+and the OAuth callback requires a signed token, and each handler scopes its
+query to the caller's own org rather than trusting any id in the request.
+
+So "the backend is not publicly accessible" means something specific and
+achievable:
+
+| | Reachable from the internet |
+| --- | --- |
+| Caddy on 443 | yes — this is the front door |
+| The app process on 3002 | **no** — loopback only, no firewall rule |
+| PostgreSQL on 5432 | **no** — security group allows the app server only |
+| `/api/*` through Caddy | yes, and must be — behind authentication |
+
+**Splitting the web app onto its own service would not change that.** It would
+add CORS, a second thing to deploy, and two addresses that have to agree about
+each other — while the API stayed exactly as reachable, because the browser
+still has to call it. One origin is both simpler and no less safe.
+
 ### One process, one port, one URL
 
 In production the API also serves the built web app, so there is no second

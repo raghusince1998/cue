@@ -103,7 +103,16 @@ async function processOne(claim: ClaimedReminder) {
   }
 }
 
-async function tick() {
+/**
+ * One pass of the loop.
+ *
+ * Exported so tests can await the work instead of sleeping and hoping. A fixed
+ * sleep is calibrated for whatever database the author had: 400ms is plenty
+ * against localhost and not nearly enough against a database across a network,
+ * where each query in the pass costs a round trip. That produces failures that
+ * look like a broken worker and are really a stopwatch.
+ */
+export async function runOnce() {
   const claimed = await claimDue(50)
   if (claimed.length === 0) return
 
@@ -128,7 +137,7 @@ export function startReminderWorker() {
     if (running) return
     running = true
     try {
-      await tick()
+      await runOnce()
     } catch (err) {
       // Message only — a full stack every 20s just buries the real cause, which
       // at this level is almost always the database being unreachable.

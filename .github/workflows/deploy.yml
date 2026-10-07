@@ -21,10 +21,20 @@ jobs:
     name: Typecheck and tests
     runs-on: ubuntu-latest
 
-    # The API tests run against real PostgreSQL rather than a mock, because
-    # every API bug found by hand in this project lived in the layer a mock
-    # would have faked away: a unique index that collided, a check constraint
-    # that fired, a cascade that did or did not reach.
+    # A throwaway PostgreSQL on the runner itself.
+    #
+    # The suite runs against real PostgreSQL because every API bug found by hand
+    # in this project lived in the layer a mock would have faked away: a unique
+    # index that collided, a check constraint that fired, a cascade that did or
+    # did not reach. But it does not need to be *the* PostgreSQL.
+    #
+    # Pointing this at RDS was measured and rejected: 155s against a database
+    # across the internet versus 12s here, with a file-level failure that came
+    # and went between identical runs. It would also mean opening 5432 to
+    # 0.0.0.0/0, because GitHub-hosted runners have no small fixed IP range —
+    # the production database exposed to anyone, to run tests that are slower
+    # and flakier. This container lives for about ninety seconds and is reached
+    # over loopback.
     services:
       postgres:
         image: postgres:16
@@ -40,11 +50,11 @@ jobs:
           --health-retries 10
 
     env:
-      # Each test file builds its own throwaway schema inside this database and
-      # drops it afterwards, so one plain database serves the whole suite.
+      # Each test file builds its own schema inside this database, migrates it,
+      # and drops it afterwards, so one plain database serves the whole suite.
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
-      # Required at import time. Never a real secret — nothing here is signed
-      # for anything that outlives the job.
+      # Required at import time. Never real — nothing here is signed for
+      # anything that outlives the job.
       JWT_SECRET: ci-not-a-real-secret
       ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
 
