@@ -170,6 +170,10 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 
 await app.listen({ port: env.port, host: env.host })
 
+// Said once at startup, because the wrong value produces no error anywhere —
+// only times that are quietly hours out.
+app.log.info(`interpreting times in ${env.appTimezone}`)
+
 if (env.host === '0.0.0.0') {
   // Not wrong, but worth saying once. Behind a proxy this port should not be
   // reachable from anywhere except the proxy, and a firewall rule is one

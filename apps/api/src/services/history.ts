@@ -100,3 +100,39 @@ export async function buildHistory(
     notes: (r.notes as string | null) ?? null,
   }))
 }
+
+/**
+ * Remove one entry from History, permanently.
+ *
+ * Not the ordinary delete. That one is soft on purpose — deleting a plan moves
+ * it here as "let go" — so calling it on something already in History would
+ * just relabel a Done entry rather than remove it. This is the step after that:
+ * somebody looking at their own record and deciding a line should not be on
+ * it at all.
+ *
+ * Narrow by design. It only touches a row whose status matches the kind it was
+ * shown as, so this route can never reach a plan that is still pending — that
+ * goes through the ordinary delete, which keeps the record. And it is scoped to
+ * the person's own rows, so a guessed id from someone else's history finds
+ * nothing.
+ */
+export async function forgetHistoryEntry(
+  userId: string,
+  kind: HistoryKind,
+  id: string,
+): Promise<boolean> {
+  if (kind === 'visit') {
+    const rows = await db.execute(sql`
+      delete from interactions
+       where id = ${id} and user_id = ${userId}
+      returning id`)
+    return (rows as unknown as unknown[]).length > 0
+  }
+
+  // done, cancelled, deleted — the three statuses History shows.
+  const rows = await db.execute(sql`
+    delete from commitments
+     where id = ${id} and user_id = ${userId} and status = ${kind}
+    returning id`)
+  return (rows as unknown as unknown[]).length > 0
+}

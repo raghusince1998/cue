@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { scope } from '../auth.ts'
 import { searchEverything } from '../services/search.ts'
 import { findPeople } from '../services/memory.ts'
-import { buildHistory } from '../services/history.ts'
+import { buildHistory, forgetHistoryEntry } from '../services/history.ts'
 
 export async function searchRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate)
@@ -19,6 +19,21 @@ export async function searchRoutes(app: FastifyInstance) {
   app.get('/history', async (req) => {
     const { sub: userId, orgId } = scope(req)
     return { entries: await buildHistory(orgId, userId) }
+  })
+
+  /** Take one line off the record, for good. See forgetHistoryEntry. */
+  app.delete('/history/:kind/:id', async (req, reply) => {
+    const { sub: userId } = scope(req)
+    const { kind, id } = z
+      .object({
+        kind: z.enum(['visit', 'done', 'cancelled', 'deleted']),
+        id: z.string().uuid(),
+      })
+      .parse(req.params)
+
+    const removed = await forgetHistoryEntry(userId, kind, id)
+    if (!removed) return reply.code(404).send({ error: 'not_found' })
+    return { ok: true }
   })
 
   /**

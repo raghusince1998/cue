@@ -4,6 +4,7 @@ import { z } from 'zod'
 import {
   DEFAULT_DURATION_MINUTES,
   parseWhen,
+  normalizeHinglish,
   titleFrom,
   placeFrom,
   parseIntention,
@@ -322,7 +323,11 @@ async function interpret(userId: string, orgId: string, raw: string): Promise<Qu
   // The list comes off first, so every parser below sees "go shopping this
   // evening" rather than a sentence with five commas in it.
   const list = parseChecklist(raw)
-  const text = list ? list.title : raw
+  // Hindi time words become English before any parser sees them — "kal subah
+  // 9 baje" is tomorrow morning at nine. Only the time words change; the place
+  // and the activity pass through in the words that were used, so the title
+  // that comes back is still theirs.
+  const text = normalizeHinglish(list ? list.title : raw)
   const checklist = list?.items ?? []
 
   const base: QuickPlan = {

@@ -225,3 +225,73 @@ test('the limit cuts the oldest, not the newest', async () => {
   const rows = await history.buildHistory(me.orgId, me.userId, 2)
   assert.deepEqual(titles(rows), ['Day 5', 'Day 4'])
 })
+
+/**
+ * Removing a line from History.
+ *
+ * What matters is what it refuses: a plan that is still pending, somebody
+ * else's entry, and an entry of one kind addressed as another. Each of those
+ * would be a delete reaching further than the person meant.
+ */
+async function idOf(title: string): Promise<string> {
+  const [row] = await h.sql<{ id: string }[]>`select id from commitments where title = ${title}`
+  return row!.id
+}
+
+test('a finished plan can be removed from History for good', async () => {
+  await plan('Dentist', { status: 'done', completedAt: '2026-09-21T09:00:00Z' })
+  const id = await idOf('Dentist')
+
+  assert.equal(await history.forgetHistoryEntry(me.userId, 'done', id), true)
+  assert.deepEqual(titles(await history.buildHistory(me.orgId, me.userId)), [])
+  const [row] = await h.sql`select id from commitments where id = ${id}`
+  assert.equal(row, undefined, 'gone from the table, not relabelled')
+})
+
+test('a cancelled and a let-go plan can each be removed', async () => {
+  await plan('Called off', { status: 'cancelled', cancelledAt: '2026-09-21T09:00:00Z' })
+  await plan('Abandoned', { status: 'deleted', deletedAt: '2026-09-22T09:00:00Z' })
+
+  assert.equal(await history.forgetHistoryEntry(me.userId, 'cancelled', await idOf('Called off')), true)
+  assert.equal(await history.forgetHistoryEntry(me.userId, 'deleted', await idOf('Abandoned')), true)
+  assert.deepEqual(titles(await history.buildHistory(me.orgId, me.userId)), [])
+})
+
+test('a logged visit can be removed', async () => {
+  await visit('2026-09-20T10:00:00Z', { contactName: 'Suresh Kumar' })
+  const [v] = await h.sql<{ id: string }[]>`select id from interactions limit 1`
+
+  assert.equal(await history.forgetHistoryEntry(me.userId, 'visit', v!.id), true)
+  assert.deepEqual(titles(await history.buildHistory(me.orgId, me.userId)), [])
+})
+
+test('a plan that is still pending cannot be reached this way', async () => {
+  // The ordinary delete keeps the record. This route must never become a way
+  // round that for something not yet finished.
+  await plan('Still to do', { status: 'pending' })
+  const id = await idOf('Still to do')
+
+  for (const kind of ['done', 'cancelled', 'deleted'] as const) {
+    assert.equal(await history.forgetHistoryEntry(me.userId, kind, id), false)
+  }
+  const [row] = await h.sql`select id from commitments where id = ${id}`
+  assert.ok(row, 'still there')
+})
+
+test('the kind has to match what it was shown as', async () => {
+  // A Done entry addressed as "cancelled" is a mismatch between what was on
+  // screen and what is in the table. Refusing is safer than guessing.
+  await plan('Dentist', { status: 'done', completedAt: '2026-09-21T09:00:00Z' })
+  assert.equal(await history.forgetHistoryEntry(me.userId, 'cancelled', await idOf('Dentist')), false)
+})
+
+test("someone else's History is out of reach", async () => {
+  await plan('Their dentist', { status: 'done', completedAt: '2026-09-21T09:00:00Z', user: other })
+  await visit('2026-09-20T10:00:00Z', { contactName: 'Their visit', user: other })
+  const theirPlan = await idOf('Their dentist')
+  const [theirVisit] = await h.sql<{ id: string }[]>`select id from interactions limit 1`
+
+  assert.equal(await history.forgetHistoryEntry(me.userId, 'done', theirPlan), false)
+  assert.equal(await history.forgetHistoryEntry(me.userId, 'visit', theirVisit!.id), false)
+  assert.equal(titles(await history.buildHistory(other.orgId, other.userId)).length, 2, 'both survive')
+})

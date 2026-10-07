@@ -5,6 +5,35 @@ import { fileURLToPath } from 'node:url'
 const here = dirname(fileURLToPath(import.meta.url))
 config({ path: resolve(here, '../../../.env') })
 
+/**
+ * Which wall clock "9am" means.
+ *
+ * Every parser, the recurrence expander, the free-slot finder and the preview
+ * text build times with local-time arithmetic, so the process timezone decides
+ * what "tomorrow 9am" refers to. That was invisible in development, where the
+ * server ran on a laptop in India. On EC2 the process is UTC, so every time
+ * typed into the live app was stored 5h30 late — "9am" became 2:30 PM, and its
+ * reminder fired at 2:30 PM too. The preview even said 9:00 AM, because it was
+ * formatted in the same wrong zone it was computed in.
+ *
+ * Set here, before anything creates a Date, rather than in a systemd unit:
+ * this file is the first thing every entry point loads — the server, the
+ * migrations, the worker, the tests — so none of them can start without it.
+ *
+ * This is one zone for the whole server. Users elsewhere would see their
+ * times shifted; doing that properly means threading each user's zone through
+ * every date computation, and is a larger change than this fix.
+ */
+const APP_TIMEZONE = process.env.APP_TIMEZONE || 'Asia/Kolkata'
+try {
+  new Intl.DateTimeFormat('en-US', { timeZone: APP_TIMEZONE })
+} catch {
+  // Refuse to start rather than fall back to UTC — falling back is exactly the
+  // silent 5h30 shift this exists to prevent.
+  throw new Error(`APP_TIMEZONE "${APP_TIMEZONE}" is not a timezone this runtime knows.`)
+}
+process.env.TZ = APP_TIMEZONE
+
 function required(key: string): string {
   const value = process.env[key]
   if (!value) throw new Error(`Missing required env var ${key}. Copy .env.example to .env.`)
@@ -21,6 +50,8 @@ function num(key: string, fallback: number): number {
 export const env = {
   databaseUrl: required('DATABASE_URL'),
   port: num('PORT', 3002),
+  /** Applied to the process above; recorded here so it can be logged. */
+  appTimezone: APP_TIMEZONE,
   /**
    * Which interfaces to listen on.
    *

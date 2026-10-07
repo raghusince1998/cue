@@ -17,6 +17,13 @@ export interface ParsedWhen {
   date: Date
   /** The exact substring that produced the date, so it can be cut from the title. */
   matched: string
+  /**
+   * The date, time and duration fragments separately. Prefer these for cutting
+   * a title: `matched` encloses everything between the first fragment and the
+   * last, so in "tomorrow call the bank 9am" it would take the activity too.
+   * Optional so a caller building a ParsedWhen by hand need not supply it.
+   */
+  pieces?: string[]
   /** True when no time was given and 9am was assumed. */
   timeAssumed: boolean
   /**
@@ -163,6 +170,47 @@ function findTime(text: string): TimeFound | null {
     }
   }
 
+  // "morning 7", "evening 7:30", "7 in the evening", "night at 10".
+  //
+  // Checked before the 24-hour clock and before the day-part default, because
+  // each of those silently lost what was said. The day-part branch returned its
+  // own default and never looked at the number — "tomorrow morning 7" became
+  // 9am and "tomorrow night 10" became 8pm. The clock branch read "evening
+  // 7:30" as half past seven in the morning. The part of the day is exactly
+  // what says which half of the clock a bare number belongs to.
+  //
+  // This is also the natural order of Hindi — "kal subah 7 baje", "shaam 6
+  // baje" — so without it those sentences lost their hour too.
+  const parts = Object.keys(WINDOW_OF_PART).join('|')
+  const oclock = `(?:\\s*o'?\\s?clock)?`
+  const partThenHour = new RegExp(
+    `\\b(${parts})\\s+(?:at\\s+)?(\\d{1,2})(?:[:.](\\d{2}))?${oclock}\\b`,
+    'i',
+  ).exec(text)
+  const hourThenPart = new RegExp(
+    `\\b(\\d{1,2})(?:[:.](\\d{2}))?${oclock}\\s+(?:in\\s+the\\s+|at\\s+)?(${parts})\\b`,
+    'i',
+  ).exec(text)
+  const spoken = partThenHour
+    ? { part: partThenHour[1]!, h: partThenHour[2]!, m: partThenHour[3], at: partThenHour }
+    : hourThenPart
+      ? { part: hourThenPart[3]!, h: hourThenPart[1]!, m: hourThenPart[2], at: hourThenPart }
+      : null
+  if (spoken) {
+    const raw = Number(spoken.h)
+    const minute = Number(spoken.m ?? 0)
+    if (raw <= 23 && minute <= 59) {
+      return {
+        hour: hourInPart(raw, spoken.part.toLowerCase()),
+        minute,
+        match: { start: spoken.at.index, end: spoken.at.index + spoken.at[0].length },
+        needsDateAnchor: false,
+        // No window: the hour was said out loud, so it is a time, not a range
+        // to schedule somewhere inside.
+      }
+    }
+  }
+
   // 24-hour, or an explicit "at 6:30"
   const clock = /\b(\d{1,2}):(\d{2})\b/.exec(text)
   if (clock) {
@@ -233,6 +281,24 @@ function findTime(text: string): TimeFound | null {
   }
 
   return null
+}
+
+/**
+ * Which half of the clock a number means, given the part of the day said with it.
+ *
+ * "7 in the evening" is 19:00 and "morning 7" is 07:00 — the number alone is
+ * ambiguous and the part of the day is what settles it. Night covers both ends:
+ * "night 10" is 22:00, while "raat 2 baje" is two in the morning, because
+ * nobody means two in the afternoon when they say night.
+ */
+function hourInPart(raw: number, part: string): number {
+  if (raw >= 13) return raw // already 24-hour; trust it
+  const window = WINDOW_OF_PART[part]
+  if (window === 'morning') return raw === 12 ? 12 : raw
+  if (window === 'afternoon' || window === 'evening') return raw === 12 ? 12 : raw + 12
+  // Night: late evening, or the small hours after midnight.
+  if (raw === 12) return 0
+  return raw <= 4 ? raw : raw + 12
 }
 
 /** 1–7 reads as afternoon, 8–12 as morning. How people actually speak. */
@@ -505,9 +571,39 @@ export function parseWhen(input: string, now: Date = new Date()): ParsedWhen | n
   // A window beats an exact hour: it is what the user actually said.
   const window = dateFound?.impliedWindow ?? (usableTime ? timeFound?.window : undefined)
 
+  // Each fragment on its own, as well as the enclosing span.
+  //
+  // `matched` runs from the earliest fragment to the latest, which is right
+  // when they sit together ("tomorrow 9am") and wrong when something sits
+  // between them: in "tomorrow call the bank 9am" the span swallows "call the
+  // bank", and a title built by cutting it out comes back empty. That is the
+  // ordinary order of a Hindi sentence — "kal subah mandir jaunga 9 baje" — so
+  // there it happened every time.
+  //
+  // But fragments joined only by a connector are one phrase: in "tomorrow at
+  // 4pm" the "at" belongs to neither fragment, and cutting them apart strands
+  // it in the title — "meet dr sharma at about the pricing". So neighbours are
+  // merged when nothing but a connector separates them, and kept apart when
+  // real words do.
+  const CONNECTOR = /^[\s,@-]*(?:(?:at|on|around|by)\b[\s,@-]*)?$/i
+  const ordered = [dateFound?.match, usableTime ? timeFound?.match : null, duration?.match]
+    .filter((m): m is Match => Boolean(m))
+    .sort((a, b) => a.start - b.start)
+  const joined: Match[] = []
+  for (const m of ordered) {
+    const last = joined[joined.length - 1]
+    if (last && (m.start <= last.end || CONNECTOR.test(input.slice(last.end, m.start)))) {
+      last.end = Math.max(last.end, m.end)
+    } else {
+      joined.push({ ...m })
+    }
+  }
+  const pieces = joined.map((m) => input.slice(m.start, m.end).trim()).filter(Boolean)
+
   return {
     date,
     matched: input.slice(matchSpan.start, matchSpan.end).trim(),
+    pieces,
     timeAssumed,
     ...(window ? { window } : {}),
     ...(duration ? { durationMinutes: duration.minutes } : {}),
@@ -523,11 +619,22 @@ export function parseWhen(input: string, now: Date = new Date()): ParsedWhen | n
  * conversational cleanup was shared with this path.
  */
 export function titleFrom(input: string, parsed: ParsedWhen): string {
-  const index = input.indexOf(parsed.matched)
-  const without =
-    index === -1
-      ? input
-      : input.slice(0, index) + ' ' + input.slice(index + parsed.matched.length)
+  let without: string
+  if (parsed.pieces && parsed.pieces.length > 0) {
+    // Cut each fragment on its own, so whatever sat between them — usually the
+    // thing being planned — survives.
+    without = input
+    for (const piece of parsed.pieces) {
+      const at = without.indexOf(piece)
+      if (at !== -1) without = without.slice(0, at) + ' ' + without.slice(at + piece.length)
+    }
+  } else {
+    const index = input.indexOf(parsed.matched)
+    without =
+      index === -1
+        ? input
+        : input.slice(0, index) + ' ' + input.slice(index + parsed.matched.length)
+  }
 
   const place = extractPlace(without)
   const cleaned = cleanTitle(without, { place })

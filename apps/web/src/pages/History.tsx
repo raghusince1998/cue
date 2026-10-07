@@ -50,6 +50,31 @@ export default function History() {
   const [visits, setVisits] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Editing>(null)
+  const [removing, setRemoving] = useState<string | null>(null)
+
+  /**
+   * Take one entry off the record, for good.
+   *
+   * Asks first, because nothing brings it back: this is not the ordinary
+   * delete, which keeps a "let go" line here. Removed from the screen only once
+   * the server confirms, so a failure does not leave the list claiming
+   * something is gone that is not.
+   */
+  async function remove(entry: Entry) {
+    const what =
+      entry.kind === 'visit' ? 'this visit' : entry.kind === 'done' ? 'this finished plan' : 'this entry'
+    if (!window.confirm(`Remove ${what} from your history? This cannot be undone.`)) return
+
+    setRemoving(entry.id)
+    try {
+      await api(`/history/${entry.kind}/${entry.id}`, { method: 'DELETE' })
+      setVisits((list) => list.filter((e) => !(e.id === entry.id && e.kind === entry.kind)))
+    } catch (err) {
+      window.alert(`Could not remove it: ${(err as Error).message}`)
+    } finally {
+      setRemoving(null)
+    }
+  }
 
   const load = useCallback(async () => {
     setVisits((await api<{ entries: Entry[] }>('/history')).entries)
@@ -132,16 +157,24 @@ export default function History() {
 
               {/* Only a logged visit has an editor; a finished plan is edited
                   from where it lives, and a dropped one is simply a record. */}
-              {v.kind === 'visit' && (
-                <div className="tile-actions">
+              <div className="tile-actions">
+                {v.kind === 'visit' && (
                   <button
                     className="ghost small-btn"
                     onClick={() => setEditing({ type: 'visit', id: v.id })}
                   >
                     Edit
                   </button>
-                </div>
-              )}
+                )}
+                <button
+                  className="ghost small-btn danger-text"
+                  onClick={() => void remove(v)}
+                  disabled={removing === v.id}
+                  aria-label={`Remove ${v.title} from history`}
+                >
+                  {removing === v.id ? 'Removing…' : 'Delete'}
+                </button>
+              </div>
             </article>
           )
         })}

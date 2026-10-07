@@ -2489,3 +2489,12 @@ button:disabled {
     flex-direction: column;
   }
 }
+
+/* A destructive action that should be findable but not shout. */
+.danger-text {
+  color: var(--danger);
+}
+.danger-text:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
