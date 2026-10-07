@@ -26,7 +26,7 @@
     "test": "npm run test:unit && npm run test:api",
     "start": "npm run build && npm start -w @cue/api",
     "test:unit": "tsx --test packages/shared/src/*.test.ts",
-    "test:api": "tsx --test --test-concurrency=1 apps/api/src/**/*.test.ts"
+    "test:api": "tsx --test --test-concurrency=1 \"apps/api/src/**/*.test.ts\""
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

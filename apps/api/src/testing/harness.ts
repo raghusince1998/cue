@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from 'dotenv'
 import postgres from 'postgres'
+import { applyAppTimezone } from '../timezone.ts'
 
 /**
  * A throwaway schema for the API tests.
@@ -29,6 +30,14 @@ const migrationsDir = resolve(apiRoot, 'migrations')
 // imported — importing env.ts first would build the pool against the wrong
 // schema and there would be no way back.
 config({ path: resolve(apiRoot, '../../.env') })
+
+// The same zone the server uses, applied before any test file evaluates. Test
+// files build dates at their top level — `const NOW = new Date(2026, 9, 5, 8)`
+// — and import the service under test later. Without this, a process that
+// starts in UTC (CI does, as EC2 does) builds those dates in UTC and then the
+// service, once env.ts has switched the zone, reads them five and a half hours
+// out. A laptop in India starts in the right zone, which is how it hid.
+applyAppTimezone()
 
 /** Same database, but every table lands in an isolated schema. */
 function urlFor(schema: string): string {
