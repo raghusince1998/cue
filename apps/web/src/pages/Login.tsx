@@ -25,8 +25,16 @@ export default function Login() {
         email_taken: 'An account already exists for that email.',
         invalid_input: 'Check the fields — password must be at least 8 characters.',
       }
+      // Only claim the server is unreachable when it genuinely did not answer.
+      // An ApiError means it did — saying otherwise sends people to check logs
+      // on a service that is running perfectly, which is exactly what happened.
       const code = err instanceof ApiError ? err.code : ''
-      setError(messages[code] ?? 'Could not reach the server. Is the API running?')
+      setError(
+        messages[code] ??
+          (err instanceof ApiError
+            ? `Sign-in failed (${err.status}${code ? `: ${code}` : ''}).`
+            : 'Could not reach the server. Is the API running?'),
+      )
     } finally {
       setBusy(false)
     }

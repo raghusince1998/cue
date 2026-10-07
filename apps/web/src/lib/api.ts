@@ -4,6 +4,23 @@
  * VITE_API_URL points at the separate API port.
  */
 export const BASE = `${import.meta.env.VITE_API_URL ?? ''}/api`
+
+/**
+ * `new URL()` needs somewhere to resolve against.
+ *
+ * In production BASE is the relative "/api", and `new URL("/api/auth/login")`
+ * does not return a relative URL — it throws. Every call then failed before
+ * reaching the network, and because the thrown value was not an ApiError the
+ * login screen reported "Could not reach the server", which was the one
+ * explanation that was not true: the server was answering fine.
+ *
+ * Invisible in development, where VITE_API_URL makes BASE absolute and the
+ * constructor is happy. It only appeared in the single-origin arrangement that
+ * production is supposed to use.
+ */
+function apiUrl(path: string): URL {
+  return new URL(BASE + path, window.location.origin)
+}
 const TOKEN_KEY = 'cue.token'
 
 /**
@@ -55,7 +72,7 @@ export async function api<T>(
   path: string,
   options: { method?: string; body?: unknown; query?: Record<string, string> } = {},
 ): Promise<T> {
-  const url = new URL(BASE + path)
+  const url = apiUrl(path)
   for (const [key, value] of Object.entries(options.query ?? {})) {
     url.searchParams.set(key, value)
   }
@@ -91,7 +108,7 @@ export async function apiUploadAudio(
   blob: Blob,
   query: Record<string, string> = {},
 ): Promise<{ id: string; mimeType: string; durationMs: number | null; sizeBytes: number }> {
-  const url = new URL(BASE + path)
+  const url = apiUrl(path)
   for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value)
 
   const token = getToken()
