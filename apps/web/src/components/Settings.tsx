@@ -14,6 +14,7 @@ interface Me {
 interface Preferences {
   timezone: string
   followupPrompts: boolean
+  prepPrompts: boolean
   morningBriefEnabled: boolean
   morningBriefHour: number
   dailyNudgeEnabled: boolean
@@ -334,6 +335,23 @@ export function Settings({ onClose }: { onClose: () => void }) {
           A notification as each one-off meeting ends — from Cue or a connected calendar — so
           you can note what was agreed while it is fresh. Each follow-up becomes a reminder of
           its own. Meetings also wait under &ldquo;Just finished&rdquo; on Today either way.
+        </InfoTip>
+      </div>
+
+      <div className="setting-row has-infotip">
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={prefs.prepPrompts}
+            disabled={busy}
+            onChange={(e) => void update({ prepPrompts: e.target.checked })}
+          />
+          <span>Before a meeting, remind me what is still open from last time</span>
+        </label>
+        <InfoTip label="How does it know?">
+          Follow-ups remember the meeting they came from. About 15 minutes before a meeting
+          with the same title, in the same series, or with the same person, you get a note of
+          what is still open from the earlier ones — only when there is something.
         </InfoTip>
       </div>
 

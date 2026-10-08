@@ -74,6 +74,8 @@ export const users = pgTable(
     dailyNudgeEnabled: boolean('daily_nudge_enabled').notNull().default(true),
     /** Ask "any follow-ups?" by notification when a meeting ends. */
     followupPrompts: boolean('followup_prompts').notNull().default(true),
+    /** Before a meeting, say what is still open from last time. */
+    prepPrompts: boolean('prep_prompts').notNull().default(true),
     /** The day's shape, by notification, each morning. */
     morningBriefEnabled: boolean('morning_brief_enabled').notNull().default(true),
     /** Local hour, 0-23. */
@@ -226,6 +228,8 @@ export const commitments = pgTable(
     recurrenceId: uuid('recurrence_id'),
     /** The schedule this is one step of — see `schedules`. */
     scheduleId: uuid('schedule_id'),
+    /** When the "before your meeting" notification went. */
+    prepPromptedAt: timestamp('prep_prompted_at', { withTimezone: true }),
     /** When the "any follow-ups?" notification went, for a meeting. */
     wrapupPromptedAt: timestamp('wrapup_prompted_at', { withTimezone: true }),
     /** The meeting this follow-up came out of. */

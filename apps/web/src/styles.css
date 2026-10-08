@@ -3676,3 +3676,70 @@ button:disabled {
   border-radius: 10px;
   background: var(--surface-2);
 }
+
+/* ---- Meeting prep --------------------------------------------------- */
+
+.prep-chip {
+  display: inline-block;
+  align-self: flex-start;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #8b5cf6 18%, transparent);
+  color: #a78bfa;
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.commitment-main > .prep-chip {
+  margin-left: 0;
+  margin-top: 2px;
+}
+
+.prep {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, #8b5cf6 40%, var(--border));
+  background: color-mix(in srgb, #8b5cf6 7%, var(--surface));
+}
+
+.prep-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.prep-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prep-item {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.prep-item:hover {
+  background: var(--surface-2);
+}
+
+.prep-done {
+  margin: 0;
+}

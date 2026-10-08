@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { and, asc, desc, eq, gt, gte, lt, lte, ne, or, sql, isNull, isNotNull } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, lt, lte, ne, or, sql, isNull, isNotNull, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   COMMITMENT_KIND,
@@ -23,6 +23,7 @@ import { suggestSlots } from '../services/slots.ts'
 import { detectLocationConflicts } from '../services/locationConflict.ts'
 import { canBeOverdue, isAwaitingWrapUp, isCalendarHistory, managedByCue } from '../services/overdue.ts'
 import { wrapUpMeeting } from '../services/wrapUp.ts'
+import { prepOpenCount, relatedMeetings } from '../services/meetingPrep.ts'
 
 const agendaQuery = z.object({
   /** Local day boundaries, supplied by the client which knows its timezone. */
@@ -76,6 +77,7 @@ const selection = {
   recurrenceId: schema.commitments.recurrenceId,
   feedId: schema.commitments.feedId,
   waitingOn: schema.commitments.waitingOn,
+  prepOpen: prepOpenCount(),
   history: isCalendarHistory(),
   fromTitle: sql<string | null>`(
     select f.title from commitments f where f.id = ${schema.commitments.fromCommitmentId}
@@ -123,6 +125,7 @@ function toDTO(row: SelectedRow): CommitmentDTO {
     recurrenceId: (row.recurrenceId as string | null) ?? null,
     feedId: (row.feedId as string | null) ?? null,
     waitingOn: (row.waitingOn as string | null) ?? null,
+    prepOpen: Number(row.prepOpen ?? 0),
     history: Boolean(row.history),
     scheduleTitle: (row.scheduleTitle as string | null) ?? null,
     fromTitle: (row.fromTitle as string | null) ?? null,
@@ -616,6 +619,47 @@ export async function commitmentRoutes(app: FastifyInstance) {
     })
 
     return { ok: true }
+  })
+
+  /**
+   * Prep for a meeting: the last related meeting, what is still open from all
+   * the earlier ones, and what from the last one has been done since.
+   */
+  app.get('/commitments/:id/prep', async (req, reply) => {
+    const { sub: userId } = scope(req)
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params)
+    const related = await relatedMeetings(userId, id)
+    if (!related) return reply.code(404).send({ error: 'not_found' })
+
+    const ids = related.map((m) => m.id)
+    const last = related[0] ?? null
+    const open = ids.length
+      ? await baseQuery()
+          .where(
+            and(
+              inArray(schema.commitments.fromCommitmentId, ids),
+              eq(schema.commitments.status, 'pending'),
+            ),
+          )
+          .orderBy(asc(schema.commitments.dueAt))
+      : []
+    const done = last
+      ? await baseQuery()
+          .where(
+            and(
+              eq(schema.commitments.fromCommitmentId, last.id),
+              eq(schema.commitments.status, 'done'),
+            ),
+          )
+          .orderBy(asc(schema.commitments.dueAt))
+      : []
+
+    return {
+      last: last ? { id: last.id, title: last.title, dueAt: last.dueAt.toISOString() } : null,
+      earlierCount: related.length,
+      open: open.map(toDTO),
+      doneSinceLast: done.map(toDTO),
+    }
   })
 
   /**

@@ -13,6 +13,7 @@ const preferencesInput = z.object({
   dailyNudgeEnabled: z.boolean().optional(),
   dailyNudgeHour: z.number().int().min(0).max(23).optional(),
   followupPrompts: z.boolean().optional(),
+  prepPrompts: z.boolean().optional(),
   morningBriefEnabled: z.boolean().optional(),
   morningBriefHour: z.number().int().min(0).max(23).optional(),
 })
@@ -23,6 +24,7 @@ const selection = {
   dailyNudgeHour: schema.users.dailyNudgeHour,
   lastNudgeOn: schema.users.lastNudgeOn,
   followupPrompts: schema.users.followupPrompts,
+  prepPrompts: schema.users.prepPrompts,
   morningBriefEnabled: schema.users.morningBriefEnabled,
   morningBriefHour: schema.users.morningBriefHour,
 }
@@ -59,6 +61,7 @@ export async function meRoutes(app: FastifyInstance) {
           : {}),
         ...(body.dailyNudgeHour !== undefined ? { dailyNudgeHour: body.dailyNudgeHour } : {}),
         ...(body.followupPrompts !== undefined ? { followupPrompts: body.followupPrompts } : {}),
+        ...(body.prepPrompts !== undefined ? { prepPrompts: body.prepPrompts } : {}),
         ...(body.morningBriefEnabled !== undefined
           ? { morningBriefEnabled: body.morningBriefEnabled }
           : {}),

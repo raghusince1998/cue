@@ -650,6 +650,8 @@ export interface CommitmentDTO {
   fromTitle?: string | null
   /** Someone else's to do: who it is waiting on. A check-in, not time booked. */
   waitingOn?: string | null
+  /** For a meeting: follow-ups still open from earlier meetings like it. */
+  prepOpen?: number
   /** How many things are attached to this; 0 means do not render a list. */
   checklistCount: number
   checklistDone: number

@@ -121,6 +121,12 @@ function Card({
             {commitment.recurrenceId ? ' · repeats' : ''}
             {commitment.feedId ? ' · from your calendar' : ''}
           </p>
+          {/* Prep at a glance: open the card for what they are. */}
+          {(commitment.prepOpen ?? 0) > 0 && (
+            <span className="prep-chip">
+              {commitment.prepOpen} open from last time
+            </span>
+          )}
         </div>
         {overdue && commitment.flexibility === 'fixed' && (
           <span className="badge">{overdueBy(commitment.dueAt)} late</span>
@@ -295,6 +301,15 @@ export default function Today() {
   const wide = useWide()
   /** A day a link asked to open on — "Open the day" on a clash. */
   const [focusDate, setFocusDate] = useState<string | null>(null)
+
+  // ?prep=<id>: "your meeting starts soon — still open from last time", tapped.
+  useEffect(() => {
+    const id = params.get('prep')
+    if (!id) return
+    params.delete('prep')
+    setParams(params, { replace: true })
+    openPlan(id)
+  }, [params, setParams, openPlan])
 
   // ?day=1: the morning brief, or the summary card's "your day", tapped.
   useEffect(() => {
@@ -938,6 +953,7 @@ export default function Today() {
           initialMode={opened.mode}
           onClose={() => setOpened(null)}
           onChanged={() => void load()}
+          onOpenOther={(id) => openPlan(id)}
         />
       )}
     </div>

@@ -32,6 +32,7 @@ import { intentionRoutes } from './routes/intentions.ts'
 import { startNudgeWorker } from './services/dailyNudge.ts'
 import { startFollowUpWorker } from './services/wrapUp.ts'
 import { startMorningBriefWorker } from './services/morningBrief.ts'
+import { startPrepWorker } from './services/meetingPrep.ts'
 import { startReminderWorker } from './worker/reminders.ts'
 import { sweep } from './services/recurrence.ts'
 import { syncAllFeeds } from './services/calendarFeed.ts'
@@ -129,6 +130,7 @@ const stopWorker = startReminderWorker()
 const stopNudges = startNudgeWorker()
 const stopFollowUps = startFollowUpWorker()
 const stopBriefs = startMorningBriefWorker()
+const stopPrep = startPrepWorker()
 
 // Keeps the rolling window of generated occurrences topped up. Hourly is ample
 // for a 120-day horizon, and it runs once at boot so a series created while the
@@ -168,6 +170,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     stopNudges()
   stopFollowUps()
   stopBriefs()
+  stopPrep()
     clearInterval(recurrenceTimer)
     clearInterval(feedTimer)
     clearInterval(purgeTimer)

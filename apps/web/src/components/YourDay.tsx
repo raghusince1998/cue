@@ -160,6 +160,9 @@ export function YourDay({
                   {row.c.placeName ? ` · ${row.c.placeName}` : ''}
                   {row.from <= now && row.to > now ? ' · now' : ''}
                   {row.c.status === 'done' ? ' · done' : ''}
+                  {(row.c.prepOpen ?? 0) > 0 && row.to > now ? (
+                    <span className="prep-chip">{row.c.prepOpen} open from last time</span>
+                  ) : null}
                 </span>
               </button>
             </li>

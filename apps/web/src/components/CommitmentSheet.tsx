@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { KIND_LABELS, PRIORITY_LABELS, WINDOW_LABELS, type CommitmentDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
-import { formatSpan, overdueBy, relativeDay } from '../lib/time.ts'
+import { dayLabel, formatSpan, overdueBy, relativeDay } from '../lib/time.ts'
 import { readNotes } from '../lib/sample.ts'
 import { Modal } from './Modal.tsx'
 import { CommitmentEditor } from './CommitmentEditor.tsx'
@@ -53,17 +53,27 @@ function StatusLine({ c }: { c: CommitmentDTO }) {
  * was to start editing it. This shows everything about it first, with Edit
  * one tap away inside, and returns here after a save.
  */
+interface Prep {
+  last: { id: string; title: string; dueAt: string } | null
+  earlierCount: number
+  open: CommitmentDTO[]
+  doneSinceLast: CommitmentDTO[]
+}
+
 export function CommitmentSheet({
   commitmentId,
   initialMode = 'view',
   onClose,
   onChanged,
+  onOpenOther,
 }: {
   commitmentId: string
   initialMode?: SheetMode
   onClose: () => void
   /** Something was saved, so the page behind should reload. */
   onChanged: () => void
+  /** Open a different plan in this sheet — an open item from last time. */
+  onOpenOther?: (id: string) => void
 }) {
   const [mode, setMode] = useState<SheetMode>(initialMode)
   const [c, setC] = useState<CommitmentDTO | null>(null)
@@ -85,6 +95,32 @@ export function CommitmentSheet({
   useEffect(() => {
     void load()
   }, [load])
+
+  // For a meeting: what is still open from the last ones like it.
+  const [prep, setPrep] = useState<Prep | null>(null)
+  const loadPrep = useCallback(async () => {
+    try {
+      setPrep(await api<Prep>(`/commitments/${commitmentId}/prep`))
+    } catch {
+      setPrep(null)
+    }
+  }, [commitmentId])
+  useEffect(() => {
+    if (c?.kind === 'meeting') void loadPrep()
+  }, [c?.kind, loadPrep])
+
+  async function closeOther(id: string) {
+    setBusy(true)
+    try {
+      await api(`/commitments/${id}/done`, { method: 'POST' })
+      onChanged()
+      await loadPrep()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function markDone() {
     setBusy(true)
@@ -172,6 +208,49 @@ export function CommitmentSheet({
             </p>
             <StatusLine c={c} />
           </div>
+
+          {/* Before a meeting, the first thing worth knowing: what was left
+              open last time, so it gets raised rather than remembered later. */}
+          {c.kind === 'meeting' && prep?.last && (
+            <section className="prep">
+              <span className="label-text">
+                From last time · {prep.last.title} · {dayLabel(prep.last.dueAt)}
+              </span>
+              {prep.open.length === 0 ? (
+                <p className="muted small">Nothing left open from earlier meetings like this.</p>
+              ) : (
+                <ul className="prep-list">
+                  {prep.open.map((o) => (
+                    <li key={o.id}>
+                      <button className="prep-item" onClick={() => onOpenOther?.(o.id)}>
+                        {o.waitingOn && <span className="waiting-who">{o.waitingOn}</span>}
+                        <span>{o.waitingOn ? o.title.replace(/^Waiting on [^:]+:\s*/i, '') : o.title}</span>
+                        <span className="muted small">
+                          {' '}
+                          · {o.waitingOn ? 'check in' : 'due'} {dayLabel(o.dueAt)}
+                          {o.fromTitle && prep.last && o.fromTitle !== prep.last.title
+                            ? ` · from ${o.fromTitle}`
+                            : ''}
+                        </span>
+                      </button>
+                      <button
+                        className="ghost tiny-btn"
+                        onClick={() => void closeOther(o.id)}
+                        disabled={busy}
+                      >
+                        {o.waitingOn ? 'Got it' : 'Done'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {prep.doneSinceLast.length > 0 && (
+                <p className="muted small prep-done">
+                  Done since: {prep.doneSinceLast.map((d) => d.title).join(' · ')}
+                </p>
+              )}
+            </section>
+          )}
 
           <dl className="details-facts">
             <div>
