@@ -147,3 +147,20 @@ test('a batch with one bad row still processes the rest', async () => {
   assert.equal((await reminders(good))[0]!.status, 'sent')
   assert.equal((await reminders(closed))[0]!.status, 'cancelled')
 })
+
+test('a meeting from a connected calendar is announced once, not chased', async () => {
+  const [feed] = await h.sql<{ id: string }[]>`
+    insert into calendar_feeds (org_id, user_id, label, source)
+    values (${me.orgId}, ${me.userId}, 'Work', 'google') returning id`
+  const [row] = await h.sql<{ id: string }[]>`
+    insert into commitments (org_id, user_id, title, due_at, status, feed_id)
+    values (${me.orgId}, ${me.userId}, 'Design review', now() - interval '1 minute', 'pending', ${feed!.id})
+    returning id`
+  await queue(row!.id)
+
+  await tick()
+
+  const chain = await reminders(row!.id)
+  assert.equal(chain.length, 1, '"Still open, 15 min overdue" about a meeting is nagging, not reminding')
+  assert.equal(chain[0]!.status, 'sent')
+})

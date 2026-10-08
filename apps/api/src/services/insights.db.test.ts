@@ -188,3 +188,29 @@ test('the summary stays on today while today still has something in it', async (
   assert.equal(summary.subject, 'today')
   assert.equal(summary.todayCount, 1)
 })
+
+test('a calendar event that is over is not something you dropped', async () => {
+  // Connecting Google brings in a year of history. Every meeting in it is in
+  // the past and still "pending", and it used to land in the overdue count —
+  // 65 of them on a real account, last year's Diwali included.
+  await h.sql`delete from commitments`
+  const [feed] = await h.sql<{ id: string }[]>`
+    insert into calendar_feeds (org_id, user_id, label, source)
+    values (${me.orgId}, ${me.userId}, 'Work', 'google') returning id`
+  await h.sql`
+    insert into commitments (org_id, user_id, title, due_at, status, feed_id)
+    values (${me.orgId}, ${me.userId}, 'Last year''s offsite', ${at(-300, 10)}, 'pending', ${feed!.id})`
+
+  const insights = await svc.buildInsights(me.userId, NOW)
+  assert.ok(!insights.some((i) => i.id === 'overdue' || i.id === 'stuck'), 'not dropped, not stuck')
+  const summary = await svc.buildSummary(me.userId, NOW)
+  assert.equal(summary.overdue, 0)
+
+  // Something you set out to do still counts, and its button goes somewhere.
+  await plan('Send the quote', at(-2, 10))
+  const after = await svc.buildInsights(me.userId, NOW)
+  const overdue = after.find((i) => i.id === 'overdue')
+  assert.ok(overdue, 'a real overdue item is still reported')
+  assert.notEqual(overdue!.action?.href, '/', 'a button that links to the page it is on does nothing')
+  await h.sql`delete from calendar_feeds`
+})

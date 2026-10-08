@@ -3,6 +3,7 @@ import { db, schema } from '../db/index.ts'
 import { env } from '../env.ts'
 import { cancelPendingReminders, scheduleFirstReminder } from './reminders.ts'
 import { nextFreeSlot } from './freeSlots.ts'
+import { canBeOverdue } from './overdue.ts'
 
 /**
  * The moment the app admits its own nagging failed.
@@ -33,6 +34,8 @@ export type TriageReason =
   | 'bad-day'
   /** Simply old. */
   | 'just-old'
+  /** Late but not yet stuck — only listed when every overdue item is asked for. */
+  | 'late'
 
 export type TriageAction = 'done' | 'reschedule' | 'someday' | 'drop'
 
@@ -74,6 +77,7 @@ async function worstWeekdayFor(userId: string, now: Date): Promise<number | null
       and(
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
+        canBeOverdue(),
         lt(schema.commitments.dueAt, now),
         gte(schema.commitments.dueAt, new Date(now.getTime() - 90 * DAY_MS)),
       ),
@@ -87,7 +91,18 @@ async function worstWeekdayFor(userId: string, now: Date): Promise<number | null
   return counts[worst] >= Math.max(3, Math.ceil(rows.length * 0.4)) ? worst : null
 }
 
-export async function buildTriage(userId: string, now = new Date()): Promise<TriageReport> {
+/**
+ * What has stopped moving, and what to do about each.
+ *
+ * `all` lists every overdue item rather than only the stuck ones. "Clear
+ * them", under the overdue count, means all of them; a panel that then left
+ * out everything less than five days late answered a different question.
+ */
+export async function buildTriage(
+  userId: string,
+  now = new Date(),
+  opts: { all?: boolean } = {},
+): Promise<TriageReport> {
   const overdue = await db
     .select({
       id: schema.commitments.id,
@@ -102,6 +117,7 @@ export async function buildTriage(userId: string, now = new Date()): Promise<Tri
       and(
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
+        canBeOverdue(),
         lt(schema.commitments.dueAt, now),
       ),
     )
@@ -116,13 +132,21 @@ export async function buildTriage(userId: string, now = new Date()): Promise<Tri
   const items: StuckItem[] = []
   const claimed: { from: Date; to: Date }[] = []
 
-  for (const c of stuckRows) {
+  const stuckIds = new Set(stuckRows.map((c) => c.id))
+  for (const c of opts.all ? overdue : stuckRows) {
     const daysOverdue = Math.floor((now.getTime() - c.dueAt.getTime()) / DAY_MS)
 
     let reason: TriageReason = 'just-old'
     let because = `${plural(daysOverdue, 'day')} past its time, and nothing has moved.`
 
-    if (c.escalationCount >= env.maxEscalations) {
+    if (!stuckIds.has(c.id)) {
+      reason = 'late'
+      const hoursLate = Math.max(1, Math.round((now.getTime() - c.dueAt.getTime()) / 3_600_000))
+      because =
+        daysOverdue >= 1
+          ? `${plural(daysOverdue, 'day')} past its time.`
+          : `${plural(hoursLate, 'hour')} past its time.`
+    } else if (c.escalationCount >= env.maxEscalations) {
       reason = 'chased-out'
       because = `Chased ${plural(c.escalationCount, 'time')} and still open. The reminders are not working for this one.`
     } else if (c.flexibility === 'flexible') {
@@ -171,7 +195,7 @@ export async function buildTriage(userId: string, now = new Date()): Promise<Tri
   return {
     items,
     worstWeekday: worst !== null ? WEEKDAYS[worst]! : null,
-    merelyLate: overdue.length - stuckRows.length,
+    merelyLate: opts.all ? 0 : overdue.length - stuckRows.length,
   }
 }
 

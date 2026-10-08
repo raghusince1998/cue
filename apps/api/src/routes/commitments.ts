@@ -21,6 +21,7 @@ import { checkConflicts } from '../services/scheduling.ts'
 import { findFreeSlots } from '../services/freeSlots.ts'
 import { suggestSlots } from '../services/slots.ts'
 import { detectLocationConflicts } from '../services/locationConflict.ts'
+import { canBeOverdue } from '../services/overdue.ts'
 
 const agendaQuery = z.object({
   /** Local day boundaries, supplied by the client which knows its timezone. */
@@ -210,7 +211,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
 
     const [overdue, today, upcoming, doneToday] = await Promise.all([
       baseQuery()
-        .where(and(mine, pending, lt(schema.commitments.dueAt, now)))
+        .where(and(mine, pending, canBeOverdue(), lt(schema.commitments.dueAt, now)))
         .orderBy(asc(schema.commitments.dueAt)),
       baseQuery()
         .where(

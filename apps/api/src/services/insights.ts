@@ -1,6 +1,13 @@
 import { and, asc, eq, gte, isNull, lt, lte, ne, or, sql } from 'drizzle-orm'
 import { db, schema } from '../db/index.ts'
 import { estimateTravel, geocode, sameLabel } from './travel.ts'
+import { canBeOverdue } from './overdue.ts'
+
+/** A local calendar date as YYYY-MM-DD, for a link into the calendar. */
+function dayKey(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
 
 /**
  * What the app has noticed.
@@ -165,7 +172,9 @@ async function travelRisks(items: Busy[]): Promise<Insight[]> {
       tone: 'urgent',
       headline: `You cannot get from ${labelA} to ${labelB} in time`,
       detail: `${a.title} ends at ${clock(endOf(a))} and ${b.title} starts at ${clock(b.dueAt)} — ${Math.round(gapMinutes)} minutes apart. That journey is about ${travel.distanceKm} km, roughly ${hours(travel.minutes)}.`,
-      action: { label: 'Open the day', href: '/' },
+      // The week that day is in, with the day picked out. '/' was the page
+      // the button sat on, so it did nothing.
+      action: { label: 'Open the day', href: `/?view=week&date=${dayKey(a.dueAt)}` },
       weight: 100,
     })
   }
@@ -196,6 +205,7 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
       and(
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
+        canBeOverdue(),
         lt(schema.commitments.dueAt, now),
       ),
     )
@@ -212,7 +222,9 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
         days >= 1
           ? `The oldest is "${oldest.title}", ${days} day${days === 1 ? '' : 's'} past its time.`
           : `"${oldest.title}" was due at ${clock(oldest.dueAt)}.`,
-      action: { label: 'Clear them', href: '/' },
+      // The triage panel is where each one gets decided. '/' was the page
+      // the button sat on, so pressing it did nothing at all.
+      action: { label: 'Clear them', href: '/?triage=all' },
       weight: 95,
     })
   }
@@ -249,6 +261,7 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
       and(
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
+        canBeOverdue(),
         lt(schema.commitments.dueAt, now),
         gte(schema.commitments.dueAt, new Date(now.getTime() - 60 * DAY_MS)),
       ),
@@ -409,6 +422,7 @@ export async function buildSummary(userId: string, now = new Date()) {
       and(
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
+        canBeOverdue(),
         lt(schema.commitments.dueAt, now),
       ),
     )

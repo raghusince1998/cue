@@ -161,3 +161,13 @@ test('blank description and location become null, not empty strings', () => {
   assert.equal(events[0]!.description, null)
   assert.equal(events[0]!.location, null)
 })
+
+test('an event description arrives as text, not HTML', async () => {
+  const { plainText } = await import('./googleCalendar.ts')
+  assert.equal(
+    plainText('Hi Everyone!<br>Today we have a joint session led by <strong>Sunita</strong> &amp; Aashi.'),
+    'Hi Everyone!\nToday we have a joint session led by Sunita & Aashi.',
+  )
+  assert.equal(plainText('<ul><li>One</li><li>Two</li></ul>'), '• One\n• Two')
+  assert.equal(plainText('Plain words stay as they are'), 'Plain words stay as they are')
+})

@@ -47,7 +47,16 @@ function when(iso: string): string {
   })
 }
 
-export function Triage({ onClose, onApplied }: { onClose: () => void; onApplied: () => void }) {
+export function Triage({
+  onClose,
+  onApplied,
+  all = false,
+}: {
+  onClose: () => void
+  onApplied: () => void
+  /** Every overdue item, not only the ones that have stopped moving. */
+  all?: boolean
+}) {
   const [report, setReport] = useState<Report | null>(null)
   const [choices, setChoices] = useState<Record<string, Action>>({})
   const [busy, setBusy] = useState(false)
@@ -55,7 +64,7 @@ export function Triage({ onClose, onApplied }: { onClose: () => void; onApplied:
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api<Report>('/triage')
+    api<Report>('/triage', { query: all ? { all: '1' } : undefined })
       .then((r) => {
         setReport(r)
         // Pre-selected with what the app would do, so the common case is one
@@ -63,7 +72,7 @@ export function Triage({ onClose, onApplied }: { onClose: () => void; onApplied:
         setChoices(Object.fromEntries(r.items.map((i) => [i.id, i.suggested])))
       })
       .catch((err) => setError((err as Error).message))
-  }, [])
+  }, [all])
 
   async function apply() {
     if (!report) return
@@ -87,7 +96,13 @@ export function Triage({ onClose, onApplied }: { onClose: () => void; onApplied:
   }
 
   if (error) return <p className="error small">{error}</p>
-  if (!report) return <p className="muted small">Looking at what has stopped moving…</p>
+  if (!report) {
+    return (
+      <p className="muted small">
+        {all ? 'Gathering everything past its time…' : 'Looking at what has stopped moving…'}
+      </p>
+    )
+  }
 
   if (done) {
     const parts = [
@@ -113,7 +128,7 @@ export function Triage({ onClose, onApplied }: { onClose: () => void; onApplied:
   if (report.items.length === 0) {
     return (
       <div className="stack tight">
-        <strong>Nothing is stuck.</strong>
+        <strong>{all ? 'Nothing is overdue.' : 'Nothing is stuck.'}</strong>
         <p className="muted small">
           {report.merelyLate > 0
             ? `${report.merelyLate} ${report.merelyLate === 1 ? 'thing is' : 'things are'} late, but still being chased. They have not been given up on yet.`
@@ -129,8 +144,9 @@ export function Triage({ onClose, onApplied }: { onClose: () => void; onApplied:
   return (
     <div className="stack tight">
       <p className="muted small">
-        These stopped moving. The reminders ran out, so chasing them again will not work — and
-        that is the app&rsquo;s failure as much as yours.
+        {all
+          ? `Everything past its time — ${report.items.length}. What the app would do is already picked for each; change any, then apply.`
+          : 'These stopped moving. The reminders ran out, so chasing them again will not work — and that is the app\u2019s failure as much as yours.'}
         {report.worstWeekday && ` Most of them were due on a ${report.worstWeekday}.`}
       </p>
 

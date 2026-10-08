@@ -65,9 +65,14 @@ async function processOne(claim: ClaimedReminder) {
   const where = [row.placeName, row.contactName].filter(Boolean).join(' · ')
   const suffix = where ? ` · ${where}` : ''
 
+  // A meeting from a connected calendar is announced once, as it starts. It is
+  // not a task, so "Still open — 2h overdue" every fifteen minutes would be
+  // nagging about something that has already happened.
+  const mirrored = commitment.feedId !== null
+
   await sendToUser(commitment.userId, {
     title: commitment.title,
-    body: `${describe(commitment.dueAt, claim.attempt)}${suffix}`,
+    body: `${mirrored ? 'Starting now' : describe(commitment.dueAt, claim.attempt)}${suffix}`,
     tag: `commitment-${commitment.id}`,
     // Lets the notification offer a Call button instead of only a nag.
     phone: row.contactPhone ?? undefined,
@@ -92,7 +97,7 @@ async function processOne(claim: ClaimedReminder) {
 
   // Keep chasing. Once the chain is exhausted the item simply stays in the
   // Overdue list until the user closes it — it is never silently dropped.
-  if (nextAttempt < env.maxEscalations) {
+  if (!mirrored && nextAttempt < env.maxEscalations) {
     await db.insert(schema.reminders).values({
       orgId: claim.org_id,
       commitmentId: commitment.id,

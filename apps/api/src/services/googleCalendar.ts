@@ -141,6 +141,31 @@ export async function listCalendars(account: AccountRow): Promise<GoogleCalendar
  * these two have to agree or the same holiday lands on different days
  * depending on how it was imported.
  */
+/**
+ * An event description as text.
+ *
+ * Google stores descriptions as HTML — anything pasted from an invite arrives
+ * as "Hi Everyone!<br>Today we have a joint session led by <strong>…", and
+ * that is what showed under the event in Cue. Line breaks are kept as line
+ * breaks; every other tag is dropped and the common entities decoded.
+ */
+export function plainText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&amp;/gi, '&')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 function localDate(ymd: string): Date | null {
   const parts = ymd.split('-').map(Number)
   if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null
@@ -285,7 +310,7 @@ export function mapGoogleEvents(
     events.push({
       uid,
       title: label,
-      description: (item.description ?? '').trim() || null,
+      description: plainText(item.description ?? '') || null,
       location: (item.location ?? '').trim() || null,
       startsAt: start.date,
       endsAt: end?.date ?? null,

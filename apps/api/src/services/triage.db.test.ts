@@ -228,3 +228,32 @@ test('a decision about something already closed does nothing', async () => {
   const r = await svc.applyTriage(me.userId, [{ id, action: 'drop' }], NOW)
   assert.equal(r.dropped, 0, 'a stale panel must not reopen or overwrite a closed item')
 })
+
+// ------------------------------------------------- what "Clear them" lists
+
+test('asking for everything lists the merely late as well as the stuck', async () => {
+  await overdue('Yesterday', daysAgo(1), { escalations: 1 })
+  await overdue('Last month', daysAgo(30))
+
+  const stuckOnly = await svc.buildTriage(me.userId, NOW)
+  assert.deepEqual(stuckOnly.items.map((i) => i.title), ['Last month'])
+
+  const all = await svc.buildTriage(me.userId, NOW, { all: true })
+  assert.deepEqual(all.items.map((i) => i.title).sort(), ['Last month', 'Yesterday'])
+  assert.equal(all.items.find((i) => i.title === 'Yesterday')!.reason, 'late')
+  assert.equal(all.merelyLate, 0, 'nothing is left out, so nothing is "merely late"')
+})
+
+test('a past event from a connected calendar is never in the backlog', async () => {
+  const [feed] = await h.sql<{ id: string }[]>`
+    insert into calendar_feeds (org_id, user_id, label, source)
+    values (${me.orgId}, ${me.userId}, 'Holidays', 'google') returning id`
+  await h.sql`
+    insert into commitments (org_id, user_id, title, due_at, status, feed_id)
+    values (${me.orgId}, ${me.userId}, 'Diwali', ${daysAgo(353)}, 'pending', ${feed!.id})`
+  await overdue('Mine', daysAgo(30))
+
+  const all = await svc.buildTriage(me.userId, NOW, { all: true })
+  assert.deepEqual(all.items.map((i) => i.title), ['Mine'])
+  await h.sql`delete from calendar_feeds`
+})

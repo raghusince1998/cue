@@ -60,7 +60,8 @@ export async function insightRoutes(app: FastifyInstance) {
   /** What has stopped moving, and why the app thinks so. Writes nothing. */
   app.get('/triage', async (req) => {
     const { sub: userId } = scope(req)
-    return buildTriage(userId)
+    const { all } = z.object({ all: z.string().optional() }).parse(req.query)
+    return buildTriage(userId, new Date(), { all: all === '1' })
   })
 
   /** Applies what was decided about each stuck item. */

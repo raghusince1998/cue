@@ -237,6 +237,20 @@ export default function Today() {
   const [params, setParams] = useSearchParams()
   const handledDeepLink = useRef(false)
   const wide = useWide()
+  /** A day a link asked to open on — "Open the day" on a clash. */
+  const [focusDate, setFocusDate] = useState<string | null>(null)
+
+  // ?view=week&date=YYYY-MM-DD: switch to that view on that day, then take
+  // the parameters out of the address so a refresh does not keep jumping back.
+  useEffect(() => {
+    const linked = params.get('view')
+    if (linked !== 'week' && linked !== 'month') return
+    setView(linked)
+    setFocusDate(params.get('date'))
+    params.delete('view')
+    params.delete('date')
+    setParams(params, { replace: true })
+  }, [params, setParams])
 
   const load = useCallback(async () => {
     const { from, to } = dayBounds()
@@ -359,15 +373,16 @@ export default function Today() {
      */
     <div className="today">
       {/* Opened from the brief, which is the only thing that raises it. */}
-      {params.get('triage') === '1' && (
+      {(params.get('triage') === '1' || params.get('triage') === 'all') && (
         <Modal
-          title="What stopped moving"
+          title={params.get('triage') === 'all' ? 'Clear what is overdue' : 'What stopped moving'}
           onClose={() => {
             params.delete('triage')
             setParams(params, { replace: true })
           }}
         >
           <Triage
+            all={params.get('triage') === 'all'}
             onClose={() => {
               params.delete('triage')
               setParams(params, { replace: true })
@@ -448,7 +463,13 @@ export default function Today() {
       </div>
 
       {view !== 'agenda' && (
-        <CalendarView mode={view} onOpen={setEditingId} refreshKey={calendarKey} />
+        <CalendarView
+          key={focusDate ?? 'today'}
+          mode={view}
+          onOpen={setEditingId}
+          refreshKey={calendarKey}
+          initialDate={focusDate ?? undefined}
+        />
       )}
 
       {view === 'agenda' && agenda.overdue.length > 0 && (
