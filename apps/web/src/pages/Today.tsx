@@ -6,7 +6,7 @@ import { dayBounds, formatSpan, overdueBy } from '../lib/time.ts'
 import { enablePush, pushState, sendTestPush } from '../lib/push.ts'
 import { Modal } from '../components/Modal.tsx'
 import { InstallButton } from '../components/InstallButton.tsx'
-import { CommitmentEditor } from '../components/CommitmentEditor.tsx'
+import { CommitmentSheet, type SheetMode } from '../components/CommitmentSheet.tsx'
 import { NearbyIntentions } from '../components/NearbyIntentions.tsx'
 import { DayBrief } from '../components/DayBrief.tsx'
 import { PlanTomorrow } from '../components/PlanTomorrow.tsx'
@@ -41,14 +41,15 @@ function Card({
   overdue,
   onDone,
   onSnooze,
-  onEdit,
+  onOpen,
   onMoved,
 }: {
   commitment: CommitmentDTO
   overdue?: boolean
   onDone: (id: string) => void
   onSnooze: (id: string, minutes: number) => void
-  onEdit: (id: string) => void
+  /** Show this plan's details; 'edit' goes straight to the form. */
+  onOpen: (id: string, mode?: SheetMode) => void
   onMoved: () => void
 }) {
   const [moving, setMoving] = useState(false)
@@ -58,7 +59,21 @@ function Card({
     <li
       className={`card commitment tone-edge tone-${cardTone(commitment, overdue)}${overdue ? ' is-overdue' : ''}`}
     >
-      <div className="commitment-main">
+      {/* The card itself opens the plan. Its buttons do their own thing and
+          sit outside this, so pressing Done never also opens the details. */}
+      <div
+        className="commitment-main is-openable"
+        role="button"
+        tabIndex={0}
+        aria-label={`Open ${commitment.title}`}
+        onClick={() => onOpen(commitment.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onOpen(commitment.id)
+          }
+        }}
+      >
       <div className="commitment-head">
         <div>
           <p className="commitment-title">
@@ -123,9 +138,6 @@ function Card({
             Call {commitment.contactName ?? ''}
           </a>
         )}
-        <button className="link push-right" onClick={() => onEdit(commitment.id)}>
-          Edit
-        </button>
       </div>
 
       {commitment.checklistCount ? <Checklist commitmentId={commitment.id} /> : null}
@@ -140,7 +152,7 @@ function Card({
           onCancel={() => setMoving(false)}
           onEdit={() => {
             setMoving(false)
-            onEdit(commitment.id)
+            onOpen(commitment.id, 'edit')
           }}
         />
       )}
@@ -223,7 +235,12 @@ function useWide(): boolean {
 export default function Today() {
   const [agenda, setAgenda] = useState<Agenda>(EMPTY)
   const [loading, setLoading] = useState(true)
-  const [editingId, setEditingId] = useState<string | null>(null)
+  /** The plan open in the details sheet, and whether it opened on the form. */
+  const [opened, setOpened] = useState<{ id: string; mode: SheetMode } | null>(null)
+  const openPlan = useCallback(
+    (id: string, mode: SheetMode = 'view') => setOpened({ id, mode }),
+    [],
+  )
   // Five is enough to see the shape of the month without scrolling past it.
   const [showAllContext, setShowAllContext] = useState(false)
   // Bumped after any save, so the calendar refetches instead of going stale.
@@ -433,7 +450,7 @@ export default function Today() {
             <CalendarView
               compact
               mode={wide ? 'month' : 'week'}
-              onOpen={setEditingId}
+              onOpen={openPlan}
               refreshKey={calendarKey}
             />
           </section>
@@ -466,7 +483,7 @@ export default function Today() {
         <CalendarView
           key={focusDate ?? 'today'}
           mode={view}
-          onOpen={setEditingId}
+          onOpen={openPlan}
           refreshKey={calendarKey}
           initialDate={focusDate ?? undefined}
         />
@@ -485,7 +502,7 @@ export default function Today() {
                 overdue
                 onDone={complete}
                 onSnooze={snooze}
-                onEdit={setEditingId}
+                onOpen={openPlan}
                 onMoved={() => void load()}
               />
             ))}
@@ -506,7 +523,7 @@ export default function Today() {
                 commitment={c}
                 onDone={complete}
                 onSnooze={snooze}
-                onEdit={setEditingId}
+                onOpen={openPlan}
                 onMoved={() => void load()}
               />
             ))}
@@ -526,7 +543,7 @@ export default function Today() {
                 commitment={c}
                 onDone={complete}
                 onSnooze={snooze}
-                onEdit={setEditingId}
+                onOpen={openPlan}
                 onMoved={() => void load()}
               />
             ))}
@@ -544,7 +561,7 @@ export default function Today() {
                 commitment={c}
                 onDone={complete}
                 onSnooze={snooze}
-                onEdit={setEditingId}
+                onOpen={openPlan}
                 onMoved={() => void load()}
               />
             ))}
@@ -588,7 +605,7 @@ export default function Today() {
                       {c.placeName ? ` · ${c.placeName}` : ''}
                     </p>
                   </div>
-                  <button className="link" onClick={() => setEditingId(c.id)}>
+                  <button className="link" onClick={() => openPlan(c.id, 'edit')}>
                     Reopen
                   </button>
                 </div>
@@ -608,17 +625,14 @@ export default function Today() {
       )}
       </div>
 
-      {editingId && (
-        <Modal title="Edit follow-up" onClose={() => setEditingId(null)}>
-          <CommitmentEditor
-            commitmentId={editingId}
-            onClose={() => setEditingId(null)}
-            onSaved={() => {
-              setEditingId(null)
-              void load()
-            }}
-          />
-        </Modal>
+      {opened && (
+        <CommitmentSheet
+          key={opened.id}
+          commitmentId={opened.id}
+          initialMode={opened.mode}
+          onClose={() => setOpened(null)}
+          onChanged={() => void load()}
+        />
       )}
     </div>
   )
