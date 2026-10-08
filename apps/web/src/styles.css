@@ -3743,3 +3743,137 @@ button:disabled {
 .prep-done {
   margin: 0;
 }
+
+/* ---- Weekly review -------------------------------------------------- */
+
+.brief-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+
+@media (min-width: 900px) {
+  .modal:has(.review) {
+    max-width: 640px;
+  }
+}
+
+.review-part {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.review-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.review-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.review-stats strong {
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.review-stats span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.review-done summary {
+  cursor: pointer;
+  color: var(--accent-2);
+  font-size: 13px;
+}
+
+.review-done ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13.5px;
+}
+
+.review-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.review-action .small-btn {
+  flex: 0 0 auto;
+}
+
+/* Next week as seven columns: how full each day already is. */
+.week-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: end;
+  gap: 8px;
+  height: 130px;
+}
+
+.week-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  height: 100%;
+}
+
+.week-bar-fill {
+  width: 100%;
+  max-width: 34px;
+  border-radius: 6px 6px 2px 2px;
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.week-bar.is-busiest .week-bar-fill {
+  background: var(--accent);
+}
+
+.week-bar-value {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.week-bar-day {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+@media (max-width: 480px) {
+  /* Side by side even on a phone: three small numbers, not three cards. */
+  .review-stats > div {
+    padding: 8px 9px;
+  }
+
+  .review-stats strong {
+    font-size: 19px;
+  }
+
+  .review-stats span {
+    font-size: 11px;
+  }
+
+  .review-action {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

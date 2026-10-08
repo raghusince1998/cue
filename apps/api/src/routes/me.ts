@@ -14,6 +14,8 @@ const preferencesInput = z.object({
   dailyNudgeHour: z.number().int().min(0).max(23).optional(),
   followupPrompts: z.boolean().optional(),
   prepPrompts: z.boolean().optional(),
+  weeklyReviewEnabled: z.boolean().optional(),
+  weeklyReviewHour: z.number().int().min(0).max(23).optional(),
   morningBriefEnabled: z.boolean().optional(),
   morningBriefHour: z.number().int().min(0).max(23).optional(),
 })
@@ -25,6 +27,8 @@ const selection = {
   lastNudgeOn: schema.users.lastNudgeOn,
   followupPrompts: schema.users.followupPrompts,
   prepPrompts: schema.users.prepPrompts,
+  weeklyReviewEnabled: schema.users.weeklyReviewEnabled,
+  weeklyReviewHour: schema.users.weeklyReviewHour,
   morningBriefEnabled: schema.users.morningBriefEnabled,
   morningBriefHour: schema.users.morningBriefHour,
 }
@@ -62,6 +66,10 @@ export async function meRoutes(app: FastifyInstance) {
         ...(body.dailyNudgeHour !== undefined ? { dailyNudgeHour: body.dailyNudgeHour } : {}),
         ...(body.followupPrompts !== undefined ? { followupPrompts: body.followupPrompts } : {}),
         ...(body.prepPrompts !== undefined ? { prepPrompts: body.prepPrompts } : {}),
+        ...(body.weeklyReviewEnabled !== undefined
+          ? { weeklyReviewEnabled: body.weeklyReviewEnabled }
+          : {}),
+        ...(body.weeklyReviewHour !== undefined ? { weeklyReviewHour: body.weeklyReviewHour } : {}),
         ...(body.morningBriefEnabled !== undefined
           ? { morningBriefEnabled: body.morningBriefEnabled }
           : {}),

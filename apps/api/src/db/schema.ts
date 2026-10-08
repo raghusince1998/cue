@@ -76,6 +76,14 @@ export const users = pgTable(
     followupPrompts: boolean('followup_prompts').notNull().default(true),
     /** Before a meeting, say what is still open from last time. */
     prepPrompts: boolean('prep_prompts').notNull().default(true),
+    /** Every Friday, a review of the week behind and the one ahead. */
+    weeklyReviewEnabled: boolean('weekly_review_enabled').notNull().default(true),
+    /** Local hour on Friday, 0-23. */
+    weeklyReviewHour: integer('weekly_review_hour').notNull().default(17),
+    /** Local date of the last Friday prompt, so a restart cannot double-send. */
+    lastReviewPromptOn: date('last_review_prompt_on'),
+    /** When the person last finished a review. */
+    lastReviewedAt: timestamp('last_reviewed_at', { withTimezone: true }),
     /** The day's shape, by notification, each morning. */
     morningBriefEnabled: boolean('morning_brief_enabled').notNull().default(true),
     /** Local hour, 0-23. */

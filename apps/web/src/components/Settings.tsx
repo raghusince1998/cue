@@ -15,6 +15,8 @@ interface Preferences {
   timezone: string
   followupPrompts: boolean
   prepPrompts: boolean
+  weeklyReviewEnabled: boolean
+  weeklyReviewHour: number
   morningBriefEnabled: boolean
   morningBriefHour: number
   dailyNudgeEnabled: boolean
@@ -75,6 +77,27 @@ export function Settings({ onClose }: { onClose: () => void }) {
       setMessage(
         res.empty
           ? 'Nothing booked today and nothing outstanding, so there is nothing to brief — it stays quiet on days like this.'
+          : res.delivered > 0
+            ? `Sent: “${res.title}”`
+            : 'No device registered — enable notifications on the Today screen first.',
+      )
+    } catch (err) {
+      setMessage((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function testReview() {
+    setBusy(true)
+    try {
+      const res = await api<{ delivered: number; title: string | null; empty?: boolean }>(
+        '/review/week/test',
+        { method: 'POST' },
+      )
+      setMessage(
+        res.empty
+          ? 'Nothing happened this week and nothing is booked next, so there is nothing to review yet.'
           : res.delivered > 0
             ? `Sent: “${res.title}”`
             : 'No device registered — enable notifications on the Today screen first.',
@@ -260,6 +283,45 @@ export function Settings({ onClose }: { onClose: () => void }) {
           </div>
           <button className="ghost small-btn" onClick={testBrief} disabled={busy}>
             Send today&rsquo;s brief now
+          </button>
+        </>
+      )}
+
+      <hr className="rule" />
+
+      {/* Friday: the week behind and the one ahead. */}
+      <div className="setting-row has-infotip">
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={prefs.weeklyReviewEnabled}
+            disabled={busy}
+            onChange={(e) => void update({ weeklyReviewEnabled: e.target.checked })}
+          />
+          <span>Every Friday, ask me to review the week</span>
+        </label>
+        <InfoTip label="What is the review?">
+          What got done, what slipped, who still owes you something, and how next week is
+          already filling up — two minutes, each part with the one thing to do about it. It
+          stays quiet on a week with nothing in it.
+        </InfoTip>
+      </div>
+      {prefs.weeklyReviewEnabled && (
+        <>
+          <div className="chips">
+            {[16, 17, 18].map((hour) => (
+              <button
+                key={hour}
+                className={`chip${prefs.weeklyReviewHour === hour ? ' selected' : ''}`}
+                disabled={busy}
+                onClick={() => void update({ weeklyReviewHour: hour })}
+              >
+                Fri {label(hour)}
+              </button>
+            ))}
+          </div>
+          <button className="ghost small-btn" onClick={testReview} disabled={busy}>
+            Send this week&rsquo;s now
           </button>
         </>
       )}

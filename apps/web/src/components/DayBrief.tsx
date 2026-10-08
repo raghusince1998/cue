@@ -157,9 +157,14 @@ export function DayBrief({
       </div>
 
       {/* The shape of the day, not just its numbers. */}
-      <button className="brief-day-link" onClick={() => onNavigate('/?day=1')}>
-        Your day, hour by hour →
-      </button>
+      <div className="brief-links">
+        <button className="brief-day-link" onClick={() => onNavigate('/?day=1')}>
+          Your day, hour by hour →
+        </button>
+        <button className="brief-day-link" onClick={() => onNavigate('/?review=1')}>
+          Review your week →
+        </button>
+      </div>
 
       <div className="brief-stats">
         <button className="stat" onClick={() => onNavigate('/')}>

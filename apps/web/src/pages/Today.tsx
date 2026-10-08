@@ -11,6 +11,7 @@ import { WrapUp } from '../components/WrapUp.tsx'
 import { Nudge, waitingWhat } from '../components/Nudge.tsx'
 import { WaitingForm } from '../components/WaitingForm.tsx'
 import { YourDay } from '../components/YourDay.tsx'
+import { WeeklyReview } from '../components/WeeklyReview.tsx'
 import { NearbyIntentions } from '../components/NearbyIntentions.tsx'
 import { DayBrief } from '../components/DayBrief.tsx'
 import { PlanTomorrow } from '../components/PlanTomorrow.tsx'
@@ -279,6 +280,8 @@ export default function Today() {
   const [addingWaiting, setAddingWaiting] = useState(false)
   /** "Your day": today hour by hour, with the free stretches marked. */
   const [dayOpen, setDayOpen] = useState(false)
+  /** The weekly review: the week behind and the one ahead. */
+  const [reviewOpen, setReviewOpen] = useState(false)
   const [showAllWaiting, setShowAllWaiting] = useState(false)
   /** The plan open in the details sheet, and whether it opened on the form. */
   const [opened, setOpened] = useState<{ id: string; mode: SheetMode } | null>(null)
@@ -310,6 +313,14 @@ export default function Today() {
     setParams(params, { replace: true })
     openPlan(id)
   }, [params, setParams, openPlan])
+
+  // ?review=1: the Friday notification, or the summary card's link, tapped.
+  useEffect(() => {
+    if (params.get('review') !== '1') return
+    params.delete('review')
+    setParams(params, { replace: true })
+    setReviewOpen(true)
+  }, [params, setParams])
 
   // ?day=1: the morning brief, or the summary card's "your day", tapped.
   useEffect(() => {
@@ -900,6 +911,22 @@ export default function Today() {
         </div>
       )}
       </div>
+
+      {reviewOpen && (
+        <Modal title="Weekly review" onClose={() => setReviewOpen(false)}>
+          <WeeklyReview
+            onDecideSlipped={() => {
+              setReviewOpen(false)
+              navigate('/?triage=all')
+            }}
+            onGoToWaiting={() => {
+              setReviewOpen(false)
+              navigate('/?focus=waiting')
+            }}
+            onDone={() => setReviewOpen(false)}
+          />
+        </Modal>
+      )}
 
       {dayOpen && (
         <Modal title="Your day" onClose={() => setDayOpen(false)}>

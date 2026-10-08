@@ -22,6 +22,7 @@ import { aiRoutes } from './routes/ai.ts'
 import { tripRoutes } from './routes/trips.ts'
 import { recurrenceRoutes } from './routes/recurrences.ts'
 import { scheduleRoutes } from './routes/schedules.ts'
+import { reviewRoutes } from './routes/review.ts'
 import { calendarFeedRoutes } from './routes/calendarFeeds.ts'
 import { oauthRoutes } from './routes/oauth.ts'
 import { insightRoutes } from './routes/insights.ts'
@@ -33,6 +34,7 @@ import { startNudgeWorker } from './services/dailyNudge.ts'
 import { startFollowUpWorker } from './services/wrapUp.ts'
 import { startMorningBriefWorker } from './services/morningBrief.ts'
 import { startPrepWorker } from './services/meetingPrep.ts'
+import { startWeeklyReviewWorker } from './services/weeklyReview.ts'
 import { startReminderWorker } from './worker/reminders.ts'
 import { sweep } from './services/recurrence.ts'
 import { syncAllFeeds } from './services/calendarFeed.ts'
@@ -72,6 +74,7 @@ await app.register(aiRoutes, { prefix: '/api' })
 await app.register(tripRoutes, { prefix: '/api' })
 await app.register(recurrenceRoutes, { prefix: '/api' })
 await app.register(scheduleRoutes, { prefix: '/api' })
+await app.register(reviewRoutes, { prefix: '/api' })
 await app.register(calendarFeedRoutes, { prefix: '/api' })
 await app.register(oauthRoutes, { prefix: '/api' })
 await app.register(insightRoutes, { prefix: '/api' })
@@ -131,6 +134,7 @@ const stopNudges = startNudgeWorker()
 const stopFollowUps = startFollowUpWorker()
 const stopBriefs = startMorningBriefWorker()
 const stopPrep = startPrepWorker()
+const stopReviews = startWeeklyReviewWorker()
 
 // Keeps the rolling window of generated occurrences topped up. Hourly is ample
 // for a 120-day horizon, and it runs once at boot so a series created while the
@@ -171,6 +175,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   stopFollowUps()
   stopBriefs()
   stopPrep()
+  stopReviews()
     clearInterval(recurrenceTimer)
     clearInterval(feedTimer)
     clearInterval(purgeTimer)
