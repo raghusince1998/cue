@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
+import { openAdd } from '../lib/addSheet.ts'
 
 /**
  * What the app noticed, above what the app was told.
@@ -163,6 +164,9 @@ export function DayBrief({
         </button>
         <button className="brief-day-link" onClick={() => onNavigate('/?review=1')}>
           Review your week →
+        </button>
+        <button className="brief-day-link" onClick={() => openAdd({ share: true })}>
+          Share when you&rsquo;re free →
         </button>
       </div>
 

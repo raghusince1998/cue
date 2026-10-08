@@ -34,6 +34,13 @@ export interface FreeSlotOptions {
   excludeId?: string
   /** Times already promised elsewhere in the same decision. */
   claimed?: Busy[]
+  /**
+   * At most this many offers on one day. Sharing availability wants a spread
+   * across the week; five times on Tuesday morning is one option, not five.
+   */
+  perDay?: number
+  /** Leave Saturday and Sunday out — what someone booking a work meeting expects. */
+  skipWeekends?: boolean
 }
 
 /** Everything that genuinely occupies time between now and the horizon. */
@@ -92,6 +99,8 @@ export async function findFreeSlots(
 
   for (let day = 0; day < (options.horizonDays ?? DEFAULT_HORIZON_DAYS); day += 1) {
     const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + day)
+    if (options.skipWeekends && (date.getDay() === 0 || date.getDay() === 6)) continue
+    let onThisDay = 0
 
     for (let half = FIRST_HALF_HOUR; half <= LAST_HALF_HOUR; half += 1) {
       const start = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, half * 30)
@@ -103,6 +112,8 @@ export async function findFreeSlots(
 
       found.push(start)
       if (found.length >= count) return found
+      onThisDay += 1
+      if (options.perDay && onThisDay >= options.perDay) break
 
       // Spread the offers out: three slots half an hour apart on the same
       // afternoon is one choice presented three times.

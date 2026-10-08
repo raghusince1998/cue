@@ -23,6 +23,7 @@ import { tripRoutes } from './routes/trips.ts'
 import { recurrenceRoutes } from './routes/recurrences.ts'
 import { scheduleRoutes } from './routes/schedules.ts'
 import { reviewRoutes } from './routes/review.ts'
+import { availabilityRoutes } from './routes/availability.ts'
 import { calendarFeedRoutes } from './routes/calendarFeeds.ts'
 import { oauthRoutes } from './routes/oauth.ts'
 import { insightRoutes } from './routes/insights.ts'
@@ -75,6 +76,7 @@ await app.register(tripRoutes, { prefix: '/api' })
 await app.register(recurrenceRoutes, { prefix: '/api' })
 await app.register(scheduleRoutes, { prefix: '/api' })
 await app.register(reviewRoutes, { prefix: '/api' })
+await app.register(availabilityRoutes, { prefix: '/api' })
 await app.register(calendarFeedRoutes, { prefix: '/api' })
 await app.register(oauthRoutes, { prefix: '/api' })
 await app.register(insightRoutes, { prefix: '/api' })

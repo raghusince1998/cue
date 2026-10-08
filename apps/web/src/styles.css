@@ -3877,3 +3877,33 @@ button:disabled {
     align-items: flex-start;
   }
 }
+
+/* ---- Share when I'm free -------------------------------------------- */
+
+.quick-more-row {
+  gap: 8px;
+}
+
+.chip-gap {
+  flex: 0 0 10px;
+}
+
+.free-slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.free-slots .checkbox {
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.share-free textarea {
+  font-size: 14px;
+  line-height: 1.5;
+}

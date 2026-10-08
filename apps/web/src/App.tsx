@@ -224,6 +224,7 @@ export default function App() {
             initialFull={addOptions.full || addOptions.repeat}
             initialRepeat={addOptions.repeat}
             initialSchedule={addOptions.schedule}
+            initialShare={addOptions.share}
             onDone={() => setAddOpen(false)}
           />
         </Modal>

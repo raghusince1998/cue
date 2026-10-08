@@ -18,6 +18,8 @@ export interface AddOptions {
   repeat?: boolean
   /** The schedule form: steps at set distances from one date. */
   schedule?: boolean
+  /** "Share when I'm free": times to offer someone, as a message. */
+  share?: boolean
 }
 
 const EVENT = 'cue:add'

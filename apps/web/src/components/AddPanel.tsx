@@ -25,6 +25,7 @@ import { useOnline } from '../lib/online.ts'
 import { RepeatVisitCard, suggestedDueAt } from './RepeatVisitCard.tsx'
 import { UpcomingForm } from './UpcomingForm.tsx'
 import { ScheduleForm } from './ScheduleForm.tsx'
+import { ShareAvailability } from './ShareAvailability.tsx'
 import { QuickAdd } from './QuickAdd.tsx'
 import { DictateButton } from './DictateButton.tsx'
 import { announceChange } from '../lib/changes.ts'
@@ -43,6 +44,7 @@ export function AddPanel({
   initialFull = false,
   initialRepeat = false,
   initialSchedule = false,
+  initialShare = false,
 }: {
   /** Saved, or abandoned: either way the sheet's job is over. */
   onDone: () => void
@@ -52,12 +54,16 @@ export function AddPanel({
   initialRepeat?: boolean
   /** The schedule form, for dates that follow a plan rather than a rhythm. */
   initialSchedule?: boolean
+  /** Times to offer someone, rather than something to add. */
+  initialShare?: boolean
 }) {
   // Two things belong here: something that already happened, and something
   // that has not.
   const [mode, setMode] = useState<'past' | 'upcoming'>(initialMode)
   // The detailed form is opt-in, and stays open once asked for.
   const [fullForm, setFullForm] = useState(initialFull)
+  /** "Share when I'm free" instead of adding anything. */
+  const [sharing, setSharing] = useState(initialShare)
   /** The schedule form, and the title carried into it from the detailed form. */
   const [schedule, setSchedule] = useState<{ title: string } | null>(() =>
     initialSchedule ? { title: '' } : null,
@@ -524,7 +530,14 @@ export function AddPanel({
             "type it in plain words" box, and showing the quick one above it
             meant two inputs for the same sentence, each with its own Dictate
             button, and no way to tell which one would save. */}
-        {schedule ? (
+        {sharing ? (
+          <>
+            <button className="quick-more" onClick={() => setSharing(false)}>
+              Back to adding something
+            </button>
+            <ShareAvailability onDone={onDone} />
+          </>
+        ) : schedule ? (
           <ScheduleForm
             initialTitle={schedule.title}
             onDone={onDone}
@@ -556,9 +569,14 @@ export function AddPanel({
                 setFullForm(true)
               }}
             />
-            <button className="quick-more" onClick={() => setFullForm(true)}>
-              Set it up in detail instead
-            </button>
+            <div className="row quick-more-row">
+              <button className="quick-more" onClick={() => setFullForm(true)}>
+                Set it up in detail instead
+              </button>
+              <button className="quick-more" onClick={() => setSharing(true)}>
+                Share when I&rsquo;m free
+              </button>
+            </div>
           </>
         )}
       </div>
