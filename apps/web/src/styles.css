@@ -3419,3 +3419,15 @@ button:disabled {
   height: 100%;
   background: #14b8a6;
 }
+
+/* A template says where it comes from, plainly, before anything is booked. */
+.schedule-caution {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border));
+  background: var(--warn-soft);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}

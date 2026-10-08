@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import {
+  SCHEDULE_TEMPLATES,
   SCHEDULE_UNITS,
   offsetLabel,
   stepDate,
   type ScheduleDTO,
+  type ScheduleTemplate,
   type ScheduleUnit,
 } from '@cue/shared'
 import { api } from '../lib/api.ts'
@@ -60,6 +62,8 @@ export function ScheduleForm({
   const [startsOn, setStartsOn] = useState(() => toDateInputValue(new Date()))
   const [time, setTime] = useState('10:00')
   const [steps, setSteps] = useState<StepDraft[]>(() => [blankStep(), blankStep()])
+  /** The template the steps came from, kept for its caution and its start label. */
+  const [template, setTemplate] = useState<ScheduleTemplate | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState<{ schedule: ScheduleDTO; booked: number; skippedPast: number } | null>(
@@ -68,6 +72,30 @@ export function ScheduleForm({
 
   const [hour, minute] = time.split(':').map(Number) as [number, number]
   const now = Date.now()
+
+  /** Fills the steps from a template. Every step stays editable before booking. */
+  function applyTemplate(id: string) {
+    const t = SCHEDULE_TEMPLATES.find((x) => x.id === id)
+    if (!t) return
+    const typed = steps.some((s) => s.title.trim() || s.amount.trim() || s.date)
+    if (typed && !window.confirm(`Replace the steps you have typed with "${t.label}"?`)) return
+    setTemplate(t)
+    if (!title.trim()) setTitle(t.title)
+    setTime(`${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}`)
+    setSteps(
+      t.steps.map((step) => {
+        nextKey += 1
+        return {
+          key: nextKey,
+          title: step.title ?? '',
+          mode: step.date ? 'on' : 'after',
+          amount: step.offset ? String(step.offset.amount) : '',
+          unit: step.offset?.unit ?? 'weeks',
+          date: step.date ?? '',
+        }
+      }),
+    )
+  }
 
   function update(key: number, patch: Partial<StepDraft>) {
     setSteps((list) => list.map((s) => (s.key === key ? { ...s, ...patch } : s)))
@@ -146,6 +174,26 @@ export function ScheduleForm({
         Back to a single plan
       </button>
 
+      {SCHEDULE_TEMPLATES.length > 0 && (
+        <section className="card schedule-template">
+          <label>
+            Start from a template (optional)
+            <select
+              value={template?.id ?? ''}
+              onChange={(e) => (e.target.value ? applyTemplate(e.target.value) : setTemplate(null))}
+            >
+              <option value="">— my own steps —</option>
+              {SCHEDULE_TEMPLATES.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {template && <p className="schedule-caution">{template.caution}</p>}
+        </section>
+      )}
+
       <section className="card">
         <label>
           What is the schedule?
@@ -153,12 +201,12 @@ export function ScheduleForm({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Aarav's vaccinations"
-            autoFocus
+            autoFocus={!template}
           />
         </label>
         <div className="row schedule-start">
           <label className="grow">
-            Counting from
+            {template ? template.startLabel : 'Counting from'}
             <input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />
           </label>
           <label className="grow">
@@ -238,7 +286,13 @@ export function ScheduleForm({
                 {ymd
                   ? past
                     ? `${dayLabel(ymd)} — already past, will be left out`
-                    : `${dayLabel(ymd)} · ${relativeDay(ymd)}${read.offset ? ` · ${offsetLabel(read.offset).toLowerCase()} after the start` : ''}`
+                    : `${dayLabel(ymd)} · ${relativeDay(ymd)}${
+                        read.offset
+                          ? read.offset.amount === 0
+                            ? ' · at the start'
+                            : ` · ${offsetLabel(read.offset).toLowerCase()} after the start`
+                          : ''
+                      }`
                   : read.empty
                     ? ' '
                     : 'Needs a when'}

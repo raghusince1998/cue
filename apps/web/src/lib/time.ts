@@ -167,10 +167,20 @@ export function relativeDay(value: string | Date): string {
   if (days === -1) return 'yesterday'
   // Pluralised properly: "1 weeks ago" is the kind of detail that makes a
   // screen feel unfinished even when nobody can say why.
-  const weeks = (n: number) => `${n} week${n === 1 ? '' : 's'}`
-  if (days > 0) return days < 7 ? `in ${days} days` : `in ${weeks(Math.round(days / 7))}`
-  const ago = Math.abs(days)
-  return ago < 7 ? `${ago} days ago` : `${weeks(Math.round(ago / 7))} ago`
+  const unit = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+  // Weeks stop meaning anything past a couple of months: a vaccination
+  // schedule runs to sixteen years, and "in 825 weeks" is not a date anyone
+  // can picture.
+  const span = (d: number) =>
+    d < 7
+      ? unit(d, 'day')
+      : d < 60
+        ? unit(Math.round(d / 7), 'week')
+        : d < 730
+          ? unit(Math.round(d / 30.44), 'month')
+          : unit(Math.round(d / 365.25), 'year')
+  if (days > 0) return `in ${span(days)}`
+  return `${span(Math.abs(days))} ago`
 }
 
 /**

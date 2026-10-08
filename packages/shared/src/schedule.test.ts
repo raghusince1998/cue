@@ -34,3 +34,23 @@ test('a gap reads the way people say it', () => {
   assert.equal(offsetLabel({ amount: 1, unit: 'months' }), '1 month')
   assert.equal(offsetLabel({ amount: 6, unit: 'weeks' }), '6 weeks')
 })
+
+test('the government vaccination template lands on the dates the schedule gives', async () => {
+  const { INDIA_UIP_CHILD } = await import('./scheduleTemplates.ts')
+  const born = '2026-08-01'
+  const dates = INDIA_UIP_CHILD.steps.map((s) => stepDate(born, s))
+  assert.deepEqual(dates, [
+    '2026-08-01', // at birth
+    '2026-09-12', // 6 weeks
+    '2026-10-10', // 10 weeks
+    '2026-11-07', // 14 weeks
+    '2027-05-01', // 9 months
+    '2027-12-01', // 16 months
+    '2031-08-01', // 5 years
+    '2036-08-01', // 10 years
+    '2042-08-01', // 16 years
+  ])
+  // In order, and every step names what is given.
+  assert.deepEqual([...dates].sort(), dates)
+  assert.ok(INDIA_UIP_CHILD.steps.every((s) => (s.title ?? '').trim().length > 0))
+})

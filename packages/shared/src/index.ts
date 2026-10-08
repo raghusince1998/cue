@@ -9,6 +9,11 @@ export {
   type ScheduleStep,
 } from './schedule.ts'
 export {
+  SCHEDULE_TEMPLATES,
+  INDIA_UIP_CHILD,
+  type ScheduleTemplate,
+} from './scheduleTemplates.ts'
+export {
   findMalformedTime,
   extractPlace,
   cleanTitle,
