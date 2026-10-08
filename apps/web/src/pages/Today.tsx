@@ -10,6 +10,7 @@ import { CommitmentSheet, type SheetMode } from '../components/CommitmentSheet.t
 import { WrapUp } from '../components/WrapUp.tsx'
 import { Nudge, waitingWhat } from '../components/Nudge.tsx'
 import { WaitingForm } from '../components/WaitingForm.tsx'
+import { YourDay } from '../components/YourDay.tsx'
 import { NearbyIntentions } from '../components/NearbyIntentions.tsx'
 import { DayBrief } from '../components/DayBrief.tsx'
 import { PlanTomorrow } from '../components/PlanTomorrow.tsx'
@@ -270,6 +271,8 @@ export default function Today() {
   /** The check-in being chased: a ready message, then "check again when?". */
   const [nudging, setNudging] = useState<CommitmentDTO | null>(null)
   const [addingWaiting, setAddingWaiting] = useState(false)
+  /** "Your day": today hour by hour, with the free stretches marked. */
+  const [dayOpen, setDayOpen] = useState(false)
   const [showAllWaiting, setShowAllWaiting] = useState(false)
   /** The plan open in the details sheet, and whether it opened on the form. */
   const [opened, setOpened] = useState<{ id: string; mode: SheetMode } | null>(null)
@@ -292,6 +295,14 @@ export default function Today() {
   const wide = useWide()
   /** A day a link asked to open on — "Open the day" on a clash. */
   const [focusDate, setFocusDate] = useState<string | null>(null)
+
+  // ?day=1: the morning brief, or the summary card's "your day", tapped.
+  useEffect(() => {
+    if (params.get('day') !== '1') return
+    params.delete('day')
+    setParams(params, { replace: true })
+    setDayOpen(true)
+  }, [params, setParams])
 
   // ?nudge=<id>: a check-in reminder, tapped — straight to the message.
   useEffect(() => {
@@ -874,6 +885,27 @@ export default function Today() {
         </div>
       )}
       </div>
+
+      {dayOpen && (
+        <Modal title="Your day" onClose={() => setDayOpen(false)}>
+          <YourDay
+            waiting={agenda.waiting ?? []}
+            justFinished={agenda.justFinished ?? []}
+            onOpen={(id) => {
+              setDayOpen(false)
+              openPlan(id)
+            }}
+            onNudge={(c) => {
+              setDayOpen(false)
+              setNudging(c)
+            }}
+            onWrapUp={(c) => {
+              setDayOpen(false)
+              setWrapping(c)
+            }}
+          />
+        </Modal>
+      )}
 
       {nudging && (
         <Modal title="Nudge" onClose={() => setNudging(null)}>

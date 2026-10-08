@@ -5,6 +5,7 @@ import { db, schema } from '../db/index.ts'
 import { takeFirst } from '../db/util.ts'
 import { scope } from '../auth.ts'
 import { sendNudgeTo } from '../services/dailyNudge.ts'
+import { sendBriefTo } from '../services/morningBrief.ts'
 
 const preferencesInput = z.object({
   /** IANA name, e.g. "Asia/Kolkata". The browser reports its own. */
@@ -12,6 +13,8 @@ const preferencesInput = z.object({
   dailyNudgeEnabled: z.boolean().optional(),
   dailyNudgeHour: z.number().int().min(0).max(23).optional(),
   followupPrompts: z.boolean().optional(),
+  morningBriefEnabled: z.boolean().optional(),
+  morningBriefHour: z.number().int().min(0).max(23).optional(),
 })
 
 const selection = {
@@ -20,6 +23,8 @@ const selection = {
   dailyNudgeHour: schema.users.dailyNudgeHour,
   lastNudgeOn: schema.users.lastNudgeOn,
   followupPrompts: schema.users.followupPrompts,
+  morningBriefEnabled: schema.users.morningBriefEnabled,
+  morningBriefHour: schema.users.morningBriefHour,
 }
 
 export async function meRoutes(app: FastifyInstance) {
@@ -54,11 +59,29 @@ export async function meRoutes(app: FastifyInstance) {
           : {}),
         ...(body.dailyNudgeHour !== undefined ? { dailyNudgeHour: body.dailyNudgeHour } : {}),
         ...(body.followupPrompts !== undefined ? { followupPrompts: body.followupPrompts } : {}),
+        ...(body.morningBriefEnabled !== undefined
+          ? { morningBriefEnabled: body.morningBriefEnabled }
+          : {}),
+        ...(body.morningBriefHour !== undefined ? { morningBriefHour: body.morningBriefHour } : {}),
       })
       .where(eq(schema.users.id, sub))
 
     const rows = await db.select(selection).from(schema.users).where(eq(schema.users.id, sub))
     return takeFirst(rows, 'preferences')
+  })
+
+  /**
+   * This user's morning brief, now, whatever the hour — to see what it says.
+   * Says so when there is nothing to send rather than sending nothing.
+   */
+  app.post('/me/preferences/test-brief', async (req) => {
+    const { sub } = scope(req)
+    const rows = await db
+      .select({ timezone: schema.users.timezone })
+      .from(schema.users)
+      .where(eq(schema.users.id, sub))
+    const sent = await sendBriefTo(sub, takeFirst(rows, 'user').timezone)
+    return sent ?? { delivered: 0, title: null, body: null, empty: true }
   })
 
   /**

@@ -1,0 +1,209 @@
+import { useEffect, useState } from 'react'
+import type { CommitmentDTO } from '@cue/shared'
+import { api } from '../lib/api.ts'
+
+/** The working day the free stretches are measured within — the same as the summary card's. */
+const DAY_START_HOUR = 8
+const DAY_END_HOUR = 21
+/** Shorter than this, a gap is a breather, not time to get something done. */
+const MIN_GAP_MINUTES = 30
+
+function endOf(c: CommitmentDTO): Date {
+  return c.endsAt
+    ? new Date(c.endsAt)
+    : new Date(new Date(c.dueAt).getTime() + c.durationMinutes * 60_000)
+}
+
+function clock(d: Date): string {
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
+function length(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m ? `${h}h ${m}m` : `${h}h`
+}
+
+type Row =
+  | { type: 'item'; c: CommitmentDTO; from: Date; to: Date }
+  | { type: 'gap'; from: Date; to: Date }
+
+/**
+ * Today, hour by hour, with the free stretches between things marked.
+ *
+ * The list on Today says what is due; this says how the day fits together:
+ * where the meetings are, what is already behind you, and where the gaps
+ * long enough for real work are. It is what the morning brief opens.
+ */
+export function YourDay({
+  waiting,
+  justFinished,
+  onOpen,
+  onNudge,
+  onWrapUp,
+}: {
+  waiting: CommitmentDTO[]
+  justFinished: CommitmentDTO[]
+  onOpen: (id: string) => void
+  onNudge: (c: CommitmentDTO) => void
+  onWrapUp: (c: CommitmentDTO) => void
+}) {
+  const [items, setItems] = useState<CommitmentDTO[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const now = new Date()
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const dayEnd = new Date(dayStart.getTime() + 86_400_000)
+
+  useEffect(() => {
+    api<{ commitments: CommitmentDTO[] }>('/commitments/range', {
+      query: { from: dayStart.toISOString(), to: dayEnd.toISOString() },
+    })
+      .then((r) => setItems(r.commitments))
+      .catch((err) => setError((err as Error).message))
+    // Today's bounds, fixed for the life of the sheet.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (error) return <p className="error small">{error}</p>
+  if (!items) return <p className="muted small">Laying out your day…</p>
+
+  // Check-ins are not time on the calendar, and a cancelled plan gave its time back.
+  const real = items.filter((c) => !c.waitingOn && c.status !== 'cancelled')
+  const allDay = real.filter((c) => c.allDay)
+  const loose = real.filter((c) => !c.allDay && c.flexibility === 'flexible')
+  const timed = real
+    .filter((c) => !c.allDay && c.flexibility !== 'flexible')
+    .filter((c) => new Date(c.dueAt) >= dayStart && new Date(c.dueAt) < dayEnd)
+    .sort((a, b) => +new Date(a.dueAt) - +new Date(b.dueAt))
+
+  // Free stretches inside the working day, between whatever is booked.
+  const windowStart = new Date(dayStart.getTime() + DAY_START_HOUR * 3_600_000)
+  const windowEnd = new Date(dayStart.getTime() + DAY_END_HOUR * 3_600_000)
+  const rows: Row[] = []
+  let cursor = windowStart
+  let freeMinutes = 0
+  const addGap = (from: Date, to: Date) => {
+    const minutes = Math.round((to.getTime() - from.getTime()) / 60_000)
+    if (minutes >= MIN_GAP_MINUTES) {
+      rows.push({ type: 'gap', from, to })
+      freeMinutes += minutes
+    }
+  }
+  for (const c of timed) {
+    const from = new Date(c.dueAt)
+    const to = endOf(c)
+    if (from > cursor && cursor < windowEnd) addGap(cursor, from < windowEnd ? from : windowEnd)
+    rows.push({ type: 'item', c, from, to })
+    if (to > cursor) cursor = to
+  }
+  if (cursor < windowEnd) addGap(cursor, windowEnd)
+
+  const meetings = timed.filter((c) => c.kind === 'meeting').length
+  const toDo = timed.length - meetings + loose.length
+  const checkIns = waiting.filter((c) => new Date(c.dueAt) < dayEnd)
+  const toWrap = justFinished.filter((c) => endOf(c) <= now)
+
+  return (
+    <div className="stack tight your-day">
+      <div className="your-day-head">
+        <strong>{now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
+        <span className="muted small">
+          {[
+            meetings ? `${meetings} meeting${meetings === 1 ? '' : 's'}` : null,
+            toDo ? `${toDo} to do` : null,
+            `${length(freeMinutes)} free between ${DAY_START_HOUR} am and ${DAY_END_HOUR - 12} pm`,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </span>
+      </div>
+
+      {allDay.length > 0 && (
+        <p className="muted small">All day: {allDay.map((c) => c.title).join(', ')}</p>
+      )}
+
+      <ol className="timeline">
+        {rows.map((row) =>
+          row.type === 'gap' ? (
+            <li
+              key={`gap-${row.from.getTime()}`}
+              className={`timeline-gap${row.to <= now ? ' is-past' : ''}`}
+            >
+              <span className="timeline-time">{clock(row.from)}</span>
+              <span>
+                Free until {clock(row.to)} ·{' '}
+                {length(Math.round((row.to.getTime() - row.from.getTime()) / 60_000))}
+                {row.to > now && row.to.getTime() - row.from.getTime() >= 60 * 60_000 && (
+                  <em> — room for focused work</em>
+                )}
+              </span>
+            </li>
+          ) : (
+            <li
+              key={row.c.id}
+              className={[
+                'timeline-item',
+                row.c.kind === 'meeting' ? 'is-meeting' : '',
+                row.c.status === 'done' ? 'is-done' : '',
+                row.to <= now ? 'is-past' : '',
+                row.from <= now && row.to > now ? 'is-now' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              <span className="timeline-time">{clock(row.from)}</span>
+              <button className="timeline-body" onClick={() => onOpen(row.c.id)}>
+                <span className="timeline-title">{row.c.title}</span>
+                <span className="muted small">
+                  {clock(row.from)}–{clock(row.to)}
+                  {row.c.placeName ? ` · ${row.c.placeName}` : ''}
+                  {row.from <= now && row.to > now ? ' · now' : ''}
+                  {row.c.status === 'done' ? ' · done' : ''}
+                </span>
+              </button>
+            </li>
+          ),
+        )}
+        {rows.length === 0 && <li className="muted small">Nothing booked between 8 am and 9 pm.</li>}
+      </ol>
+
+      {loose.length > 0 && (
+        <p className="muted small">
+          Sometime today: {loose.map((c) => c.title).join(', ')}
+        </p>
+      )}
+
+      {checkIns.length > 0 && (
+        <section className="stack tight">
+          <span className="label-text">Check in today</span>
+          {checkIns.map((c) => (
+            <div className="your-day-line" key={c.id}>
+              <span>
+                <span className="waiting-who">{c.waitingOn}</span>
+                {c.title.replace(/^Waiting on [^:]+:\s*/i, '')}
+              </span>
+              <button className="ghost small-btn" onClick={() => onNudge(c)}>
+                Nudge
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {toWrap.length > 0 && (
+        <section className="stack tight">
+          <span className="label-text">Still need follow-ups</span>
+          {toWrap.map((c) => (
+            <div className="your-day-line" key={c.id}>
+              <span>{c.title}</span>
+              <button className="ghost small-btn" onClick={() => onWrapUp(c)}>
+                Add follow-ups
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
+    </div>
+  )
+}

@@ -74,6 +74,12 @@ export const users = pgTable(
     dailyNudgeEnabled: boolean('daily_nudge_enabled').notNull().default(true),
     /** Ask "any follow-ups?" by notification when a meeting ends. */
     followupPrompts: boolean('followup_prompts').notNull().default(true),
+    /** The day's shape, by notification, each morning. */
+    morningBriefEnabled: boolean('morning_brief_enabled').notNull().default(true),
+    /** Local hour, 0-23. */
+    morningBriefHour: integer('morning_brief_hour').notNull().default(8),
+    /** Local date of the last brief, so a restart cannot double-send. */
+    lastBriefOn: date('last_brief_on'),
     /** Local hour, 0-23. */
     dailyNudgeHour: integer('daily_nudge_hour').notNull().default(19),
     /** Local date of the last nudge, so a restart cannot double-send. */

@@ -156,6 +156,11 @@ export function DayBrief({
         </div>
       </div>
 
+      {/* The shape of the day, not just its numbers. */}
+      <button className="brief-day-link" onClick={() => onNavigate('/?day=1')}>
+        Your day, hour by hour →
+      </button>
+
       <div className="brief-stats">
         <button className="stat" onClick={() => onNavigate('/')}>
           <strong>{summary.todayCount}</strong>

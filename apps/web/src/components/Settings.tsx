@@ -14,6 +14,8 @@ interface Me {
 interface Preferences {
   timezone: string
   followupPrompts: boolean
+  morningBriefEnabled: boolean
+  morningBriefHour: number
   dailyNudgeEnabled: boolean
   dailyNudgeHour: number
   lastNudgeOn: string | null
@@ -55,6 +57,27 @@ export function Settings({ onClose }: { onClose: () => void }) {
     setMessage(null)
     try {
       setPrefs(await api<Preferences>('/me/preferences', { method: 'PATCH', body: patch }))
+    } catch (err) {
+      setMessage((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function testBrief() {
+    setBusy(true)
+    try {
+      const res = await api<{ delivered: number; title: string | null; empty?: boolean }>(
+        '/me/preferences/test-brief',
+        { method: 'POST' },
+      )
+      setMessage(
+        res.empty
+          ? 'Nothing booked today and nothing outstanding, so there is nothing to brief — it stays quiet on days like this.'
+          : res.delivered > 0
+            ? `Sent: “${res.title}”`
+            : 'No device registered — enable notifications on the Today screen first.',
+      )
     } catch (err) {
       setMessage((err as Error).message)
     } finally {
@@ -203,6 +226,45 @@ export function Settings({ onClose }: { onClose: () => void }) {
       {/* How the app behaves: when it nudges, and which calendars it reads. */}
       {tab === 'settings' && (
       <>
+      {/* The morning: what is coming, before it arrives. */}
+      <div className="setting-row has-infotip">
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={prefs.morningBriefEnabled}
+            disabled={busy}
+            onChange={(e) => void update({ morningBriefEnabled: e.target.checked })}
+          />
+          <span>Send me a brief of the day each morning</span>
+        </label>
+        <InfoTip label="What is in it?">
+          How many meetings and things to do, the first one, your longest free stretch for
+          focused work, who is due a check-in, and anything left over. Tapping it opens your
+          day hour by hour. On a day with nothing in it, it stays quiet.
+        </InfoTip>
+      </div>
+      {prefs.morningBriefEnabled && (
+        <>
+          <div className="chips">
+            {[7, 8, 9, 10].map((hour) => (
+              <button
+                key={hour}
+                className={`chip${prefs.morningBriefHour === hour ? ' selected' : ''}`}
+                disabled={busy}
+                onClick={() => void update({ morningBriefHour: hour })}
+              >
+                {label(hour)}
+              </button>
+            ))}
+          </div>
+          <button className="ghost small-btn" onClick={testBrief} disabled={busy}>
+            Send today&rsquo;s brief now
+          </button>
+        </>
+      )}
+
+      <hr className="rule" />
+
       {/* The why sits behind the icon: worth reading once, not every time
           Settings opens. Outside the label, so tapping it never ticks the box. */}
       <div className="setting-row has-infotip">
