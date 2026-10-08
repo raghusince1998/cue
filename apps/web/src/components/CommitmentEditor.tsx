@@ -36,6 +36,8 @@ export function CommitmentEditor({
   const [durationMinutes, setDurationMinutes] = useState(15)
   const [status, setStatus] = useState<CommitmentStatus>('pending')
   const [placeId, setPlaceId] = useState<string | null>(null)
+  /** From a connected calendar, dated before Cue was reading it. */
+  const [history, setHistory] = useState(false)
 
   const [conflict, setConflict] = useState<ConflictReport | null>(null)
   const [allowConflict, setAllowConflict] = useState(false)
@@ -54,6 +56,7 @@ export function CommitmentEditor({
       setDurationMinutes(c.durationMinutes)
       setStatus(c.status)
       setPlaceId(c.placeId)
+      setHistory(Boolean(c.history))
       setPlaces(p)
       setLoaded(true)
     })
@@ -220,11 +223,18 @@ export function CommitmentEditor({
             className={`chip${status === s.value ? ' selected' : ''}`}
             onClick={() => setStatus(s.value)}
           >
-            {s.label}
+            {/* Calendar history is not "still open": Cue was not there. */}
+            {s.value === 'pending' && history ? 'No status' : s.label}
           </button>
         ))}
       </div>
-      {status === 'pending' && (
+      {status === 'pending' && history && (
+        <p className="muted small">
+          This was already in your calendar before Cue started reading it, so Cue does not treat it
+          as done or as overdue. Mark it done or cancelled if you want it on record.
+        </p>
+      )}
+      {status === 'pending' && !history && (
         <p className="muted small">
           Reminders restart from {formatDateTime(dueAt.toISOString())} — the overdue count resets.
         </p>

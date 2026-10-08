@@ -99,10 +99,12 @@ function toneOf(c: CommitmentDTO, now: Date): string {
   // late, and the slot being free is the point of still showing it.
   if (c.status === 'cancelled') return 'cancelled'
   if (c.status === 'done') return 'done'
-  // Before the overdue test: a calendar event that is over is just over.
-  if (c.feedId) return 'feed'
+  // Before the overdue test: calendar history has no status, so it is drawn
+  // as plain calendar, never as late.
+  if (c.history) return 'feed'
   if (!c.allDay && new Date(c.dueAt) < now) return 'overdue'
   if (c.priority === 'critical') return 'critical'
+  if (c.feedId) return 'feed'
   if (c.recurrenceId) return 'repeat'
   return 'normal'
 }

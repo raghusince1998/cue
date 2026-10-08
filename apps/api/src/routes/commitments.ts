@@ -21,7 +21,7 @@ import { checkConflicts } from '../services/scheduling.ts'
 import { findFreeSlots } from '../services/freeSlots.ts'
 import { suggestSlots } from '../services/slots.ts'
 import { detectLocationConflicts } from '../services/locationConflict.ts'
-import { canBeOverdue } from '../services/overdue.ts'
+import { canBeOverdue, isCalendarHistory } from '../services/overdue.ts'
 
 const agendaQuery = z.object({
   /** Local day boundaries, supplied by the client which knows its timezone. */
@@ -72,6 +72,7 @@ const selection = {
   contactPhone: schema.contacts.phone,
   recurrenceId: schema.commitments.recurrenceId,
   feedId: schema.commitments.feedId,
+  history: isCalendarHistory(),
   checklistCount: sql<number>`(
     select count(*)::int from checklist_items ci where ci.commitment_id = ${schema.commitments.id}
   )`,
@@ -111,6 +112,7 @@ function toDTO(row: SelectedRow): CommitmentDTO {
     contactPhone: (row.contactPhone as string | null) ?? null,
     recurrenceId: (row.recurrenceId as string | null) ?? null,
     feedId: (row.feedId as string | null) ?? null,
+    history: Boolean(row.history),
     checklistCount: Number(row.checklistCount ?? 0),
     checklistDone: Number(row.checklistDone ?? 0),
     notes: (row.notes as string | null) ?? null,

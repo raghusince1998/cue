@@ -58,8 +58,11 @@ async function statsFor(userId: string, timezone: string): Promise<DayStats> {
          where i.user_id = ${userId} and i.started_at >= b.day_start)::int as logged_today,
       (select count(*) from commitments c
          where c.user_id = ${userId} and c.status = 'pending' and c.due_at < now()
-           -- A mirrored calendar event that is over is not overdue; see overdue.ts.
-           and c.feed_id is null)::int as overdue,
+           -- The same rule as canBeOverdue in overdue.ts: never calendar
+           -- history from before it was connected, never an all-day entry.
+           and (c.feed_id is null or (not c.all_day and c.due_at >= coalesce(
+             (select f.created_at from calendar_feeds f where f.id = c.feed_id),
+             '-infinity'::timestamptz))))::int as overdue,
       (select count(*) from commitments c, bounds b
          where c.user_id = ${userId} and c.status = 'pending'
            and c.due_at >= now()

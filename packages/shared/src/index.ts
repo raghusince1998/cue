@@ -578,6 +578,11 @@ export interface CommitmentDTO {
   recurrenceId: string | null
   /** Set when this was mirrored from a subscribed calendar, not created here. */
   feedId: string | null
+  /**
+   * Mirrored from a calendar and dated before Cue started reading it. Cue was
+   * not there, so it is neither done nor overdue — it has no status.
+   */
+  history?: boolean
   /** How many things are attached to this; 0 means do not render a list. */
   checklistCount: number
   checklistDone: number
