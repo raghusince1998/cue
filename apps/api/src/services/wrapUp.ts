@@ -97,9 +97,11 @@ interface JustEnded {
  */
 export async function promptFollowUps(now = new Date()): Promise<number> {
   const c = schema.commitments
-  const since = new Date(now.getTime() - PROMPT_WITHIN_MINUTES * 60_000)
+  // Strings, cast: raw fragments do not convert Dates for the driver.
+  const at = now.toISOString()
+  const since = new Date(now.getTime() - PROMPT_WITHIN_MINUTES * 60_000).toISOString()
   const rows = (await db.execute(sql`
-    update commitments set wrapup_prompted_at = ${now}
+    update commitments set wrapup_prompted_at = ${at}::timestamptz
     where id in (
       select ${c.id} from commitments
       join users u on u.id = ${c.userId}
@@ -110,8 +112,8 @@ export async function promptFollowUps(now = new Date()): Promise<number> {
         and ${c.recurrenceId} is null
         and ${c.wrapupPromptedAt} is null
         and ${managedByCue()}
-        and ${meetingEnd()} <= ${now}
-        and ${meetingEnd()} > ${since}
+        and ${meetingEnd()} <= ${at}::timestamptz
+        and ${meetingEnd()} > ${since}::timestamptz
       for update of commitments skip locked
     )
     returning id, user_id, title

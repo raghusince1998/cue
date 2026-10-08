@@ -58,7 +58,9 @@ export const WRAP_UP_DAYS = 7
 export function isAwaitingWrapUp(now: Date) {
   const c = schema.commitments
   const since = new Date(now.getTime() - WRAP_UP_DAYS * 86_400_000)
-  return sql`(${c.kind} = 'meeting' and not ${c.allDay} and ${meetingEnd()} > ${since})`
+  // As a string, cast: a Date inside a raw fragment reaches the driver
+  // unconverted and it refuses it — typed comparisons like lt() convert, sql`` does not.
+  return sql`(${c.kind} = 'meeting' and not ${c.allDay} and ${meetingEnd()} > ${since.toISOString()}::timestamptz)`
 }
 
 /**
