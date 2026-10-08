@@ -205,7 +205,7 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
       and(
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
-        canBeOverdue(),
+        canBeOverdue(now),
         lt(schema.commitments.dueAt, now),
       ),
     )
@@ -261,7 +261,7 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
       and(
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
-        canBeOverdue(),
+        canBeOverdue(now),
         lt(schema.commitments.dueAt, now),
         gte(schema.commitments.dueAt, new Date(now.getTime() - 60 * DAY_MS)),
       ),
@@ -422,7 +422,7 @@ export async function buildSummary(userId: string, now = new Date()) {
       and(
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
-        canBeOverdue(),
+        canBeOverdue(now),
         lt(schema.commitments.dueAt, now),
       ),
     )

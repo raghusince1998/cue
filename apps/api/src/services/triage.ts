@@ -77,7 +77,7 @@ async function worstWeekdayFor(userId: string, now: Date): Promise<number | null
       and(
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
-        canBeOverdue(),
+        canBeOverdue(now),
         lt(schema.commitments.dueAt, now),
         gte(schema.commitments.dueAt, new Date(now.getTime() - 90 * DAY_MS)),
       ),
@@ -117,7 +117,7 @@ export async function buildTriage(
       and(
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
-        canBeOverdue(),
+        canBeOverdue(now),
         lt(schema.commitments.dueAt, now),
       ),
     )

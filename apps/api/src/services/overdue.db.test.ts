@@ -52,7 +52,7 @@ test('calendar history has no status; what came after connecting is managed', as
 
   const c = dbm.schema.commitments
   const rows = await dbm.db
-    .select({ title: c.title, history: rules.isCalendarHistory(), can: rules.canBeOverdue() })
+    .select({ title: c.title, history: rules.isCalendarHistory(), can: rules.canBeOverdue(new Date(2026, 9, 9)) })
     .from(c)
     .where(eq(c.userId, me.userId))
 

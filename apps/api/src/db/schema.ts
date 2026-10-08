@@ -72,6 +72,8 @@ export const users = pgTable(
     /** Also the cache key — the URL carries it, so a new photo is a new URL. */
     avatarUpdatedAt: timestamp('avatar_updated_at', { withTimezone: true }),
     dailyNudgeEnabled: boolean('daily_nudge_enabled').notNull().default(true),
+    /** Ask "any follow-ups?" by notification when a meeting ends. */
+    followupPrompts: boolean('followup_prompts').notNull().default(true),
     /** Local hour, 0-23. */
     dailyNudgeHour: integer('daily_nudge_hour').notNull().default(19),
     /** Local date of the last nudge, so a restart cannot double-send. */
@@ -218,6 +220,10 @@ export const commitments = pgTable(
     recurrenceId: uuid('recurrence_id'),
     /** The schedule this is one step of — see `schedules`. */
     scheduleId: uuid('schedule_id'),
+    /** When the "any follow-ups?" notification went, for a meeting. */
+    wrapupPromptedAt: timestamp('wrapup_prompted_at', { withTimezone: true }),
+    /** The meeting this follow-up came out of. */
+    fromCommitmentId: uuid('from_commitment_id'),
     /** Local date this occurrence stands for — safer to compare than dueAt. */
     occurrenceOn: date('occurrence_on'),
     /** Edited on its own, so regenerating the series must leave it alone. */

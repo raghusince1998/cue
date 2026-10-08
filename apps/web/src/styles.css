@@ -3431,3 +3431,63 @@ button:disabled {
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* ---- Follow-ups from meetings --------------------------------------- */
+
+.section-title .count.is-calm {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.wrapup-card {
+  border-left: 3px solid var(--accent);
+}
+
+.wrapup-meeting {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.wrapup-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wrapup-line {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.wrapup-who,
+.wrapup-due {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.wrapup-due > .muted {
+  margin-right: 2px;
+}
+
+.wrapup-name {
+  flex: 1 1 140px;
+  width: auto;
+  padding: 7px 10px;
+}
+
+.wrapup-due input[type='datetime-local'] {
+  width: auto;
+  padding: 6px 8px;
+}

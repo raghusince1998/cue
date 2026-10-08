@@ -7,8 +7,9 @@ import { readNotes } from '../lib/sample.ts'
 import { Modal } from './Modal.tsx'
 import { CommitmentEditor } from './CommitmentEditor.tsx'
 import { Checklist } from './Checklist.tsx'
+import { WrapUp } from './WrapUp.tsx'
 
-export type SheetMode = 'view' | 'edit'
+export type SheetMode = 'view' | 'edit' | 'wrapup'
 
 function lengthLabel(minutes: number): string {
   if (minutes < 60) return `${minutes} min`
@@ -94,6 +95,20 @@ export function CommitmentSheet({
       setError((err as Error).message)
       setBusy(false)
     }
+  }
+
+  if (mode === 'wrapup' && c) {
+    return (
+      <Modal title="Wrap up" onClose={onClose} closeOnBackdrop={false}>
+        <WrapUp
+          meeting={c}
+          onDone={() => {
+            onChanged()
+            onClose()
+          }}
+        />
+      </Modal>
+    )
   }
 
   if (mode === 'edit') {
@@ -188,6 +203,12 @@ export function CommitmentSheet({
                 </dd>
               </div>
             )}
+            {c.fromTitle && (
+              <div>
+                <dt>From</dt>
+                <dd>The meeting &ldquo;{c.fromTitle}&rdquo;</dd>
+              </div>
+            )}
             {c.scheduleTitle && (
               <div>
                 <dt>Part of</dt>
@@ -227,6 +248,15 @@ export function CommitmentSheet({
             <button className="primary" onClick={() => setMode('edit')} disabled={busy}>
               Edit
             </button>
+            {c.status === 'pending' &&
+              !c.history &&
+              c.kind === 'meeting' &&
+              !c.allDay &&
+              new Date(c.dueAt).getTime() < Date.now() && (
+                <button className="ghost" onClick={() => setMode('wrapup')} disabled={busy}>
+                  Add follow-ups
+                </button>
+              )}
             {c.status === 'pending' && !c.history && (
               <button className="ghost" onClick={() => void markDone()} disabled={busy}>
                 {busy ? 'Saving…' : 'Mark done'}

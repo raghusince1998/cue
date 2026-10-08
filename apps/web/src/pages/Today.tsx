@@ -7,6 +7,7 @@ import { enablePush, pushState, sendTestPush } from '../lib/push.ts'
 import { Modal } from '../components/Modal.tsx'
 import { InstallButton } from '../components/InstallButton.tsx'
 import { CommitmentSheet, type SheetMode } from '../components/CommitmentSheet.tsx'
+import { WrapUp } from '../components/WrapUp.tsx'
 import { NearbyIntentions } from '../components/NearbyIntentions.tsx'
 import { DayBrief } from '../components/DayBrief.tsx'
 import { PlanTomorrow } from '../components/PlanTomorrow.tsx'
@@ -23,9 +24,27 @@ interface Agenda {
   today: CommitmentDTO[]
   upcoming: CommitmentDTO[]
   doneToday: CommitmentDTO[]
+  /** Meetings under way or ended this week, not yet wrapped up. */
+  justFinished?: CommitmentDTO[]
 }
 
-const EMPTY: Agenda = { overdue: [], today: [], upcoming: [], doneToday: [] }
+const EMPTY: Agenda = { overdue: [], today: [], upcoming: [], doneToday: [], justFinished: [] }
+
+/** When a meeting ends: its own end, or its start plus its length. */
+function endOf(c: CommitmentDTO): Date {
+  return c.endsAt
+    ? new Date(c.endsAt)
+    : new Date(new Date(c.dueAt).getTime() + c.durationMinutes * 60_000)
+}
+
+function endedAgo(end: Date, now = new Date()): string {
+  const minutes = Math.round((now.getTime() - end.getTime()) / 60_000)
+  if (minutes < 60) return `Ended ${Math.max(1, minutes)} min ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `Ended ${hours}h ago`
+  const days = Math.round(hours / 24)
+  return days === 1 ? 'Ended yesterday' : `Ended ${days} days ago`
+}
 
 /** Mirrors toneOf in CalendarView, so a card and its chip agree on colour. */
 function cardTone(c: CommitmentDTO, overdue?: boolean): string {
@@ -235,6 +254,8 @@ function useWide(): boolean {
 export default function Today() {
   const [agenda, setAgenda] = useState<Agenda>(EMPTY)
   const [loading, setLoading] = useState(true)
+  /** The meeting being wrapped up: "what came out of it?". */
+  const [wrapping, setWrapping] = useState<CommitmentDTO | null>(null)
   /** The plan open in the details sheet, and whether it opened on the form. */
   const [opened, setOpened] = useState<{ id: string; mode: SheetMode } | null>(null)
   const openPlan = useCallback(
@@ -256,6 +277,19 @@ export default function Today() {
   const wide = useWide()
   /** A day a link asked to open on — "Open the day" on a clash. */
   const [focusDate, setFocusDate] = useState<string | null>(null)
+
+  // ?wrapup=<id>: the "just ended — any follow-ups?" notification, tapped.
+  useEffect(() => {
+    const id = params.get('wrapup')
+    if (!id) return
+    params.delete('wrapup')
+    setParams(params, { replace: true })
+    void api<CommitmentDTO>(`/commitments/${id}`)
+      .then((c) => {
+        if (c.status === 'pending') setWrapping(c)
+      })
+      .catch(() => undefined)
+  }, [params, setParams])
 
   // ?view=week&date=YYYY-MM-DD: switch to that view on that day, then take
   // the parameters out of the address so a refresh does not keep jumping back.
@@ -336,6 +370,15 @@ export default function Today() {
   }
 
   const fixedToday = agenda.today.filter((c) => c.flexibility !== 'flexible')
+  const nowMs = Date.now()
+  const happeningNow = (agenda.justFinished ?? []).filter((c) => endOf(c).getTime() > nowMs)
+  const justFinished = (agenda.justFinished ?? []).filter((c) => endOf(c).getTime() <= nowMs)
+
+  /** "Nothing came out of it": close the meeting without opening anything. */
+  async function nothingToAdd(id: string) {
+    await api(`/commitments/${id}/wrap-up`, { method: 'POST', body: { items: [] } })
+    await load()
+  }
   const flexibleToday = agenda.today.filter((c) => c.flexibility === 'flexible')
 
   /**
@@ -489,6 +532,68 @@ export default function Today() {
         />
       )}
 
+      {/* First, because it is the most perishable thing on the screen: what was
+          agreed in a meeting is clearest in the hour after it. */}
+      {view === 'agenda' && justFinished.length > 0 && (
+        <section>
+          <h2 className="section-title">
+            Just finished — any follow-ups? <span className="count is-calm">{justFinished.length}</span>
+          </h2>
+          <ul className="list">
+            {justFinished.map((c) => (
+              <li key={c.id} className="card commitment wrapup-card">
+                <div
+                  className="commitment-main is-openable"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open ${c.title}`}
+                  onClick={() => openPlan(c.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      openPlan(c.id)
+                    }
+                  }}
+                >
+                  <p className="commitment-title">{c.title}</p>
+                  <p className="muted small">
+                    {endedAgo(endOf(c))}
+                    {c.placeName ? ` · ${c.placeName}` : ''}
+                    {c.feedId ? ' · from your calendar' : ''}
+                  </p>
+                </div>
+                <div className="row commitment-actions">
+                  <button className="primary small-btn" onClick={() => setWrapping(c)}>
+                    Add follow-ups
+                  </button>
+                  <button className="ghost small-btn" onClick={() => void nothingToAdd(c.id)}>
+                    Nothing to add
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {view === 'agenda' && happeningNow.length > 0 && (
+        <section>
+          <h2 className="section-title">Happening now</h2>
+          <ul className="list">
+            {happeningNow.map((c) => (
+              <Card
+                key={c.id}
+                commitment={c}
+                onDone={complete}
+                onSnooze={snooze}
+                onOpen={openPlan}
+                onMoved={() => void load()}
+              />
+            ))}
+          </ul>
+        </section>
+      )}
+
       {view === 'agenda' && agenda.overdue.length > 0 && (
         <section>
           <h2 className="section-title danger">
@@ -624,6 +729,18 @@ export default function Today() {
         </div>
       )}
       </div>
+
+      {wrapping && (
+        <Modal title="Wrap up" onClose={() => setWrapping(null)} closeOnBackdrop={false}>
+          <WrapUp
+            meeting={wrapping}
+            onDone={() => {
+              setWrapping(null)
+              void load()
+            }}
+          />
+        </Modal>
+      )}
 
       {opened && (
         <CommitmentSheet

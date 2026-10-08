@@ -13,6 +13,7 @@ interface Me {
 
 interface Preferences {
   timezone: string
+  followupPrompts: boolean
   dailyNudgeEnabled: boolean
   dailyNudgeHour: number
   lastNudgeOn: string | null
@@ -255,6 +256,24 @@ export function Settings({ onClose }: { onClose: () => void }) {
           </button>
         </>
       )}
+
+      <hr className="rule" />
+      <div className="setting-row has-infotip">
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={prefs.followupPrompts}
+            disabled={busy}
+            onChange={(e) => void update({ followupPrompts: e.target.checked })}
+          />
+          <span>When a meeting ends, ask me what to follow up on</span>
+        </label>
+        <InfoTip label="What does this do?">
+          A notification as each one-off meeting ends — from Cue or a connected calendar — so
+          you can note what was agreed while it is fresh. Each follow-up becomes a reminder of
+          its own. Meetings also wait under &ldquo;Just finished&rdquo; on Today either way.
+        </InfoTip>
+      </div>
 
       <hr className="rule" />
       <CalendarFeeds />

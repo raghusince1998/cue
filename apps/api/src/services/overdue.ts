@@ -31,6 +31,37 @@ export function isCalendarHistory() {
 }
 
 /**
+ * Something Cue is managing at all: everything added here, and from a connected
+ * calendar only what is dated after connecting and is not an all-day entry.
+ */
+export function managedByCue() {
+  const c = schema.commitments
+  return sql`(${c.feedId} is null or (not ${c.allDay} and ${c.dueAt} >= ${connectedAt()}))`
+}
+
+/** When a meeting ends: its own end if it has one, else its start plus its length. */
+export function meetingEnd() {
+  const c = schema.commitments
+  return sql`coalesce(${c.endsAt}, ${c.dueAt} + ${c.durationMinutes} * interval '1 minute')`
+}
+
+/** How long a finished meeting waits to be wrapped up before it counts as dropped. */
+export const WRAP_UP_DAYS = 7
+
+/**
+ * A meeting that is under way, or ended within the last week.
+ *
+ * It is not dropped: it is waiting to be wrapped up — "any follow-ups?" — on
+ * Today's "Just finished" list. Only after a week untouched does it join the
+ * overdue list like anything else.
+ */
+export function isAwaitingWrapUp(now: Date) {
+  const c = schema.commitments
+  const since = new Date(now.getTime() - WRAP_UP_DAYS * 86_400_000)
+  return sql`(${c.kind} = 'meeting' and not ${c.allDay} and ${meetingEnd()} > ${since})`
+}
+
+/**
  * What can be overdue.
  *
  * Everything you added yourself, and anything from a connected calendar dated
@@ -42,7 +73,6 @@ export function isCalendarHistory() {
  * the Today list, the counts, the insights, the triage panel and the evening
  * nudge cannot disagree. (The nudge's raw SQL spells out the same rule.)
  */
-export function canBeOverdue() {
-  const c = schema.commitments
-  return sql`(${c.feedId} is null or (not ${c.allDay} and ${c.dueAt} >= ${connectedAt()}))`
+export function canBeOverdue(now: Date) {
+  return sql`(${managedByCue()} and not ${isAwaitingWrapUp(now)})`
 }

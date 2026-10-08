@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { and, asc, eq, gt, gte, lt, lte, ne, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, lt, lte, ne, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   COMMITMENT_KIND,
@@ -21,7 +21,8 @@ import { checkConflicts } from '../services/scheduling.ts'
 import { findFreeSlots } from '../services/freeSlots.ts'
 import { suggestSlots } from '../services/slots.ts'
 import { detectLocationConflicts } from '../services/locationConflict.ts'
-import { canBeOverdue, isCalendarHistory } from '../services/overdue.ts'
+import { canBeOverdue, isAwaitingWrapUp, isCalendarHistory, managedByCue } from '../services/overdue.ts'
+import { wrapUpMeeting } from '../services/wrapUp.ts'
 
 const agendaQuery = z.object({
   /** Local day boundaries, supplied by the client which knows its timezone. */
@@ -73,6 +74,9 @@ const selection = {
   recurrenceId: schema.commitments.recurrenceId,
   feedId: schema.commitments.feedId,
   history: isCalendarHistory(),
+  fromTitle: sql<string | null>`(
+    select f.title from commitments f where f.id = ${schema.commitments.fromCommitmentId}
+  )`,
   scheduleTitle: sql<string | null>`(
     select s.title from schedules s where s.id = ${schema.commitments.scheduleId}
   )`,
@@ -117,6 +121,7 @@ function toDTO(row: SelectedRow): CommitmentDTO {
     feedId: (row.feedId as string | null) ?? null,
     history: Boolean(row.history),
     scheduleTitle: (row.scheduleTitle as string | null) ?? null,
+    fromTitle: (row.fromTitle as string | null) ?? null,
     checklistCount: Number(row.checklistCount ?? 0),
     checklistDone: Number(row.checklistDone ?? 0),
     notes: (row.notes as string | null) ?? null,
@@ -215,9 +220,9 @@ export async function commitmentRoutes(app: FastifyInstance) {
     const mine = eq(schema.commitments.orgId, orgId)
     const pending = eq(schema.commitments.status, 'pending')
 
-    const [overdue, today, upcoming, doneToday] = await Promise.all([
+    const [overdue, today, upcoming, doneToday, justFinished] = await Promise.all([
       baseQuery()
-        .where(and(mine, pending, canBeOverdue(), lt(schema.commitments.dueAt, now)))
+        .where(and(mine, pending, canBeOverdue(now), lt(schema.commitments.dueAt, now)))
         .orderBy(asc(schema.commitments.dueAt)),
       baseQuery()
         .where(
@@ -253,10 +258,24 @@ export async function commitmentRoutes(app: FastifyInstance) {
           ),
         )
         .orderBy(asc(schema.commitments.dueAt)),
+      // Meetings under way or ended this week, waiting for "any follow-ups?".
+      baseQuery()
+        .where(
+          and(
+            mine,
+            pending,
+            managedByCue(),
+            isAwaitingWrapUp(now),
+            lt(schema.commitments.dueAt, now),
+          ),
+        )
+        .orderBy(desc(schema.commitments.dueAt))
+        .limit(30),
     ])
 
     return {
       overdue: overdue.map(toDTO),
+      justFinished: justFinished.map(toDTO),
       today: today.map(toDTO),
       upcoming: upcoming.map(toDTO),
       doneToday: doneToday.map(toDTO),
@@ -583,6 +602,31 @@ export async function commitmentRoutes(app: FastifyInstance) {
     })
 
     return { ok: true }
+  })
+
+  /**
+   * Wrapping up a meeting: what came out of it becomes plans of their own, and
+   * the meeting is done. An empty list is "nothing came out of it".
+   */
+  app.post('/commitments/:id/wrap-up', async (req, reply) => {
+    const { sub: userId } = scope(req)
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params)
+    const { items } = z
+      .object({
+        items: z
+          .array(
+            z.object({
+              title: z.string().min(1).max(300),
+              waitingOn: z.string().max(100).nullable().optional(),
+              dueAt: z.string().datetime(),
+            }),
+          )
+          .max(20),
+      })
+      .parse(req.body)
+    const result = await wrapUpMeeting(userId, id, items)
+    if (!result) return reply.code(404).send({ error: 'not_found' })
+    return result
   })
 
   app.post('/commitments/:id/cancel', async (req, reply) => {

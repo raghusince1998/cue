@@ -11,6 +11,7 @@ const preferencesInput = z.object({
   timezone: z.string().min(1).max(80).optional(),
   dailyNudgeEnabled: z.boolean().optional(),
   dailyNudgeHour: z.number().int().min(0).max(23).optional(),
+  followupPrompts: z.boolean().optional(),
 })
 
 const selection = {
@@ -18,6 +19,7 @@ const selection = {
   dailyNudgeEnabled: schema.users.dailyNudgeEnabled,
   dailyNudgeHour: schema.users.dailyNudgeHour,
   lastNudgeOn: schema.users.lastNudgeOn,
+  followupPrompts: schema.users.followupPrompts,
 }
 
 export async function meRoutes(app: FastifyInstance) {
@@ -51,6 +53,7 @@ export async function meRoutes(app: FastifyInstance) {
           ? { dailyNudgeEnabled: body.dailyNudgeEnabled }
           : {}),
         ...(body.dailyNudgeHour !== undefined ? { dailyNudgeHour: body.dailyNudgeHour } : {}),
+        ...(body.followupPrompts !== undefined ? { followupPrompts: body.followupPrompts } : {}),
       })
       .where(eq(schema.users.id, sub))
 

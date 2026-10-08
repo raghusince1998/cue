@@ -74,7 +74,11 @@ self.addEventListener('push', (event) => {
     data: { url: payload.url ?? '/', commitmentId: payload.commitmentId },
     // Three is the most any platform shows, and Call earns its slot whenever
     // there is actually a number to ring.
-    actions: payload.phone
+    // "Mark done" and "Snooze" need a plan to act on. The after-meeting
+    // prompt has none of its own, so it is a plain tap that opens the app.
+    actions: !payload.commitmentId
+      ? []
+      : payload.phone
       ? [
           { action: 'call', title: 'Call' },
           { action: 'done', title: 'Mark done' },

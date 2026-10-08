@@ -30,6 +30,7 @@ import { searchRoutes } from './routes/search.ts'
 import { checklistRoutes } from './routes/checklist.ts'
 import { intentionRoutes } from './routes/intentions.ts'
 import { startNudgeWorker } from './services/dailyNudge.ts'
+import { startFollowUpWorker } from './services/wrapUp.ts'
 import { startReminderWorker } from './worker/reminders.ts'
 import { sweep } from './services/recurrence.ts'
 import { syncAllFeeds } from './services/calendarFeed.ts'
@@ -125,6 +126,7 @@ try {
 // change later — the SKIP LOCKED claim already makes it safe to run N copies.
 const stopWorker = startReminderWorker()
 const stopNudges = startNudgeWorker()
+const stopFollowUps = startFollowUpWorker()
 
 // Keeps the rolling window of generated occurrences topped up. Hourly is ample
 // for a 120-day horizon, and it runs once at boot so a series created while the
@@ -162,6 +164,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, async () => {
     stopWorker()
     stopNudges()
+  stopFollowUps()
     clearInterval(recurrenceTimer)
     clearInterval(feedTimer)
     clearInterval(purgeTimer)

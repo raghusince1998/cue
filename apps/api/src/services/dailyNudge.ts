@@ -62,7 +62,11 @@ async function statsFor(userId: string, timezone: string): Promise<DayStats> {
            -- history from before it was connected, never an all-day entry.
            and (c.feed_id is null or (not c.all_day and c.due_at >= coalesce(
              (select f.created_at from calendar_feeds f where f.id = c.feed_id),
-             '-infinity'::timestamptz))))::int as overdue,
+             '-infinity'::timestamptz)))
+           -- Nor a meeting from the last week: it is waiting to be wrapped up.
+           and not (c.kind = 'meeting' and not c.all_day
+             and coalesce(c.ends_at, c.due_at + c.duration_minutes * interval '1 minute')
+                 > now() - interval '7 days'))::int as overdue,
       (select count(*) from commitments c, bounds b
          where c.user_id = ${userId} and c.status = 'pending'
            and c.due_at >= now()

@@ -646,6 +646,8 @@ export interface CommitmentDTO {
   history?: boolean
   /** The schedule this is one step of, when it is part of one. */
   scheduleTitle?: string | null
+  /** The meeting this follow-up came out of. */
+  fromTitle?: string | null
   /** How many things are attached to this; 0 means do not render a list. */
   checklistCount: number
   checklistDone: number
