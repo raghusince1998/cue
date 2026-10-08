@@ -33,21 +33,13 @@ export function needsHomeScreenInstall(): boolean {
   return isIos && !standalone
 }
 
-export async function enablePush(): Promise<{ ok: boolean; reason?: string }> {
-  if (!pushSupported()) {
-    return {
-      ok: false,
-      reason: needsHomeScreenInstall()
-        ? 'On iPhone, tap Share then "Add to Home Screen" first, then enable notifications from there.'
-        : 'This browser does not support push notifications.',
-    }
-  }
-
-  const permission = await Notification.requestPermission()
-  if (permission !== 'granted') {
-    return { ok: false, reason: 'Notification permission was declined.' }
-  }
-
+/**
+ * Hands this device's push address to the server.
+ *
+ * Shared by the Enable button and the silent check on every launch, so the
+ * two cannot disagree about what "registered" means.
+ */
+async function register(): Promise<{ ok: boolean; reason?: string }> {
   const { publicKey, configured } = await api<{ publicKey: string; configured: boolean }>(
     '/push/public-key',
   )
@@ -78,6 +70,42 @@ export async function enablePush(): Promise<{ ok: boolean; reason?: string }> {
   })
 
   return { ok: true }
+}
+
+export async function enablePush(): Promise<{ ok: boolean; reason?: string }> {
+  if (!pushSupported()) {
+    return {
+      ok: false,
+      reason: needsHomeScreenInstall()
+        ? 'On iPhone, tap Share then "Add to Home Screen" first, then enable notifications from there.'
+        : 'This browser does not support push notifications.',
+    }
+  }
+
+  const permission = await Notification.requestPermission()
+  if (permission !== 'granted') {
+    return { ok: false, reason: 'Notification permission was declined.' }
+  }
+
+  return register()
+}
+
+/**
+ * Re-registers this device on every launch, without asking anything.
+ *
+ * "Notifications are on" used to mean only that the browser had said yes once.
+ * The server's copy of the device could still be missing — never saved, pruned
+ * after the push service rotated the address, or belonging to whoever was
+ * signed in before — and nothing ever put it back, so the phone showed
+ * notifications as on and received none. Saving it again is idempotent.
+ */
+export async function resyncPush(): Promise<void> {
+  if (pushState() !== 'granted') return
+  try {
+    await register()
+  } catch {
+    // Best effort: the Enable button remains the way to see what went wrong.
+  }
 }
 
 export async function sendTestPush(): Promise<number> {

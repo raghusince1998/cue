@@ -7,6 +7,19 @@ if (pushConfigured) {
   webpush.setVapidDetails(env.vapidSubject, env.vapidPublicKey, env.vapidPrivateKey)
 }
 
+/**
+ * How every Cue notification is sent.
+ *
+ * High urgency, because these are reminders: at the default ("normal") Android
+ * may hold a web push until the phone next wakes from its battery-saving sleep,
+ * which is how a reminder arrives after the meeting it was for. Native apps
+ * such as delivery and shopping apps send theirs at high priority, which is
+ * part of why theirs turn up on time. The TTL drops a reminder the push
+ * service could not deliver within six hours, rather than buzzing about
+ * yesterday's call when the phone comes back online.
+ */
+const SEND_OPTIONS = { urgency: 'high' as const, TTL: 6 * 60 * 60 }
+
 export interface PushPayload {
   title: string
   body: string
@@ -44,6 +57,7 @@ export async function sendToUser(userId: string, payload: PushPayload): Promise<
             keys: { p256dh: sub.p256dh, auth: sub.auth },
           },
           JSON.stringify(payload),
+          SEND_OPTIONS,
         )
         delivered += 1
       } catch (err) {

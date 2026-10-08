@@ -199,9 +199,27 @@ export function CalendarFeeds() {
 
   async function toggleRemind(feed: FeedDTO) {
     setBusy(true)
+    setError(null)
     try {
-      await api(`/calendar-feeds/${feed.id}`, { method: 'PATCH', body: { remind: !feed.remind } })
+      const on = !feed.remind
+      const r = await api<{ reminders: number | null }>(`/calendar-feeds/${feed.id}`, {
+        method: 'PATCH',
+        body: { remind: on },
+      })
+      const n = r.reminders ?? 0
+      const name = feed.calendarName ?? feed.label
+      // Say what changed, so ticking the box is not an act of faith.
+      setMessage(
+        on
+          ? n > 0
+            ? `Reminders on for ${name} — ${n} upcoming event${n === 1 ? '' : 's'} will notify you at the time.`
+            : `Reminders on for ${name}. Nothing ahead in it yet; new events will notify you.`
+          : `Reminders off for ${name}.`,
+      )
+      setNote(null)
       await load()
+    } catch (err) {
+      setError((err as Error).message)
     } finally {
       setBusy(false)
     }

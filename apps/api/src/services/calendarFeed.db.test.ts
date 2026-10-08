@@ -305,3 +305,38 @@ test('deleting a subscription removes everything it brought in', async () => {
     .where(eq(dbm.schema.recurrences.feedId, feed.id))
   assert.equal(series.length, 0)
 })
+
+test('ticking "remind me" covers events already brought in, and unticking stops them', async () => {
+  // The box used to apply only to events imported after it changed. On a
+  // calendar already being read, that is none of them.
+  const reminders = await import('./reminders.ts')
+  const feed = await makeFeed({ remind: false })
+  await svc.importIcs(
+    feed,
+    ics(
+      vevent('ahead@t', ['DTSTART;TZID=Asia/Kolkata:20261012T150000', 'SUMMARY:Ahead']),
+      vevent('past@t', ['DTSTART;TZID=Asia/Kolkata:20261001T150000', 'SUMMARY:Already over']),
+    ),
+    { now: NOW },
+  )
+  const pending = async () => {
+    const [row] = await h.sql<{ n: number }[]>`
+      select count(*)::int as n from reminders rem
+      join commitments c on c.id = rem.commitment_id
+      where c.feed_id = ${feed.id} and rem.status = 'pending'`
+    return row!.n
+  }
+  assert.equal(await pending(), 0)
+
+  // Only what is still ahead: a reminder for last week is noise.
+  assert.equal(await reminders.applyFeedReminders(feed.id, true, NOW), 1)
+  assert.equal(await pending(), 1)
+
+  // Ticking it twice must not queue a second reminder for the same event.
+  assert.equal(await reminders.applyFeedReminders(feed.id, true, NOW), 0)
+  assert.equal(await pending(), 1)
+
+  assert.equal(await reminders.applyFeedReminders(feed.id, false, NOW), 1)
+  assert.equal(await pending(), 0)
+})
+

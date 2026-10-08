@@ -9,6 +9,7 @@ import { Search } from './components/Search.tsx'
 import { AddPanel } from './components/AddPanel.tsx'
 import { api } from './lib/api.ts'
 import { useOpenAdd, type AddOptions } from './lib/addSheet.ts'
+import { resyncPush } from './lib/push.ts'
 import Login from './pages/Login.tsx'
 import ResetPassword from './pages/ResetPassword.tsx'
 import Today from './pages/Today.tsx'
@@ -156,6 +157,12 @@ export default function App() {
   useEffect(() => {
     if (!me) return
     return startSyncLoop()
+  }, [me])
+
+  // Make sure the server can still reach this device. See resyncPush.
+  useEffect(() => {
+    if (!me) return
+    void resyncPush()
   }, [me])
 
   // The evening nudge fires in the user's local time, so tell the server what

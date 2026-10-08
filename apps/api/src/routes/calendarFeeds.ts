@@ -6,6 +6,7 @@ import { takeFirst } from '../db/util.ts'
 import { scope } from '../auth.ts'
 import { encryptSecret, secretsConfigured } from '../secrets.ts'
 import { FeedError, hintFor, importIcs, syncFeed } from '../services/calendarFeed.ts'
+import { applyFeedReminders } from '../services/reminders.ts'
 
 type FeedRow = typeof schema.calendarFeeds.$inferSelect
 
@@ -293,7 +294,11 @@ export async function calendarFeedRoutes(app: FastifyInstance) {
         .returning(),
       'calendar feed',
     )
-    return { feed: toDTO(row) }
+    // The box covers what the calendar already brought in, not only what
+    // arrives from now on.
+    const reminders =
+      input.remind === undefined ? null : await applyFeedReminders(id, input.remind)
+    return { feed: toDTO(row), reminders }
   })
 
   /**
