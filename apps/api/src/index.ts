@@ -21,6 +21,7 @@ import { meRoutes } from './routes/me.ts'
 import { aiRoutes } from './routes/ai.ts'
 import { tripRoutes } from './routes/trips.ts'
 import { recurrenceRoutes } from './routes/recurrences.ts'
+import { scheduleRoutes } from './routes/schedules.ts'
 import { calendarFeedRoutes } from './routes/calendarFeeds.ts'
 import { oauthRoutes } from './routes/oauth.ts'
 import { insightRoutes } from './routes/insights.ts'
@@ -67,6 +68,7 @@ await app.register(meRoutes, { prefix: '/api' })
 await app.register(aiRoutes, { prefix: '/api' })
 await app.register(tripRoutes, { prefix: '/api' })
 await app.register(recurrenceRoutes, { prefix: '/api' })
+await app.register(scheduleRoutes, { prefix: '/api' })
 await app.register(calendarFeedRoutes, { prefix: '/api' })
 await app.register(oauthRoutes, { prefix: '/api' })
 await app.register(insightRoutes, { prefix: '/api' })

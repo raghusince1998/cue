@@ -188,6 +188,14 @@ export function CommitmentSheet({
                 </dd>
               </div>
             )}
+            {c.scheduleTitle && (
+              <div>
+                <dt>Part of</dt>
+                <dd>
+                  {c.scheduleTitle} · <Link to="/repeating">See the schedule</Link>
+                </dd>
+              </div>
+            )}
             {c.feedId && (
               <div>
                 <dt>From</dt>

@@ -216,6 +216,8 @@ export const commitments = pgTable(
     tripId: uuid('trip_id'),
     /** The series this came from. Cascades: an occurrence has no life of its own. */
     recurrenceId: uuid('recurrence_id'),
+    /** The schedule this is one step of — see `schedules`. */
+    scheduleId: uuid('schedule_id'),
     /** Local date this occurrence stands for — safer to compare than dueAt. */
     occurrenceOn: date('occurrence_on'),
     /** Edited on its own, so regenerating the series must leave it alone. */
@@ -592,3 +594,29 @@ export const geocodeCache = pgTable('geocode_cache', {
   resolved: boolean('resolved').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+/**
+ * A schedule: steps at set distances from one date, each its own commitment.
+ *
+ * For what no repeating rule describes — vaccinations at birth, 6 weeks,
+ * 10 weeks, 9 months. The steps are ordinary commitments carrying
+ * `schedule_id`; this row groups them for progress and for stopping.
+ */
+export const schedules = pgTable(
+  'schedules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => orgs.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    startsOn: date('starts_on').notNull(),
+    status: text('status').notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('schedules_user_idx').on(t.userId, t.status)],
+)
+

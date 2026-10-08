@@ -24,6 +24,7 @@ import { enqueueVisit, newId, type PendingClip } from '../lib/outbox.ts'
 import { useOnline } from '../lib/online.ts'
 import { RepeatVisitCard, suggestedDueAt } from './RepeatVisitCard.tsx'
 import { UpcomingForm } from './UpcomingForm.tsx'
+import { ScheduleForm } from './ScheduleForm.tsx'
 import { QuickAdd } from './QuickAdd.tsx'
 import { DictateButton } from './DictateButton.tsx'
 import { announceChange } from '../lib/changes.ts'
@@ -40,17 +41,27 @@ export function AddPanel({
   onDone,
   initialMode = 'upcoming',
   initialFull = false,
+  initialRepeat = false,
+  initialSchedule = false,
 }: {
   /** Saved, or abandoned: either way the sheet's job is over. */
   onDone: () => void
   initialMode?: 'past' | 'upcoming'
   initialFull?: boolean
+  /** The detailed form with "every week" chosen. */
+  initialRepeat?: boolean
+  /** The schedule form, for dates that follow a plan rather than a rhythm. */
+  initialSchedule?: boolean
 }) {
   // Two things belong here: something that already happened, and something
   // that has not.
   const [mode, setMode] = useState<'past' | 'upcoming'>(initialMode)
   // The detailed form is opt-in, and stays open once asked for.
   const [fullForm, setFullForm] = useState(initialFull)
+  /** The schedule form, and the title carried into it from the detailed form. */
+  const [schedule, setSchedule] = useState<{ title: string } | null>(() =>
+    initialSchedule ? { title: '' } : null,
+  )
   /** A sentence the quick box could not read, carried into the detailed form. */
   const [handedOver, setHandedOver] = useState('')
   /** Remounts the detailed form after a quick save, so it starts clean. */
@@ -513,12 +524,27 @@ export function AddPanel({
             "type it in plain words" box, and showing the quick one above it
             meant two inputs for the same sentence, each with its own Dictate
             button, and no way to tell which one would save. */}
-        {fullForm ? (
+        {schedule ? (
+          <ScheduleForm
+            initialTitle={schedule.title}
+            onDone={onDone}
+            onBack={() => {
+              setSchedule(null)
+              setFullForm(true)
+            }}
+          />
+        ) : fullForm ? (
           <>
             <button className="quick-more" onClick={() => setFullForm(false)}>
               Back to one line
             </button>
-            <UpcomingForm key={quickSaves} initialQuick={handedOver} onDone={finish} />
+            <UpcomingForm
+              key={quickSaves}
+              initialQuick={handedOver}
+              initialRepeat={initialRepeat}
+              onDone={finish}
+              onSchedule={(title) => setSchedule({ title })}
+            />
           </>
         ) : (
           <>

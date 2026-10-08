@@ -221,7 +221,9 @@ export default function App() {
         <Modal title="Add" onClose={() => setAddOpen(false)} closeOnBackdrop={false}>
           <AddPanel
             initialMode={addOptions.mode}
-            initialFull={addOptions.full}
+            initialFull={addOptions.full || addOptions.repeat}
+            initialRepeat={addOptions.repeat}
+            initialSchedule={addOptions.schedule}
             onDone={() => setAddOpen(false)}
           />
         </Modal>

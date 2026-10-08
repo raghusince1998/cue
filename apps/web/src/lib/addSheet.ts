@@ -14,6 +14,10 @@ export interface AddOptions {
   mode?: 'upcoming' | 'past'
   /** Open on the detailed form rather than the one-line box. */
   full?: boolean
+  /** The detailed form, with "every week" already chosen. */
+  repeat?: boolean
+  /** The schedule form: steps at set distances from one date. */
+  schedule?: boolean
 }
 
 const EVENT = 'cue:add'

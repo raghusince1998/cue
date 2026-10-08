@@ -73,6 +73,9 @@ const selection = {
   recurrenceId: schema.commitments.recurrenceId,
   feedId: schema.commitments.feedId,
   history: isCalendarHistory(),
+  scheduleTitle: sql<string | null>`(
+    select s.title from schedules s where s.id = ${schema.commitments.scheduleId}
+  )`,
   checklistCount: sql<number>`(
     select count(*)::int from checklist_items ci where ci.commitment_id = ${schema.commitments.id}
   )`,
@@ -113,6 +116,7 @@ function toDTO(row: SelectedRow): CommitmentDTO {
     recurrenceId: (row.recurrenceId as string | null) ?? null,
     feedId: (row.feedId as string | null) ?? null,
     history: Boolean(row.history),
+    scheduleTitle: (row.scheduleTitle as string | null) ?? null,
     checklistCount: Number(row.checklistCount ?? 0),
     checklistDone: Number(row.checklistDone ?? 0),
     notes: (row.notes as string | null) ?? null,

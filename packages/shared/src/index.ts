@@ -1,5 +1,14 @@
 export { parseWhen, titleFrom, placeFrom, type ParsedWhen } from './parseWhen.ts'
 export {
+  addToDate,
+  stepDate,
+  offsetLabel,
+  SCHEDULE_UNITS,
+  type ScheduleUnit,
+  type ScheduleOffset,
+  type ScheduleStep,
+} from './schedule.ts'
+export {
   findMalformedTime,
   extractPlace,
   cleanTitle,
@@ -56,6 +65,7 @@ import { z } from 'zod'
 // Re-exporting a name does not put it in scope here, so the ones used below in
 // schemas and DTOs have to be imported as well.
 import { FREQUENCIES, type RecurrenceRule } from './recurrence.ts'
+import { SCHEDULE_UNITS } from './schedule.ts'
 
 /**
  * The domain is deliberately generic. A "place" is anywhere you go, a
@@ -209,6 +219,52 @@ export const createRecurrenceInput = z.object({
 export type CreateRecurrenceInput = z.infer<typeof createRecurrenceInput>
 
 export const updateRecurrenceInput = createRecurrenceInput.partial()
+
+/** One step of a schedule: a gap after the start, or a date of its own. */
+export const scheduleStepInput = z
+  .object({
+    title: z.string().max(200).default(''),
+    offset: z
+      .object({
+        amount: z.number().int().min(0).max(1200),
+        unit: z.enum(SCHEDULE_UNITS),
+      })
+      .nullable()
+      .optional(),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+  })
+  .refine((s) => Boolean(s.offset) !== Boolean(s.date), {
+    message: 'Each step needs either a gap after the start or a date of its own.',
+  })
+
+export const createScheduleInput = z.object({
+  title: z.string().min(1).max(200),
+  /** What the gaps count from — a date of birth, a start of treatment. */
+  startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  hour: z.number().int().min(0).max(23).default(10),
+  minute: z.number().int().min(0).max(59).default(0),
+  kind: z.enum(COMMITMENT_KIND).default('meeting'),
+  durationMinutes: z.number().int().min(5).max(480).default(30),
+  notes: z.string().max(4000).nullable().optional(),
+  steps: z.array(scheduleStepInput).min(1).max(60),
+})
+export type CreateScheduleInput = z.infer<typeof createScheduleInput>
+
+export interface ScheduleDTO {
+  id: string
+  title: string
+  startsOn: string
+  status: string
+  /** Steps that were booked. */
+  total: number
+  done: number
+  next: { title: string; dueAt: string } | null
+  createdAt: string
+}
 
 export interface RecurrenceDTO {
   id: string
@@ -583,6 +639,8 @@ export interface CommitmentDTO {
    * not there, so it is neither done nor overdue — it has no status.
    */
   history?: boolean
+  /** The schedule this is one step of, when it is part of one. */
+  scheduleTitle?: string | null
   /** How many things are attached to this; 0 means do not render a list. */
   checklistCount: number
   checklistDone: number

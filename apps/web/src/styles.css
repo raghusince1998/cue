@@ -3259,3 +3259,163 @@ button:disabled {
   display: flex;
   gap: 8px;
 }
+
+/* ---- Repeating: a rhythm, or a schedule of dates -------------------- */
+
+.repeat-starts {
+  gap: 8px;
+}
+
+.weekday-pick {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.weekday {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 650;
+}
+
+.weekday.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.repeat-every {
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.repeat-every input {
+  width: 84px;
+}
+
+.repeat-every select {
+  width: auto;
+}
+
+.schedule-start {
+  flex-wrap: nowrap;
+}
+
+.schedule-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  counter-reset: step;
+}
+
+.schedule-step {
+  position: relative;
+  padding-left: 30px;
+  counter-increment: step;
+}
+
+/* The step number, so a long schedule can be read and talked about. */
+.schedule-step::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 10px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.schedule-step-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.schedule-when {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.schedule-when select {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.schedule-when input[type='number'] {
+  width: 76px;
+  flex: 0 0 auto;
+}
+
+.schedule-when input[type='date'] {
+  flex: 1 1 auto;
+}
+
+.schedule-remove {
+  margin-left: auto;
+  padding: 4px 8px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.schedule-date {
+  margin: 4px 0 0;
+  min-height: 1.2em;
+  font-size: 12.5px;
+  color: var(--accent-2);
+}
+
+.schedule-date.is-past {
+  color: var(--muted);
+}
+
+@media (min-width: 640px) {
+  /* What happens beside when it happens, on a screen with room for both. */
+  .schedule-step-fields {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .schedule-step-fields > input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .schedule-when {
+    flex: 0 0 auto;
+  }
+}
+
+.tile-mark.is-schedule {
+  background: color-mix(in srgb, #14b8a6 16%, transparent);
+  color: #14b8a6;
+}
+
+.schedule-progress {
+  height: 4px;
+  margin: 8px 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.schedule-progress span {
+  display: block;
+  height: 100%;
+  background: #14b8a6;
+}

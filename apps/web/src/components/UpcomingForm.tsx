@@ -29,6 +29,8 @@ import {
   originalIfInformative,
   placeFrom,
   titleFrom,
+  type Frequency,
+  type RecurrenceRule,
 } from '@cue/shared'
 import { ApiError, api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
@@ -109,14 +111,41 @@ function planRepeat(
  * rest of life, where half of what you need to remember is simply an
  * appointment somebody gave you.
  */
+type RepeatChoice = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly' | 'custom'
+
+const REPEAT_CHOICES: { value: RepeatChoice; label: string }[] = [
+  { value: 'none', label: "Doesn't repeat" },
+  { value: 'daily', label: 'Every day' },
+  { value: 'weekdays', label: 'Weekdays' },
+  { value: 'weekly', label: 'Every week' },
+  { value: 'monthly', label: 'Every month' },
+  { value: 'yearly', label: 'Every year' },
+  { value: 'custom', label: 'Every few…' },
+]
+
+const WEEKDAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const CUSTOM_UNITS: { freq: Frequency; label: string }[] = [
+  { freq: 'daily', label: 'days' },
+  { freq: 'weekly', label: 'weeks' },
+  { freq: 'monthly', label: 'months' },
+  { freq: 'yearly', label: 'years' },
+]
+
 export function UpcomingForm({
   onDone,
   initialQuick = '',
+  initialRepeat = false,
+  onSchedule,
 }: {
   /** Saved or cancelled: the sheet this lives in closes. */
   onDone: () => void
   /** A sentence the one-line box could not read, so it is not typed twice. */
   initialQuick?: string
+  /** Open with "every week" already chosen — from the Repeating page. */
+  initialRepeat?: boolean
+  /** "Irregular dates…": hand over to the schedule form, with the title so far. */
+  onSchedule?: (title: string) => void
 }) {
   const navigate = useNavigate()
 
@@ -154,6 +183,18 @@ export function UpcomingForm({
 
   const [placeLabel, setPlaceLabel] = useState('')
   const [allDay, setAllDay] = useState(false)
+
+  // Repeating, chosen rather than typed. Until now the only way to make a
+  // plan repeat was to know to write "every tuesday" in the text box.
+  const [repeatChoice, setRepeatChoice] = useState<RepeatChoice>(initialRepeat ? 'weekly' : 'none')
+  const [repeatDays, setRepeatDays] = useState<number[]>([])
+  const [customEvery, setCustomEvery] = useState(2)
+  const [customFreq, setCustomFreq] = useState<Frequency>('weekly')
+  const [repeatEnd, setRepeatEnd] = useState<'never' | 'count' | 'until'>('never')
+  const [repeatCount, setRepeatCount] = useState(10)
+  const [repeatUntil, setRepeatUntil] = useState(() =>
+    toDateInputValue(new Date(Date.now() + 90 * 86_400_000)),
+  )
   const [endsOn, setEndsOn] = useState<Date>(() => new Date())
   const [quick, setQuick] = useState(initialQuick)
   const [aiProvider, setAiProvider] = useState<string>('none')
@@ -255,7 +296,82 @@ export function UpcomingForm({
   const blocked =
     !allDay && flexibility === 'fixed' && clashes.length > 0 && !allowConflict && timeChosen
 
+  // A repeat needs a clock time to repeat at; all-day and "sometime around
+  // then" plans keep the single-plan path.
+  const canRepeat = !allDay && flexibility === 'fixed'
+  const seriesRule: RecurrenceRule | null = (() => {
+    if (!canRepeat || repeatChoice === 'none') return null
+    const ends = {
+      until: repeatEnd === 'until' ? repeatUntil : null,
+      count: repeatEnd === 'count' ? Math.min(500, Math.max(1, repeatCount)) : null,
+    }
+    switch (repeatChoice) {
+      case 'daily':
+        return { freq: 'daily', interval: 1, ...ends }
+      case 'weekdays':
+        return { freq: 'weekly', interval: 1, byWeekday: [1, 2, 3, 4, 5], ...ends }
+      case 'weekly':
+        return {
+          freq: 'weekly',
+          interval: 1,
+          byWeekday: repeatDays.length > 0 ? [...repeatDays].sort() : [dueAt.getDay()],
+          ...ends,
+        }
+      case 'monthly':
+        return { freq: 'monthly', interval: 1, ...ends }
+      case 'yearly':
+        return { freq: 'yearly', interval: 1, ...ends }
+      default:
+        return {
+          freq: customFreq,
+          interval: Math.min(52, Math.max(1, customEvery)),
+          ...(customFreq === 'weekly' ? { byWeekday: [dueAt.getDay()] } : {}),
+          ...ends,
+        }
+    }
+  })()
+
+  // The first real date, which is not always the date picked above: "every
+  // Monday" chosen on a Thursday starts next Monday.
+  const firstOccurrence = seriesRule
+    ? (expandRecurrence(
+        seriesRule,
+        { startsOn: new Date(dueAt.getFullYear(), dueAt.getMonth(), dueAt.getDate()), hour: dueAt.getHours(), minute: dueAt.getMinutes() },
+        { from: new Date(dueAt.getTime() - 60_000), to: new Date(dueAt.getTime() + 400 * 86_400_000) },
+      )[0] ?? null)
+    : null
+
+  async function saveSeries(rule: RecurrenceRule) {
+    setSaving(true)
+    setError(null)
+    try {
+      await api('/recurrences', {
+        method: 'POST',
+        body: {
+          title: title.trim(),
+          kind,
+          durationMinutes,
+          priority,
+          placeLabel: placeLabel.trim() || null,
+          placeId,
+          contactId,
+          notes: notes.trim() || null,
+          startsOn: toDateInputValue(dueAt),
+          hour: dueAt.getHours(),
+          minute: dueAt.getMinutes(),
+          rule,
+        },
+      })
+      onDone()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function save() {
+    if (seriesRule) return saveSeries(seriesRule)
     setSaving(true)
     setError(null)
     try {
@@ -818,6 +934,144 @@ ${original}` : original))
         )}
       </section>
 
+      {canRepeat && (
+        <section className="card">
+          <span className="label-text">Repeats?</span>
+          <div className="chips">
+            {REPEAT_CHOICES.map((c) => (
+              <button
+                key={c.value}
+                className={`chip${repeatChoice === c.value ? ' selected' : ''}`}
+                onClick={() => setRepeatChoice(c.value)}
+              >
+                {c.label}
+              </button>
+            ))}
+            {onSchedule && (
+              <button className="chip" onClick={() => onSchedule(title)}>
+                Irregular dates…
+              </button>
+            )}
+          </div>
+
+          {repeatChoice === 'weekly' && (
+            <div className="weekday-pick" role="group" aria-label="On which days">
+              {WEEKDAY_LETTERS.map((letter, day) => {
+                const on = repeatDays.length > 0 ? repeatDays.includes(day) : day === dueAt.getDay()
+                return (
+                  <button
+                    key={day}
+                    className={`weekday${on ? ' selected' : ''}`}
+                    aria-label={WEEKDAY_NAMES[day]}
+                    aria-pressed={on}
+                    onClick={() => {
+                      const current = repeatDays.length > 0 ? repeatDays : [dueAt.getDay()]
+                      const next = current.includes(day)
+                        ? current.filter((d) => d !== day)
+                        : [...current, day]
+                      setRepeatDays(next.length > 0 ? next : current)
+                    }}
+                  >
+                    {letter}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {repeatChoice === 'custom' && (
+            <div className="row repeat-every">
+              <span>Every</span>
+              <input
+                type="number"
+                min={1}
+                max={52}
+                value={customEvery}
+                onChange={(e) => setCustomEvery(Number(e.target.value) || 1)}
+                aria-label="How many"
+              />
+              <select
+                value={customFreq}
+                onChange={(e) => setCustomFreq(e.target.value as Frequency)}
+                aria-label="Days, weeks, months or years"
+              >
+                {CUSTOM_UNITS.map((u) => (
+                  <option key={u.freq} value={u.freq}>
+                    {u.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {seriesRule && (
+            <>
+              <span className="label-text">Until?</span>
+              <div className="chips">
+                <button
+                  className={`chip${repeatEnd === 'never' ? ' selected' : ''}`}
+                  onClick={() => setRepeatEnd('never')}
+                >
+                  No end
+                </button>
+                <button
+                  className={`chip${repeatEnd === 'count' ? ' selected' : ''}`}
+                  onClick={() => setRepeatEnd('count')}
+                >
+                  A number of times
+                </button>
+                <button
+                  className={`chip${repeatEnd === 'until' ? ' selected' : ''}`}
+                  onClick={() => setRepeatEnd('until')}
+                >
+                  Until a date
+                </button>
+              </div>
+              {repeatEnd === 'count' && (
+                <div className="row repeat-every">
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={repeatCount}
+                    onChange={(e) => setRepeatCount(Number(e.target.value) || 1)}
+                    aria-label="How many times"
+                  />
+                  <span>times</span>
+                </div>
+              )}
+              {repeatEnd === 'until' && (
+                <input
+                  type="date"
+                  min={toDateInputValue(dueAt)}
+                  value={repeatUntil}
+                  onChange={(e) => setRepeatUntil(e.target.value)}
+                  aria-label="Last date"
+                />
+              )}
+              <p className="muted small">
+                {describeRecurrence(seriesRule, {
+                  startsOn: dueAt,
+                  hour: dueAt.getHours(),
+                  minute: dueAt.getMinutes(),
+                })}
+                {firstOccurrence
+                  ? `, first on ${formatDateTime(firstOccurrence.toISOString())}`
+                  : ''}
+                . Each one reminds you on its own, and the series is on the Repeating page.
+              </p>
+            </>
+          )}
+
+          {repeatChoice === 'none' && (
+            <p className="muted small">
+              For dates that follow a plan rather than a rhythm — vaccinations, a course of
+              treatment — use <strong>Irregular dates</strong>.
+            </p>
+          )}
+        </section>
+      )}
+
       {/* Everything below is optional — an appointment needs a time, not a dossier. */}
       <section className="card">
         <h2 className="section-title">Anything else? (optional)</h2>
@@ -899,9 +1153,16 @@ ${original}` : original))
         <button
           className="primary"
           onClick={save}
-          disabled={saving || blocked || !title.trim()}
+          // A clash is about one slot; a repeating plan is booked around it.
+          disabled={saving || (!seriesRule && blocked) || !title.trim()}
         >
-          {saving ? 'Saving…' : blocked ? 'Resolve the clash above' : 'Add to my list'}
+          {saving
+            ? 'Saving…'
+            : seriesRule
+              ? 'Add repeating plan'
+              : blocked
+                ? 'Resolve the clash above'
+                : 'Add to my list'}
         </button>
         <button
           className="ghost"
