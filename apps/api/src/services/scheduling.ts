@@ -2,6 +2,7 @@ import { and, asc, eq, gte, lte, ne, or } from 'drizzle-orm'
 import type { CommitmentDTO, ConflictReport } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import type { Executor } from '../db/util.ts'
+import { takesTime } from './overdue.ts'
 
 /** Granularity of the "next free slot" search. */
 const STEP_MINUTES = 15
@@ -127,6 +128,7 @@ async function pendingNear(
         // at 4pm without that being a clash.
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
+        takesTime(),
         // Typed operators, not a raw sql fragment: raw params bypass Drizzle's
         // timestamp mapping and the driver rejects a bare JS Date.
         lte(schema.commitments.dueAt, to),

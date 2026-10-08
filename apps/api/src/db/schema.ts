@@ -224,6 +224,11 @@ export const commitments = pgTable(
     wrapupPromptedAt: timestamp('wrapup_prompted_at', { withTimezone: true }),
     /** The meeting this follow-up came out of. */
     fromCommitmentId: uuid('from_commitment_id'),
+    /**
+     * Who this is waiting on. Set, it is a check-in date rather than time on
+     * the calendar: it claims no slot and is never overdue — see overdue.ts.
+     */
+    waitingOn: text('waiting_on'),
     /** Local date this occurrence stands for — safer to compare than dueAt. */
     occurrenceOn: date('occurrence_on'),
     /** Edited on its own, so regenerating the series must leave it alone. */

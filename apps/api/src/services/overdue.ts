@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm'
+import { isNull, sql } from 'drizzle-orm'
 import * as schema from '../db/schema.ts'
 
 /**
@@ -39,6 +39,18 @@ export function managedByCue() {
   return sql`(${c.feedId} is null or (not ${c.allDay} and ${c.dueAt} >= ${connectedAt()}))`
 }
 
+/**
+ * Whether it occupies time on the calendar.
+ *
+ * Not a "waiting on someone" item: that is a date to check in, and letting it
+ * claim a slot would make "check with Ravi at 10" clash with the 10 o'clock
+ * meeting and eat into the day's free time. Every query that works out busy
+ * time uses this.
+ */
+export function takesTime() {
+  return isNull(schema.commitments.waitingOn)
+}
+
 /** When a meeting ends: its own end if it has one, else its start plus its length. */
 export function meetingEnd() {
   const c = schema.commitments
@@ -76,5 +88,8 @@ export function isAwaitingWrapUp(now: Date) {
  * nudge cannot disagree. (The nudge's raw SQL spells out the same rule.)
  */
 export function canBeOverdue(now: Date) {
-  return sql`(${managedByCue()} and not ${isAwaitingWrapUp(now)})`
+  // Nor something you are waiting on from someone else: it has its own list,
+  // where a check-in that is due says so.
+  const c = schema.commitments
+  return sql`(${managedByCue()} and not ${isAwaitingWrapUp(now)} and ${c.waitingOn} is null)`
 }

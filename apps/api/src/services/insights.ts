@@ -1,7 +1,7 @@
-import { and, asc, eq, gte, isNull, lt, lte, ne, or, sql } from 'drizzle-orm'
+import { and, asc, eq, gte, isNull, lt, lte, ne, or, sql, isNotNull } from 'drizzle-orm'
 import { db, schema } from '../db/index.ts'
 import { estimateTravel, geocode, sameLabel } from './travel.ts'
-import { canBeOverdue } from './overdue.ts'
+import { canBeOverdue, takesTime } from './overdue.ts'
 
 /** A local calendar date as YYYY-MM-DD, for a link into the calendar. */
 function dayKey(d: Date): string {
@@ -92,6 +92,7 @@ async function busyBetween(userId: string, from: Date, to: Date): Promise<Busy[]
       and(
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
+        takesTime(),
         lte(schema.commitments.dueAt, to),
         or(gte(schema.commitments.dueAt, from), gte(schema.commitments.endsAt, from)),
       ),
@@ -427,6 +428,21 @@ export async function buildSummary(userId: string, now = new Date()) {
       ),
     )
 
+  // Things other people owe you, and how many are due a check-in now.
+  const [onOthers] = await db
+    .select({
+      n: sql<number>`count(*)::int`,
+      due: sql<number>`count(*) filter (where ${schema.commitments.dueAt} <= ${now.toISOString()}::timestamptz)::int`,
+    })
+    .from(schema.commitments)
+    .where(
+      and(
+        eq(schema.commitments.userId, userId),
+        eq(schema.commitments.status, 'pending'),
+        isNotNull(schema.commitments.waitingOn),
+      ),
+    )
+
   const [week] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(schema.commitments)
@@ -456,5 +472,7 @@ export async function buildSummary(userId: string, now = new Date()) {
     overdue: overdue?.n ?? 0,
     weekAhead: week?.n ?? 0,
     waiting: waiting?.n ?? 0,
+    waitingOnOthers: onOthers?.n ?? 0,
+    checkInsDue: onOthers?.due ?? 0,
   }
 }

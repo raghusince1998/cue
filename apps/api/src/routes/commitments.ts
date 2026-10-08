@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { and, asc, desc, eq, gt, gte, lt, lte, ne, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, lt, lte, ne, or, sql, isNull, isNotNull } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   COMMITMENT_KIND,
@@ -48,6 +48,8 @@ const createCommitmentInput = z.object({
   deadline: z.string().datetime().nullable().optional(),
   priority: z.enum(PRIORITIES).default('normal'),
   allowConflict: z.boolean().optional(),
+  /** Someone else's to do: a check-in date, which claims no time. */
+  waitingOn: z.string().trim().min(1).max(100).nullable().optional(),
 })
 
 const selection = {
@@ -73,6 +75,7 @@ const selection = {
   contactPhone: schema.contacts.phone,
   recurrenceId: schema.commitments.recurrenceId,
   feedId: schema.commitments.feedId,
+  waitingOn: schema.commitments.waitingOn,
   history: isCalendarHistory(),
   fromTitle: sql<string | null>`(
     select f.title from commitments f where f.id = ${schema.commitments.fromCommitmentId}
@@ -119,6 +122,7 @@ function toDTO(row: SelectedRow): CommitmentDTO {
     contactPhone: (row.contactPhone as string | null) ?? null,
     recurrenceId: (row.recurrenceId as string | null) ?? null,
     feedId: (row.feedId as string | null) ?? null,
+    waitingOn: (row.waitingOn as string | null) ?? null,
     history: Boolean(row.history),
     scheduleTitle: (row.scheduleTitle as string | null) ?? null,
     fromTitle: (row.fromTitle as string | null) ?? null,
@@ -220,22 +224,25 @@ export async function commitmentRoutes(app: FastifyInstance) {
     const mine = eq(schema.commitments.orgId, orgId)
     const pending = eq(schema.commitments.status, 'pending')
 
-    const [overdue, today, upcoming, doneToday, justFinished] = await Promise.all([
+    // Waiting-on items have their own list; the others leave them out.
+    const own = isNull(schema.commitments.waitingOn)
+    const [overdue, today, upcoming, doneToday, justFinished, waiting] = await Promise.all([
       baseQuery()
-        .where(and(mine, pending, canBeOverdue(now), lt(schema.commitments.dueAt, now)))
+        .where(and(mine, pending, own, canBeOverdue(now), lt(schema.commitments.dueAt, now)))
         .orderBy(asc(schema.commitments.dueAt)),
       baseQuery()
         .where(
           and(
             mine,
             pending,
+            own,
             gte(schema.commitments.dueAt, now),
             lte(schema.commitments.dueAt, new Date(to)),
           ),
         )
         .orderBy(asc(schema.commitments.dueAt)),
       baseQuery()
-        .where(and(mine, pending, gt(schema.commitments.dueAt, new Date(to))))
+        .where(and(mine, pending, own, gt(schema.commitments.dueAt, new Date(to))))
         .orderBy(asc(schema.commitments.dueAt))
         .limit(20),
       baseQuery()
@@ -271,11 +278,17 @@ export async function commitmentRoutes(app: FastifyInstance) {
         )
         .orderBy(desc(schema.commitments.dueAt))
         .limit(30),
+      // Everything other people owe you, soonest check-in first.
+      baseQuery()
+        .where(and(mine, pending, isNotNull(schema.commitments.waitingOn)))
+        .orderBy(asc(schema.commitments.dueAt))
+        .limit(50),
     ])
 
     return {
       overdue: overdue.map(toDTO),
       justFinished: justFinished.map(toDTO),
+      waiting: waiting.map(toDTO),
       today: today.map(toDTO),
       upcoming: upcoming.map(toDTO),
       doneToday: doneToday.map(toDTO),
@@ -365,7 +378,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
 
     // Neither an all-day item nor a flexible one claims a slot, so there is
     // nothing for them to clash with.
-    if (!body.allowConflict && !body.allDay && body.flexibility === 'fixed') {
+    if (!body.allowConflict && !body.allDay && body.flexibility === 'fixed' && !body.waitingOn) {
       const report = await checkConflicts(userId, { startsAt: dueAt, durationMinutes, endsAt })
       if (report.conflicts.length > 0) {
         return reply.code(409).send({ error: 'time_conflict', ...report })
@@ -381,6 +394,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
             userId,
             title: body.title,
             kind: body.kind,
+            waitingOn: body.waitingOn ?? null,
             dueAt,
             durationMinutes,
             placeId: body.placeId ?? null,

@@ -56,6 +56,7 @@ export async function wrapUpMeeting(
           durationMinutes: 15,
           notes: `From the meeting "${meeting.title}" on ${dateLabel(meeting.dueAt)}.`,
           fromCommitmentId: meeting.id,
+          waitingOn: who || null,
           status: 'pending',
         })
         .returning({ id: schema.commitments.id })

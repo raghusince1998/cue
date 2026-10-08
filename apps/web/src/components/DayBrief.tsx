@@ -33,6 +33,9 @@ interface Summary {
   overdue: number
   weekAhead: number
   waiting: number
+  /** What other people owe you, and how many are due a check-in. */
+  waitingOnOthers?: number
+  checkInsDue?: number
 }
 
 const ICON: Record<Tone, string> = {
@@ -169,6 +172,18 @@ export function DayBrief({
           <strong>{summary.weekAhead}</strong>
           <span>this week</span>
         </button>
+        {(summary.waitingOnOthers ?? 0) > 0 && (
+          <button
+            className={`stat${(summary.checkInsDue ?? 0) > 0 ? ' is-alert' : ''}`}
+            onClick={() => onNavigate('/?focus=waiting')}
+          >
+            <strong>{summary.waitingOnOthers}</strong>
+            <span>
+              waiting on others
+              {(summary.checkInsDue ?? 0) > 0 ? ` · ${summary.checkInsDue} to chase` : ''}
+            </span>
+          </button>
+        )}
         <button className="stat" onClick={() => onNavigate('/trips')}>
           <strong>{summary.waiting}</strong>
           <span>waiting on a trip</span>

@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, lte, ne, sql } from 'drizzle-orm'
 import { db, schema } from '../db/index.ts'
 import { estimateTravel, geocode, sameLabel, type TravelEstimate } from './travel.ts'
+import { takesTime } from './overdue.ts'
 
 /**
  * "You are supposed to be in Mathura on the 13th, and this event is in Jaipur."
@@ -135,6 +136,7 @@ export async function detectLocationConflicts(
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
         eq(schema.commitments.flexibility, 'fixed'),
+        takesTime(),
         eq(schema.commitments.allDay, false),
         gte(schema.commitments.dueAt, from),
         lte(schema.commitments.dueAt, to),

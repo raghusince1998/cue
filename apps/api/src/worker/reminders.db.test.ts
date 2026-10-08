@@ -164,3 +164,17 @@ test('a meeting from a connected calendar is announced once, not chased', async 
   assert.equal(chain.length, 1, '"Still open, 15 min overdue" about a meeting is nagging, not reminding')
   assert.equal(chain[0]!.status, 'sent')
 })
+
+test('a check-in with someone reminds once, not every fifteen minutes', async () => {
+  const [row] = await h.sql<{ id: string }[]>`
+    insert into commitments (org_id, user_id, title, due_at, status, waiting_on)
+    values (${me.orgId}, ${me.userId}, 'Waiting on Ravi: contract', now() - interval '1 minute', 'pending', 'Ravi')
+    returning id`
+  await queue(row!.id)
+
+  await tick()
+
+  const chain = await reminders(row!.id)
+  assert.equal(chain.length, 1)
+  assert.equal(chain[0]!.status, 'sent')
+})

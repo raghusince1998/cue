@@ -8,8 +8,9 @@ import { Modal } from './Modal.tsx'
 import { CommitmentEditor } from './CommitmentEditor.tsx'
 import { Checklist } from './Checklist.tsx'
 import { WrapUp } from './WrapUp.tsx'
+import { Nudge } from './Nudge.tsx'
 
-export type SheetMode = 'view' | 'edit' | 'wrapup'
+export type SheetMode = 'view' | 'edit' | 'wrapup' | 'nudge'
 
 function lengthLabel(minutes: number): string {
   if (minutes < 60) return `${minutes} min`
@@ -95,6 +96,20 @@ export function CommitmentSheet({
       setError((err as Error).message)
       setBusy(false)
     }
+  }
+
+  if (mode === 'nudge' && c) {
+    return (
+      <Modal title="Nudge" onClose={onClose}>
+        <Nudge
+          item={c}
+          onDone={() => {
+            onChanged()
+            onClose()
+          }}
+        />
+      </Modal>
+    )
   }
 
   if (mode === 'wrapup' && c) {
@@ -203,6 +218,12 @@ export function CommitmentSheet({
                 </dd>
               </div>
             )}
+            {c.waitingOn && (
+              <div>
+                <dt>Waiting on</dt>
+                <dd>{c.waitingOn} — a check-in, not time on your calendar</dd>
+              </div>
+            )}
             {c.fromTitle && (
               <div>
                 <dt>From</dt>
@@ -248,6 +269,11 @@ export function CommitmentSheet({
             <button className="primary" onClick={() => setMode('edit')} disabled={busy}>
               Edit
             </button>
+            {c.status === 'pending' && c.waitingOn && (
+              <button className="ghost" onClick={() => setMode('nudge')} disabled={busy}>
+                Nudge
+              </button>
+            )}
             {c.status === 'pending' &&
               !c.history &&
               c.kind === 'meeting' &&

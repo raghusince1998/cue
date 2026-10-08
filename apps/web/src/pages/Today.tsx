@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { WINDOW_LABELS, type CommitmentDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
-import { dayBounds, formatSpan, overdueBy } from '../lib/time.ts'
+import { dayBounds, dayLabel, formatSpan, overdueBy } from '../lib/time.ts'
 import { enablePush, pushState, sendTestPush } from '../lib/push.ts'
 import { Modal } from '../components/Modal.tsx'
 import { InstallButton } from '../components/InstallButton.tsx'
 import { CommitmentSheet, type SheetMode } from '../components/CommitmentSheet.tsx'
 import { WrapUp } from '../components/WrapUp.tsx'
+import { Nudge, waitingWhat } from '../components/Nudge.tsx'
+import { WaitingForm } from '../components/WaitingForm.tsx'
 import { NearbyIntentions } from '../components/NearbyIntentions.tsx'
 import { DayBrief } from '../components/DayBrief.tsx'
 import { PlanTomorrow } from '../components/PlanTomorrow.tsx'
@@ -26,9 +28,18 @@ interface Agenda {
   doneToday: CommitmentDTO[]
   /** Meetings under way or ended this week, not yet wrapped up. */
   justFinished?: CommitmentDTO[]
+  /** What other people owe you, soonest check-in first. */
+  waiting?: CommitmentDTO[]
 }
 
-const EMPTY: Agenda = { overdue: [], today: [], upcoming: [], doneToday: [], justFinished: [] }
+const EMPTY: Agenda = {
+  overdue: [],
+  today: [],
+  upcoming: [],
+  doneToday: [],
+  justFinished: [],
+  waiting: [],
+}
 
 /** When a meeting ends: its own end, or its start plus its length. */
 function endOf(c: CommitmentDTO): Date {
@@ -256,6 +267,10 @@ export default function Today() {
   const [loading, setLoading] = useState(true)
   /** The meeting being wrapped up: "what came out of it?". */
   const [wrapping, setWrapping] = useState<CommitmentDTO | null>(null)
+  /** The check-in being chased: a ready message, then "check again when?". */
+  const [nudging, setNudging] = useState<CommitmentDTO | null>(null)
+  const [addingWaiting, setAddingWaiting] = useState(false)
+  const [showAllWaiting, setShowAllWaiting] = useState(false)
   /** The plan open in the details sheet, and whether it opened on the form. */
   const [opened, setOpened] = useState<{ id: string; mode: SheetMode } | null>(null)
   const openPlan = useCallback(
@@ -277,6 +292,30 @@ export default function Today() {
   const wide = useWide()
   /** A day a link asked to open on — "Open the day" on a clash. */
   const [focusDate, setFocusDate] = useState<string | null>(null)
+
+  // ?nudge=<id>: a check-in reminder, tapped — straight to the message.
+  useEffect(() => {
+    const id = params.get('nudge')
+    if (!id) return
+    params.delete('nudge')
+    setParams(params, { replace: true })
+    void api<CommitmentDTO>(`/commitments/${id}`)
+      .then((c) => {
+        if (c.status === 'pending') setNudging(c)
+      })
+      .catch(() => undefined)
+  }, [params, setParams])
+
+  // ?focus=waiting: the summary's "waiting on others" count, tapped.
+  useEffect(() => {
+    if (params.get('focus') !== 'waiting' || loading) return
+    params.delete('focus')
+    setParams(params, { replace: true })
+    setView('agenda')
+    requestAnimationFrame(() =>
+      document.getElementById('waiting')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    )
+  }, [params, setParams, loading])
 
   // ?wrapup=<id>: the "just ended — any follow-ups?" notification, tapped.
   useEffect(() => {
@@ -373,6 +412,29 @@ export default function Today() {
   const nowMs = Date.now()
   const happeningNow = (agenda.justFinished ?? []).filter((c) => endOf(c).getTime() > nowMs)
   const justFinished = (agenda.justFinished ?? []).filter((c) => endOf(c).getTime() <= nowMs)
+
+  const waiting = agenda.waiting ?? []
+  const dueWaiting = waiting.filter((c) => new Date(c.dueAt).getTime() <= nowMs)
+  const laterWaiting = waiting.filter((c) => new Date(c.dueAt).getTime() > nowMs)
+  // Everything due a check-in, and the next few; the rest behind "show all".
+  const shownWaiting = showAllWaiting ? waiting : [...dueWaiting, ...laterWaiting.slice(0, 3)]
+
+  async function gotIt(id: string) {
+    await api(`/commitments/${id}/done`, { method: 'POST' })
+    await load()
+  }
+
+  /** "Later": check in two days from now, at ten. */
+  async function pushBack(id: string) {
+    const at = new Date()
+    at.setDate(at.getDate() + 2)
+    at.setHours(10, 0, 0, 0)
+    await api(`/commitments/${id}/reschedule`, {
+      method: 'POST',
+      body: { dueAt: at.toISOString(), allowConflict: true },
+    })
+    await load()
+  }
 
   /** "Nothing came out of it": close the meeting without opening anything. */
   async function nothingToAdd(id: string) {
@@ -515,6 +577,11 @@ export default function Today() {
             </button>
           ))}
         </div>
+        {view === 'agenda' && (agenda.waiting ?? []).length === 0 && !addingWaiting && (
+          <button className="link small" onClick={() => setAddingWaiting(true)}>
+            + Waiting on someone
+          </button>
+        )}
         {agenda.overdue.length > 0 && view !== 'agenda' && (
           <button className="ghost small-btn danger" onClick={() => chooseView('agenda')}>
             {agenda.overdue.length} overdue
@@ -573,6 +640,84 @@ export default function Today() {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {/* What other people owe you. Its own list, because it is a different
+          kind of thing: nothing here is yours to do except to ask. */}
+      {view === 'agenda' && (waiting.length > 0 || addingWaiting) && (
+        <section id="waiting">
+          <div className="row spread section-head">
+            <h2 className="section-title">
+              Waiting on others <span className="count is-calm">{waiting.length}</span>
+            </h2>
+            {!addingWaiting && (
+              <button className="link small" onClick={() => setAddingWaiting(true)}>
+                + Waiting on someone
+              </button>
+            )}
+          </div>
+          {addingWaiting && (
+            <WaitingForm
+              onDone={() => {
+                setAddingWaiting(false)
+                void load()
+              }}
+            />
+          )}
+          <ul className="list">
+            {shownWaiting.map((c) => {
+              const due = new Date(c.dueAt).getTime() <= nowMs
+              return (
+                <li key={c.id} className={`card commitment waiting-row${due ? ' is-due' : ''}`}>
+                  <div
+                    className="commitment-main is-openable"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Open ${c.title}`}
+                    onClick={() => openPlan(c.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        openPlan(c.id)
+                      }
+                    }}
+                  >
+                    <p className="commitment-title">
+                      <span className="waiting-who">{c.waitingOn}</span>
+                      {waitingWhat(c)}
+                    </p>
+                    <p className="muted small">
+                      {due ? (
+                        <span className="due-now">Check in now</span>
+                      ) : (
+                        `Check in ${dayLabel(c.dueAt)}`
+                      )}
+                      {c.fromTitle ? ` · from ${c.fromTitle}` : ''}
+                    </p>
+                  </div>
+                  <div className="row commitment-actions">
+                    <button className={`${due ? 'primary' : 'ghost'} small-btn`} onClick={() => setNudging(c)}>
+                      Nudge
+                    </button>
+                    <button className="ghost small-btn" onClick={() => void gotIt(c.id)}>
+                      Got it
+                    </button>
+                    {due && (
+                      <button className="link small" onClick={() => void pushBack(c.id)}>
+                        Later
+                      </button>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+          {waiting.length > shownWaiting.length && (
+            <button className="ghost small-btn" onClick={() => setShowAllWaiting(true)}>
+              Show all {waiting.length}
+            </button>
+          )}
         </section>
       )}
 
@@ -729,6 +874,18 @@ export default function Today() {
         </div>
       )}
       </div>
+
+      {nudging && (
+        <Modal title="Nudge" onClose={() => setNudging(null)}>
+          <Nudge
+            item={nudging}
+            onDone={() => {
+              setNudging(null)
+              void load()
+            }}
+          />
+        </Modal>
+      )}
 
       {wrapping && (
         <Modal title="Wrap up" onClose={() => setWrapping(null)} closeOnBackdrop={false}>

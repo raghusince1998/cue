@@ -3491,3 +3491,63 @@ button:disabled {
   width: auto;
   padding: 6px 8px;
 }
+
+/* ---- Waiting on others ---------------------------------------------- */
+
+.section-head {
+  margin-bottom: 8px;
+}
+
+.section-head .section-title {
+  margin: 0;
+}
+
+.waiting-row {
+  border-left: 3px solid #14b8a6;
+}
+
+.waiting-row.is-due {
+  border-left-color: var(--warn);
+}
+
+/* The person first: it is who you would be messaging. */
+.waiting-who {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #14b8a6 16%, transparent);
+  color: #14b8a6;
+  font-size: 12.5px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
+.due-now {
+  color: var(--warn);
+  font-weight: 650;
+}
+
+.waiting-form {
+  margin-bottom: 10px;
+  gap: 10px;
+}
+
+.waiting-form-fields {
+  flex-wrap: nowrap;
+}
+
+.waiting-form-fields input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.nudge-send {
+  gap: 8px;
+}
+
+@media (max-width: 480px) {
+  .waiting-form-fields {
+    flex-direction: column;
+  }
+}

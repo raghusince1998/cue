@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, lte, ne } from 'drizzle-orm'
 import { DEFAULT_WINDOW_HOURS, type TimeWindow } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { takesTime } from './overdue.ts'
 
 /**
  * When this person is actually free.
@@ -52,6 +53,7 @@ async function diaryOf(userId: string, from: Date, to: Date, excludeId?: string)
         // neither occupies a slot. Same rule the clash check uses.
         eq(schema.commitments.allDay, false),
         eq(schema.commitments.flexibility, 'fixed'),
+        takesTime(),
         gte(schema.commitments.dueAt, from),
         lte(schema.commitments.dueAt, to),
         excludeId ? ne(schema.commitments.id, excludeId) : undefined,

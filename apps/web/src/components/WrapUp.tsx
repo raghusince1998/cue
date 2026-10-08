@@ -11,7 +11,7 @@ interface Due {
 }
 
 /** When a follow-up is due, in the four answers people actually give. */
-function dueChoices(now = new Date()): Due[] {
+export function dueChoices(now = new Date()): Due[] {
   const at = (days: number, hour: number) =>
     new Date(now.getFullYear(), now.getMonth(), now.getDate() + days, hour, 0)
   // End of today, unless the day is nearly over — then an hour from now.

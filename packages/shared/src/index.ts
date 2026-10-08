@@ -648,6 +648,8 @@ export interface CommitmentDTO {
   scheduleTitle?: string | null
   /** The meeting this follow-up came out of. */
   fromTitle?: string | null
+  /** Someone else's to do: who it is waiting on. A check-in, not time booked. */
+  waitingOn?: string | null
   /** How many things are attached to this; 0 means do not render a list. */
   checklistCount: number
   checklistDone: number

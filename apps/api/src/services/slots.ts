@@ -6,6 +6,7 @@ import {
   type TimeWindow,
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { takesTime } from './overdue.ts'
 
 /**
  * Finds real gaps for something that only knows roughly when it wants to happen.
@@ -62,6 +63,7 @@ async function busyWithin(userId: string, from: Date, to: Date): Promise<Busy[]>
         eq(schema.commitments.userId, userId),
         eq(schema.commitments.status, 'pending'),
         eq(schema.commitments.flexibility, 'fixed'),
+        takesTime(),
         eq(schema.commitments.allDay, false),
         gte(schema.commitments.dueAt, new Date(from.getTime() - 12 * 3600_000)),
         lte(schema.commitments.dueAt, to),

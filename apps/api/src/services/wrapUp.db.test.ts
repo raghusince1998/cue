@@ -133,3 +133,44 @@ test('the notification goes once, for a one-off meeting that just ended', async 
 
   assert.equal(await svc.promptFollowUps(NOW), 0, 'never asked twice')
 })
+
+// ------------------------------------------------------- waiting on others
+
+test('a follow-up waiting on someone records who', async () => {
+  const id = await meeting('Vendor call', minutesAgo(120))
+  await svc.wrapUpMeeting(
+    me.userId,
+    id,
+    [{ title: 'revised quote', waitingOn: 'Priya', dueAt: new Date(2026, 9, 9, 10, 0).toISOString() }],
+    NOW,
+  )
+  const [row] = await h.sql<{ title: string; waiting_on: string }[]>`
+    select title, waiting_on from commitments where from_commitment_id = ${id}`
+  assert.deepEqual(row, { title: 'Waiting on Priya: revised quote', waiting_on: 'Priya' })
+})
+
+test('a check-in claims no time and is never overdue', async () => {
+  const scheduling = await import('./scheduling.ts')
+  const slots = await import('./freeSlots.ts')
+  // Tomorrow at 10: a check-in with Ravi, and nothing else.
+  const at10 = new Date(2026, 9, 9, 10, 0)
+  await h.sql`
+    insert into commitments (org_id, user_id, title, kind, due_at, duration_minutes, status, waiting_on)
+    values (${me.orgId}, ${me.userId}, 'Waiting on Ravi: contract', 'followup', ${at10}, 15, 'pending', 'Ravi')`
+
+  // A 10 o'clock meeting does not clash with it…
+  const report = await scheduling.checkConflicts(me.userId, { startsAt: at10, durationMinutes: 60 })
+  assert.equal(report.conflicts.length, 0)
+
+  // …and 10 o'clock is still offered as free.
+  const free = await slots.findFreeSlots(me.userId, 30, 3, { now: new Date(2026, 9, 9, 9, 50) })
+  assert.ok(free.some((d) => d.getTime() === at10.getTime()), 'the check-in did not take the slot')
+
+  // Past its date, it is due a check-in — not overdue.
+  const c = dbm.schema.commitments
+  const [row] = await dbm.db
+    .select({ can: rules.canBeOverdue(new Date(2026, 9, 12, 12, 0)) })
+    .from(c)
+    .where(eq(c.title, 'Waiting on Ravi: contract'))
+  assert.equal(Boolean(row!.can), false)
+})
