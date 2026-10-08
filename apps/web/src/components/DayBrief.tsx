@@ -165,6 +165,9 @@ export function DayBrief({
         <button className="brief-day-link" onClick={() => onNavigate('/?review=1')}>
           Review your week →
         </button>
+        <button className="brief-day-link" onClick={() => onNavigate('/?focusnow=1')}>
+          Start focus time →
+        </button>
         <button className="brief-day-link" onClick={() => openAdd({ share: true })}>
           Share when you&rsquo;re free →
         </button>

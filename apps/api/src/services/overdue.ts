@@ -90,6 +90,8 @@ export function isAwaitingWrapUp(now: Date) {
 export function canBeOverdue(now: Date) {
   // Nor something you are waiting on from someone else: it has its own list,
   // where a check-in that is due says so.
+  // Nor a focus block: when it is over, it is over — it was time set aside,
+  // not something promised.
   const c = schema.commitments
-  return sql`(${managedByCue()} and not ${isAwaitingWrapUp(now)} and ${c.waitingOn} is null)`
+  return sql`(${managedByCue()} and not ${isAwaitingWrapUp(now)} and ${c.waitingOn} is null and ${c.kind} <> 'focus')`
 }

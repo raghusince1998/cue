@@ -4,7 +4,7 @@ import {
   DURATION_CHOICES,
   KIND_LABELS,
   OUTCOME_OPTIONS,
-  COMMITMENT_KIND,
+  SELECTABLE_KINDS,
   type CommitmentKind,
   type ConflictReport,
   type ContactDTO,
@@ -894,7 +894,7 @@ export function AddPanel({
             {hasNextStep && (
               <div className="stack tight">
                 <div className="chips">
-                  {COMMITMENT_KIND.map((k) => (
+                  {SELECTABLE_KINDS.map((k) => (
                     <button
                       key={k}
                       className={`chip${kind === k ? ' selected' : ''}`}

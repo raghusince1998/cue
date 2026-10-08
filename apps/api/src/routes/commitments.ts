@@ -24,6 +24,7 @@ import { detectLocationConflicts } from '../services/locationConflict.ts'
 import { canBeOverdue, isAwaitingWrapUp, isCalendarHistory, managedByCue } from '../services/overdue.ts'
 import { wrapUpMeeting } from '../services/wrapUp.ts'
 import { prepOpenCount, relatedMeetings } from '../services/meetingPrep.ts'
+import { activeFocus, heldCount } from '../services/focus.ts'
 
 const agendaQuery = z.object({
   /** Local day boundaries, supplied by the client which knows its timezone. */
@@ -221,7 +222,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
    * still sitting there staring at you.
    */
   app.get('/commitments/agenda', async (req) => {
-    const { orgId } = scope(req)
+    const { orgId, sub: userId } = scope(req)
     const { from, to } = agendaQuery.parse(req.query)
     const now = new Date()
     const mine = eq(schema.commitments.orgId, orgId)
@@ -288,10 +289,20 @@ export async function commitmentRoutes(app: FastifyInstance) {
         .limit(50),
     ])
 
+    // Focus time under way: it started before now, so no other bucket has it.
+    const active = await activeFocus(userId, now)
+    const [activeBlock] = active
+      ? await baseQuery().where(eq(schema.commitments.id, active.id)).limit(1)
+      : []
+
     return {
       overdue: overdue.map(toDTO),
       justFinished: justFinished.map(toDTO),
       waiting: waiting.map(toDTO),
+      focus: {
+        active: activeBlock ? toDTO(activeBlock) : null,
+        held: activeBlock ? await heldCount(userId) : 0,
+      },
       today: today.map(toDTO),
       upcoming: upcoming.map(toDTO),
       doneToday: doneToday.map(toDTO),

@@ -2,6 +2,7 @@ import { and, eq, sql } from 'drizzle-orm'
 import { db, schema } from '../db/index.ts'
 import { env } from '../env.ts'
 import { sendToUser } from '../push.ts'
+import { activeFocus } from '../services/focus.ts'
 
 interface ClaimedReminder {
   id: string
@@ -62,6 +63,20 @@ async function processOne(claim: ClaimedReminder) {
   }
 
   const { commitment } = row
+
+  // Focus time: routine reminders wait until the block ends. Critical items
+  // still interrupt — that is what critical means — and a focus block's own
+  // "starting now" obviously goes.
+  if (commitment.kind !== 'focus' && commitment.priority !== 'critical') {
+    const focus = await activeFocus(commitment.userId)
+    if (focus) {
+      await db
+        .update(schema.reminders)
+        .set({ status: 'pending', fireAt: focus.endsAt, held: true })
+        .where(eq(schema.reminders.id, claim.id))
+      return
+    }
+  }
   const where = [row.placeName, row.contactName].filter(Boolean).join(' · ')
   const suffix = where ? ` · ${where}` : ''
 
@@ -69,12 +84,18 @@ async function processOne(claim: ClaimedReminder) {
   // not a task, so "Still open — 2h overdue" every fifteen minutes would be
   // nagging about something that has already happened.
   const mirrored = commitment.feedId !== null
+  // A focus block announces its start, once.
+  const focusing = commitment.kind === 'focus'
   // A check-in with someone else: once, and straight to the nudge.
   const waiting = commitment.waitingOn !== null
 
   await sendToUser(commitment.userId, {
     title: commitment.title,
-    body: waiting
+    body: focusing
+      ? `Focus time starts now — reminders will wait until ${new Date(
+          commitment.dueAt.getTime() + commitment.durationMinutes * 60_000,
+        ).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}.`
+      : waiting
       ? 'Time to check in. Tap to send a nudge.'
       : `${mirrored ? 'Starting now' : describe(commitment.dueAt, claim.attempt)}${suffix}`,
     tag: `commitment-${commitment.id}`,
@@ -101,7 +122,7 @@ async function processOne(claim: ClaimedReminder) {
 
   // Keep chasing. Once the chain is exhausted the item simply stays in the
   // Overdue list until the user closes it — it is never silently dropped.
-  if (!mirrored && !waiting && nextAttempt < env.maxEscalations) {
+  if (!mirrored && !waiting && !focusing && nextAttempt < env.maxEscalations) {
     await db.insert(schema.reminders).values({
       orgId: claim.org_id,
       commitmentId: commitment.id,

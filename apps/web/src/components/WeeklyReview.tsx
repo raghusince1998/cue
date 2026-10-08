@@ -6,6 +6,7 @@ interface WeekReview {
   week: { from: string; to: string }
   done: { total: number; meetings: number; tasks: number; titles: string[] }
   meetings: { count: number; minutes: number }
+  focus?: { blocks: number; minutes: number }
   followUps: number
   slipped: number
   waiting: { count: number; names: string[]; oldest: { title: string; who: string; dueAt: string } | null }
@@ -125,6 +126,12 @@ export function WeeklyReview({
             <span>follow-ups captured</span>
           </div>
         </div>
+        {(r.focus?.minutes ?? 0) > 0 && (
+          <p className="muted small">
+            Focus time: {hours(r.focus!.minutes)} in {r.focus!.blocks} block
+            {r.focus!.blocks === 1 ? '' : 's'}.
+          </p>
+        )}
         {r.done.titles.length > 0 && (
           <details className="review-done">
             <summary>What got done</summary>

@@ -3907,3 +3907,56 @@ button:disabled {
   font-size: 14px;
   line-height: 1.5;
 }
+
+/* ---- Focus time ----------------------------------------------------- */
+
+.focus-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, #14b8a6 45%, var(--border));
+  background: color-mix(in srgb, #14b8a6 10%, var(--surface));
+}
+
+.focus-banner > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.focus-banner strong::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: #14b8a6;
+  vertical-align: 1px;
+  animation: focus-pulse 2s ease-in-out infinite;
+}
+
+@keyframes focus-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focus-banner strong::before {
+    animation: none;
+  }
+}
+
+.timeline-item.is-focus .timeline-body {
+  border-left-color: #14b8a6;
+  background: color-mix(in srgb, #14b8a6 8%, var(--surface));
+}
+
+.gap-block {
+  margin-left: 10px;
+  padding: 0;
+}

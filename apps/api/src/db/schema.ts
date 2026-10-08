@@ -303,6 +303,8 @@ export const reminders = pgTable(
     fireAt: timestamp('fire_at', { withTimezone: true }).notNull(),
     status: text('status').notNull().default('pending'),
     attempt: integer('attempt').notNull().default(0),
+    /** Held back until a focus block ends; see services/focus.ts. */
+    held: boolean('held').notNull().default(false),
     sentAt: timestamp('sent_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

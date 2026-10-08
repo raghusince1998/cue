@@ -82,8 +82,15 @@ import { SCHEDULE_UNITS } from './schedule.ts'
 export const PURPOSE = ['business', 'personal', 'unknown'] as const
 export type Purpose = (typeof PURPOSE)[number]
 
-export const COMMITMENT_KIND = ['callback', 'meeting', 'task', 'followup'] as const
+export const COMMITMENT_KIND = ['callback', 'meeting', 'task', 'followup', 'focus'] as const
 export type CommitmentKind = (typeof COMMITMENT_KIND)[number]
+
+/**
+ * The kinds a person picks from when adding or editing a plan. Focus time is
+ * not one of them: it is started from its own button, and a "type" chooser
+ * offering it next to "Phone call" would read as a category of errand.
+ */
+export const SELECTABLE_KINDS = ['callback', 'meeting', 'task', 'followup'] as const
 
 /**
  * How long each kind of commitment blocks out. A callback is a two-minute
@@ -95,6 +102,7 @@ export const DEFAULT_DURATION_MINUTES: Record<CommitmentKind, number> = {
   meeting: 60,
   task: 30,
   followup: 15,
+  focus: 90,
 }
 
 export const DURATION_CHOICES = [15, 30, 45, 60, 90, 120] as const
@@ -113,6 +121,7 @@ export const KIND_LABELS: Record<CommitmentKind, string> = {
   callback: 'Phone call',
   task: 'Task',
   followup: 'Follow up',
+  focus: 'Focus time',
 }
 
 export const OUTCOME_OPTIONS = [

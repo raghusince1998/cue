@@ -12,6 +12,7 @@ import { Nudge, waitingWhat } from '../components/Nudge.tsx'
 import { WaitingForm } from '../components/WaitingForm.tsx'
 import { YourDay } from '../components/YourDay.tsx'
 import { WeeklyReview } from '../components/WeeklyReview.tsx'
+import { FocusStart } from '../components/FocusStart.tsx'
 import { NearbyIntentions } from '../components/NearbyIntentions.tsx'
 import { DayBrief } from '../components/DayBrief.tsx'
 import { PlanTomorrow } from '../components/PlanTomorrow.tsx'
@@ -32,6 +33,8 @@ interface Agenda {
   justFinished?: CommitmentDTO[]
   /** What other people owe you, soonest check-in first. */
   waiting?: CommitmentDTO[]
+  /** Focus time under way, and how many reminders it is holding. */
+  focus?: { active: CommitmentDTO | null; held: number }
 }
 
 const EMPTY: Agenda = {
@@ -145,6 +148,19 @@ function Card({
       )}
       </div>
 
+      {commitment.kind === 'focus' ? (
+        <div className="row commitment-actions">
+          <button
+            className="ghost small-btn"
+            onClick={async () => {
+              await api(`/focus/${commitment.id}/end`, { method: 'POST' })
+              onMoved()
+            }}
+          >
+            Call it off
+          </button>
+        </div>
+      ) : (
       <div className="row commitment-actions">
         <button className="primary small-btn" onClick={() => onDone(commitment.id)}>
           Done
@@ -177,6 +193,8 @@ function Card({
           </a>
         )}
       </div>
+
+      )}
 
       {commitment.checklistCount ? <Checklist commitmentId={commitment.id} /> : null}
 
@@ -282,6 +300,8 @@ export default function Today() {
   const [dayOpen, setDayOpen] = useState(false)
   /** The weekly review: the week behind and the one ahead. */
   const [reviewOpen, setReviewOpen] = useState(false)
+  /** Starting focus time: now, or for a free stretch picked in "Your day". */
+  const [focusStart, setFocusStart] = useState<{ startAt?: string; maxMinutes?: number } | null>(null)
   const [showAllWaiting, setShowAllWaiting] = useState(false)
   /** The plan open in the details sheet, and whether it opened on the form. */
   const [opened, setOpened] = useState<{ id: string; mode: SheetMode } | null>(null)
@@ -313,6 +333,14 @@ export default function Today() {
     setParams(params, { replace: true })
     openPlan(id)
   }, [params, setParams, openPlan])
+
+  // ?focusnow=1: the summary card's "Start focus time".
+  useEffect(() => {
+    if (params.get('focusnow') !== '1') return
+    params.delete('focusnow')
+    setParams(params, { replace: true })
+    setFocusStart({})
+  }, [params, setParams])
 
   // ?review=1: the Friday notification, or the summary card's link, tapped.
   useEffect(() => {
@@ -470,6 +498,19 @@ export default function Today() {
       method: 'POST',
       body: { dueAt: at.toISOString(), allowConflict: true },
     })
+    await load()
+  }
+
+  const focusNow = agenda.focus?.active ?? null
+  const focusEnds = focusNow ? endOf(focusNow) : null
+  // Today's own tasks, offered as what a focus block is for.
+  const focusIdeas = [...agenda.overdue, ...agenda.today]
+    .filter((c) => c.kind === 'task')
+    .map((c) => c.title)
+
+  async function endFocusNow() {
+    if (!focusNow) return
+    await api(`/focus/${focusNow.id}/end`, { method: 'POST' })
     await load()
   }
 
@@ -634,6 +675,26 @@ export default function Today() {
           refreshKey={calendarKey}
           initialDate={focusDate ?? undefined}
         />
+      )}
+
+      {/* Focus under way: what for, until when, and what is being held. */}
+      {view === 'agenda' && focusNow && focusEnds && (
+        <div className="focus-banner">
+          <div>
+            <strong>
+              Focusing{focusNow.title.startsWith('Focus: ') ? ` on ${focusNow.title.slice(7)}` : ''}
+            </strong>
+            <span className="muted small">
+              until {focusEnds.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+              {(agenda.focus?.held ?? 0) > 0
+                ? ` · ${agenda.focus!.held} reminder${agenda.focus!.held === 1 ? '' : 's'} waiting`
+                : ' · reminders will wait'}
+            </span>
+          </div>
+          <button className="ghost small-btn" onClick={() => void endFocusNow()}>
+            End now
+          </button>
+        </div>
       )}
 
       {/* First, because it is the most perishable thing on the screen: what was
@@ -912,6 +973,20 @@ export default function Today() {
       )}
       </div>
 
+      {focusStart && (
+        <Modal title="Focus time" onClose={() => setFocusStart(null)}>
+          <FocusStart
+            startAt={focusStart.startAt}
+            maxMinutes={focusStart.maxMinutes}
+            suggestions={focusIdeas}
+            onDone={() => {
+              setFocusStart(null)
+              void load()
+            }}
+          />
+        </Modal>
+      )}
+
       {reviewOpen && (
         <Modal title="Weekly review" onClose={() => setReviewOpen(false)}>
           <WeeklyReview
@@ -944,6 +1019,10 @@ export default function Today() {
             onWrapUp={(c) => {
               setDayOpen(false)
               setWrapping(c)
+            }}
+            onBlock={(startAt, maxMinutes) => {
+              setDayOpen(false)
+              setFocusStart({ startAt, maxMinutes })
             }}
           />
         </Modal>

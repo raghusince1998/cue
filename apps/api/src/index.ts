@@ -24,6 +24,7 @@ import { recurrenceRoutes } from './routes/recurrences.ts'
 import { scheduleRoutes } from './routes/schedules.ts'
 import { reviewRoutes } from './routes/review.ts'
 import { availabilityRoutes } from './routes/availability.ts'
+import { focusRoutes } from './routes/focus.ts'
 import { calendarFeedRoutes } from './routes/calendarFeeds.ts'
 import { oauthRoutes } from './routes/oauth.ts'
 import { insightRoutes } from './routes/insights.ts'
@@ -36,6 +37,7 @@ import { startFollowUpWorker } from './services/wrapUp.ts'
 import { startMorningBriefWorker } from './services/morningBrief.ts'
 import { startPrepWorker } from './services/meetingPrep.ts'
 import { startWeeklyReviewWorker } from './services/weeklyReview.ts'
+import { startFocusWorker } from './services/focus.ts'
 import { startReminderWorker } from './worker/reminders.ts'
 import { sweep } from './services/recurrence.ts'
 import { syncAllFeeds } from './services/calendarFeed.ts'
@@ -77,6 +79,7 @@ await app.register(recurrenceRoutes, { prefix: '/api' })
 await app.register(scheduleRoutes, { prefix: '/api' })
 await app.register(reviewRoutes, { prefix: '/api' })
 await app.register(availabilityRoutes, { prefix: '/api' })
+await app.register(focusRoutes, { prefix: '/api' })
 await app.register(calendarFeedRoutes, { prefix: '/api' })
 await app.register(oauthRoutes, { prefix: '/api' })
 await app.register(insightRoutes, { prefix: '/api' })
@@ -137,6 +140,7 @@ const stopFollowUps = startFollowUpWorker()
 const stopBriefs = startMorningBriefWorker()
 const stopPrep = startPrepWorker()
 const stopReviews = startWeeklyReviewWorker()
+const stopFocus = startFocusWorker()
 
 // Keeps the rolling window of generated occurrences topped up. Hourly is ample
 // for a 120-day horizon, and it runs once at boot so a series created while the
@@ -178,6 +182,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   stopBriefs()
   stopPrep()
   stopReviews()
+  stopFocus()
     clearInterval(recurrenceTimer)
     clearInterval(feedTimer)
     clearInterval(purgeTimer)

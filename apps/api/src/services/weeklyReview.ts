@@ -35,6 +35,8 @@ export interface WeekReview {
   week: { from: string; to: string }
   done: { total: number; meetings: number; tasks: number; titles: string[] }
   meetings: { count: number; minutes: number }
+  /** Focus time this week: blocks that have run, and their minutes. */
+  focus: { blocks: number; minutes: number }
   followUps: number
   slipped: number
   waiting: {
@@ -78,6 +80,19 @@ export async function weekReview(userId: string, now = new Date()): Promise<Week
         eq(c.allDay, false),
         takesTime(),
         managedByCue(),
+        gte(c.dueAt, weekStart),
+        lt(c.dueAt, now),
+      ),
+    )
+
+  const focusRows = await db
+    .select({ minutes: c.durationMinutes })
+    .from(c)
+    .where(
+      and(
+        mine,
+        inArray(c.status, ['pending', 'done']),
+        eq(c.kind, 'focus'),
         gte(c.dueAt, weekStart),
         lt(c.dueAt, now),
       ),
@@ -154,6 +169,7 @@ export async function weekReview(userId: string, now = new Date()): Promise<Week
       titles: done.slice(0, 12).map((d) => d.title),
     },
     meetings: { count: meetings.length, minutes: meetings.reduce((s, m) => s + m.minutes, 0) },
+    focus: { blocks: focusRows.length, minutes: focusRows.reduce((s, f) => s + f.minutes, 0) },
     followUps: followUps?.n ?? 0,
     slipped: slipped?.n ?? 0,
     waiting: {
@@ -205,6 +221,7 @@ export function composeReview(r: WeekReview): { title: string; body: string; url
   if (r.meetings.count > 0) {
     lines.push(`${r.meetings.count} meeting${r.meetings.count === 1 ? '' : 's'} (${hours(r.meetings.minutes)}).`)
   }
+  if (r.focus.minutes > 0) lines.push(`${hours(r.focus.minutes)} of focus time.`)
   if (r.waiting.count > 0) lines.push(`${r.waiting.count} still waiting on others.`)
   if (r.nextWeek.busiest) lines.push(`Next week's busiest day: ${weekday(r.nextWeek.busiest)}.`)
   lines.push('Two minutes to review it.')

@@ -42,12 +42,15 @@ export function YourDay({
   onOpen,
   onNudge,
   onWrapUp,
+  onBlock,
 }: {
   waiting: CommitmentDTO[]
   justFinished: CommitmentDTO[]
   onOpen: (id: string) => void
   onNudge: (c: CommitmentDTO) => void
   onWrapUp: (c: CommitmentDTO) => void
+  /** Reserve (part of) a free stretch for focus time. */
+  onBlock?: (startAt: string, maxMinutes: number) => void
 }) {
   const [items, setItems] = useState<CommitmentDTO[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -137,6 +140,17 @@ export function YourDay({
                 {row.to > now && row.to.getTime() - row.from.getTime() >= 60 * 60_000 && (
                   <em> — room for focused work</em>
                 )}
+                {onBlock && row.to.getTime() - Math.max(row.from.getTime(), now.getTime()) >= 25 * 60_000 && (
+                  <button
+                    className="link small gap-block"
+                    onClick={() => {
+                      const from = row.from > now ? row.from : now
+                      onBlock(from.toISOString(), Math.round((row.to.getTime() - from.getTime()) / 60_000))
+                    }}
+                  >
+                    Block it
+                  </button>
+                )}
               </span>
             </li>
           ) : (
@@ -145,6 +159,7 @@ export function YourDay({
               className={[
                 'timeline-item',
                 row.c.kind === 'meeting' ? 'is-meeting' : '',
+                row.c.kind === 'focus' ? 'is-focus' : '',
                 row.c.status === 'done' ? 'is-done' : '',
                 row.to <= now ? 'is-past' : '',
                 row.from <= now && row.to > now ? 'is-now' : '',

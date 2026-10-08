@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  COMMITMENT_KIND,
+  SELECTABLE_KINDS,
   DEFAULT_DURATION_MINUTES,
   DURATION_CHOICES,
   KIND_LABELS,
@@ -724,7 +724,7 @@ ${original}` : original))
 
         <span className="label-text">Type</span>
         <div className="chips">
-          {COMMITMENT_KIND.map((k) => (
+          {SELECTABLE_KINDS.map((k) => (
             <button
               key={k}
               className={`chip${kind === k ? ' selected' : ''}`}
