@@ -4466,3 +4466,12 @@ a.link-btn:hover {
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   }
 }
+
+/* A line at the top of the editor about what just happened: "Reopened…" */
+.editor-notice {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--good-soft);
+  color: var(--good);
+}

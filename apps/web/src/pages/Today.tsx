@@ -17,6 +17,7 @@ import { Targets } from '../components/Targets.tsx'
 import { startCall } from '../lib/calls.ts'
 import { clearShared, readShared, type Shared } from '../lib/share.ts'
 import { openAdd } from '../lib/addSheet.ts'
+import { reopenPlan } from '../lib/reopen.ts'
 import { QuickAdd } from '../components/QuickAdd.tsx'
 import { CallLog } from '../components/CallLog.tsx'
 import { FocusStart } from '../components/FocusStart.tsx'
@@ -327,11 +328,23 @@ export default function Today() {
   const [focusStart, setFocusStart] = useState<{ startAt?: string; maxMinutes?: number } | null>(null)
   const [showAllWaiting, setShowAllWaiting] = useState(false)
   /** The plan open in the details sheet, and whether it opened on the form. */
-  const [opened, setOpened] = useState<{ id: string; mode: SheetMode } | null>(null)
+  const [opened, setOpened] = useState<{ id: string; mode: SheetMode; notice?: string } | null>(null)
   const openPlan = useCallback(
-    (id: string, mode: SheetMode = 'view') => setOpened({ id, mode }),
+    (id: string, mode: SheetMode = 'view', notice?: string) => setOpened({ id, mode, notice }),
     [],
   )
+
+  /** Reopen from "Closed today": open again at once, then the editor for the time. */
+  async function reopen(c: CommitmentDTO) {
+    try {
+      const notice = await reopenPlan(c)
+      await load()
+      openPlan(c.id, 'edit', notice)
+    } catch {
+      // Could not reopen it here: the editor still can, by hand.
+      openPlan(c.id, 'edit')
+    }
+  }
   // Five is enough to see the shape of the month without scrolling past it.
   const [showAllContext, setShowAllContext] = useState(false)
   // Bumped after any save, so the calendar refetches instead of going stale.
@@ -1059,7 +1072,7 @@ export default function Today() {
                       {c.placeName ? ` · ${c.placeName}` : ''}
                     </p>
                   </div>
-                  <button className="link" onClick={() => openPlan(c.id, 'edit')}>
+                  <button className="link" onClick={() => void reopen(c)}>
                     Reopen
                   </button>
                 </div>
@@ -1184,6 +1197,7 @@ export default function Today() {
           key={opened.id}
           commitmentId={opened.id}
           initialMode={opened.mode}
+          initialNotice={opened.notice}
           onClose={() => setOpened(null)}
           onChanged={() => void load()}
           onOpenOther={(id) => openPlan(id)}

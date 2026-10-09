@@ -4,6 +4,7 @@ import { KIND_LABELS, PRIORITY_LABELS, WINDOW_LABELS, type CommitmentDTO } from 
 import { api } from '../lib/api.ts'
 import { dayLabel, formatSpan, overdueBy, relativeDay } from '../lib/time.ts'
 import { readNotes } from '../lib/sample.ts'
+import { reopenPlan } from '../lib/reopen.ts'
 import { Modal } from './Modal.tsx'
 import { CommitmentEditor } from './CommitmentEditor.tsx'
 import { Checklist } from './Checklist.tsx'
@@ -63,12 +64,15 @@ interface Prep {
 export function CommitmentSheet({
   commitmentId,
   initialMode = 'view',
+  initialNotice,
   onClose,
   onChanged,
   onOpenOther,
 }: {
   commitmentId: string
   initialMode?: SheetMode
+  /** A line for the editor to open with — after Reopen, when it will remind you. */
+  initialNotice?: string
   onClose: () => void
   /** Something was saved, so the page behind should reload. */
   onChanged: () => void
@@ -76,6 +80,7 @@ export function CommitmentSheet({
   onOpenOther?: (id: string) => void
 }) {
   const [mode, setMode] = useState<SheetMode>(initialMode)
+  const [notice, setNotice] = useState<string | undefined>(initialNotice)
   const [c, setC] = useState<CommitmentDTO | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -115,6 +120,22 @@ export function CommitmentSheet({
       await api(`/commitments/${id}/done`, { method: 'POST' })
       onChanged()
       await loadPrep()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Back to open in one tap, then the editor in case the time wants changing. */
+  async function reopen() {
+    if (!c) return
+    setBusy(true)
+    try {
+      setNotice(await reopenPlan(c))
+      onChanged()
+      await load()
+      setMode('edit')
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -167,14 +188,21 @@ export function CommitmentSheet({
       <Modal title="Edit" onClose={onClose} closeOnBackdrop={false}>
         <CommitmentEditor
           commitmentId={commitmentId}
+          notice={notice}
           // Cancel goes back to the details, not out of the sheet altogether.
-          onClose={() => setMode('view')}
+          onClose={() => {
+            setNotice(undefined)
+            setMode('view')
+          }}
           onSaved={async () => {
             onChanged()
             // Deleting is a save too; there is nothing left to show after it.
             const next = await load()
             if (!next || (next.status as string) === 'deleted') onClose()
-            else setMode('view')
+            else {
+              setNotice(undefined)
+              setMode('view')
+            }
           }}
         />
       </Modal>
@@ -373,6 +401,11 @@ export function CommitmentSheet({
             {c.status === 'pending' && !c.history && (
               <button className="ghost" onClick={() => void markDone()} disabled={busy}>
                 {busy ? 'Saving…' : 'Mark done'}
+              </button>
+            )}
+            {(c.status === 'done' || c.status === 'cancelled') && (
+              <button className="ghost" onClick={() => void reopen()} disabled={busy}>
+                {busy ? 'Reopening…' : 'Reopen'}
               </button>
             )}
           </div>

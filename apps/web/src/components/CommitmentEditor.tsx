@@ -23,10 +23,13 @@ export function CommitmentEditor({
   commitmentId,
   onSaved,
   onClose,
+  notice,
 }: {
   commitmentId: string
   onSaved: () => void
   onClose: () => void
+  /** Shown at the top: "Reopened. It will remind you at 5:00 PM…" */
+  notice?: string
 }) {
   const [loaded, setLoaded] = useState(false)
   const [places, setPlaces] = useState<PlaceDTO[]>([])
@@ -167,6 +170,7 @@ export function CommitmentEditor({
 
   return (
     <div className="stack tight">
+      {notice && <p className="editor-notice small">{notice}</p>}
       <label>
         What exactly?
         <input value={title} onChange={(e) => setTitle(e.target.value)} />
