@@ -6,6 +6,16 @@ import { takeFirst } from '../db/util.ts'
 import { scope } from '../auth.ts'
 import { sendNudgeTo } from '../services/dailyNudge.ts'
 import { sendBriefTo } from '../services/morningBrief.ts'
+import { sendReportReminderTo } from '../services/dailyReport.ts'
+
+/** "" from a cleared input means none. */
+const optionalText = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .nullable()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v?.trim() || null))
 
 const preferencesInput = z.object({
   /** IANA name, e.g. "Asia/Kolkata". The browser reports its own. */
@@ -18,6 +28,13 @@ const preferencesInput = z.object({
   weeklyReviewHour: z.number().int().min(0).max(23).optional(),
   morningBriefEnabled: z.boolean().optional(),
   morningBriefHour: z.number().int().min(0).max(23).optional(),
+  reportEnabled: z.boolean().optional(),
+  reportHour: z.number().int().min(0).max(23).optional(),
+  reportToName: optionalText(120),
+  reportToEmail: optionalText(200).refine((v) => !v || z.string().email().safeParse(v).success, {
+    message: 'That email address does not look right.',
+  }),
+  reportToPhone: optionalText(40),
 })
 
 const selection = {
@@ -31,6 +48,11 @@ const selection = {
   weeklyReviewHour: schema.users.weeklyReviewHour,
   morningBriefEnabled: schema.users.morningBriefEnabled,
   morningBriefHour: schema.users.morningBriefHour,
+  reportEnabled: schema.users.reportEnabled,
+  reportHour: schema.users.reportHour,
+  reportToName: schema.users.reportToName,
+  reportToEmail: schema.users.reportToEmail,
+  reportToPhone: schema.users.reportToPhone,
 }
 
 export async function meRoutes(app: FastifyInstance) {
@@ -74,11 +96,23 @@ export async function meRoutes(app: FastifyInstance) {
           ? { morningBriefEnabled: body.morningBriefEnabled }
           : {}),
         ...(body.morningBriefHour !== undefined ? { morningBriefHour: body.morningBriefHour } : {}),
+        ...(body.reportEnabled !== undefined ? { reportEnabled: body.reportEnabled } : {}),
+        ...(body.reportHour !== undefined ? { reportHour: body.reportHour } : {}),
+        ...(body.reportToName !== undefined ? { reportToName: body.reportToName } : {}),
+        ...(body.reportToEmail !== undefined ? { reportToEmail: body.reportToEmail } : {}),
+        ...(body.reportToPhone !== undefined ? { reportToPhone: body.reportToPhone } : {}),
       })
       .where(eq(schema.users.id, sub))
 
     const rows = await db.select(selection).from(schema.users).where(eq(schema.users.id, sub))
     return takeFirst(rows, 'preferences')
+  })
+
+  /** Today's report reminder, now, whatever the hour — to see what it says. */
+  app.post('/me/preferences/test-report', async (req) => {
+    const { sub } = scope(req)
+    const sent = await sendReportReminderTo(sub)
+    return sent ?? { delivered: 0, title: null, body: null, empty: true }
   })
 
   /**

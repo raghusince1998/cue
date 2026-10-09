@@ -12,6 +12,7 @@ import { Nudge, waitingWhat } from '../components/Nudge.tsx'
 import { WaitingForm } from '../components/WaitingForm.tsx'
 import { YourDay } from '../components/YourDay.tsx'
 import { WeeklyReview } from '../components/WeeklyReview.tsx'
+import { DailyReport } from '../components/DailyReport.tsx'
 import { FocusStart } from '../components/FocusStart.tsx'
 import { NearbyIntentions } from '../components/NearbyIntentions.tsx'
 import { DayBrief } from '../components/DayBrief.tsx'
@@ -300,6 +301,8 @@ export default function Today() {
   const [dayOpen, setDayOpen] = useState(false)
   /** The weekly review: the week behind and the one ahead. */
   const [reviewOpen, setReviewOpen] = useState(false)
+  /** The daily report, or the morning standup. */
+  const [reportOpen, setReportOpen] = useState<'report' | 'standup' | null>(null)
   /** Starting focus time: now, or for a free stretch picked in "Your day". */
   const [focusStart, setFocusStart] = useState<{ startAt?: string; maxMinutes?: number } | null>(null)
   const [showAllWaiting, setShowAllWaiting] = useState(false)
@@ -348,6 +351,15 @@ export default function Today() {
     params.delete('review')
     setParams(params, { replace: true })
     setReviewOpen(true)
+  }, [params, setParams])
+
+  // ?report=1: the evening reminder, or the summary card's link, tapped.
+  useEffect(() => {
+    const which = params.get('report')
+    if (!which) return
+    params.delete('report')
+    setParams(params, { replace: true })
+    setReportOpen(which === 'standup' ? 'standup' : 'report')
   }, [params, setParams])
 
   // ?day=1: the morning brief, or the summary card's "your day", tapped.
@@ -984,6 +996,12 @@ export default function Today() {
               void load()
             }}
           />
+        </Modal>
+      )}
+
+      {reportOpen && (
+        <Modal title="Daily report" onClose={() => setReportOpen(null)}>
+          <DailyReport initialFormat={reportOpen} />
         </Modal>
       )}
 

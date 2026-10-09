@@ -19,6 +19,9 @@ interface Preferences {
   weeklyReviewHour: number
   morningBriefEnabled: boolean
   morningBriefHour: number
+  reportEnabled: boolean
+  reportHour: number
+  reportToName: string | null
   dailyNudgeEnabled: boolean
   dailyNudgeHour: number
   lastNudgeOn: string | null
@@ -98,6 +101,27 @@ export function Settings({ onClose }: { onClose: () => void }) {
       setMessage(
         res.empty
           ? 'Nothing happened this week and nothing is booked next, so there is nothing to review yet.'
+          : res.delivered > 0
+            ? `Sent: “${res.title}”`
+            : 'No device registered — enable notifications on the Today screen first.',
+      )
+    } catch (err) {
+      setMessage((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function testReport() {
+    setBusy(true)
+    try {
+      const res = await api<{ delivered: number; title: string | null; empty?: boolean }>(
+        '/me/preferences/test-report',
+        { method: 'POST' },
+      )
+      setMessage(
+        res.empty
+          ? 'Nothing has happened today yet, so there is no report to send.'
           : res.delivered > 0
             ? `Sent: “${res.title}”`
             : 'No device registered — enable notifications on the Today screen first.',
@@ -283,6 +307,49 @@ export function Settings({ onClose }: { onClose: () => void }) {
           </div>
           <button className="ghost small-btn" onClick={testBrief} disabled={busy}>
             Send today&rsquo;s brief now
+          </button>
+        </>
+      )}
+
+      <hr className="rule" />
+
+      {/* Evening: the day written up for whoever you report to. */}
+      <div className="setting-row has-infotip">
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={prefs.reportEnabled}
+            disabled={busy}
+            onChange={(e) => void update({ reportEnabled: e.target.checked })}
+          />
+          <span>
+            Remind me to send my daily report
+            {prefs.reportToName ? ` to ${prefs.reportToName}` : ''}
+          </span>
+        </label>
+        <InfoTip label="What is the daily report?">
+          Your meetings with who and what came of them, visits, what got done, next steps agreed,
+          what you are waiting on, and tomorrow — written up from what is already in Cue, ready
+          to send by WhatsApp or email. Open it any time from &ldquo;Send today&rsquo;s report&rdquo;
+          on Today. A day with nothing in it sends no reminder.
+        </InfoTip>
+      </div>
+      {prefs.reportEnabled && (
+        <>
+          <div className="chips">
+            {[17, 18, 19, 20].map((hour) => (
+              <button
+                key={hour}
+                className={`chip${prefs.reportHour === hour ? ' selected' : ''}`}
+                disabled={busy}
+                onClick={() => void update({ reportHour: hour })}
+              >
+                {label(hour)}
+              </button>
+            ))}
+          </div>
+          <button className="ghost small-btn" onClick={testReport} disabled={busy}>
+            Send today&rsquo;s reminder now
           </button>
         </>
       )}

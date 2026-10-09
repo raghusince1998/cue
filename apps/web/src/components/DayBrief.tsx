@@ -170,6 +170,16 @@ export function DayBrief({
         <button className="brief-day-link" onClick={() => onNavigate('/?review=1')}>
           Review your week →
         </button>
+        {/* Mornings are for the standup; the rest of the day, for the report. */}
+        {new Date().getHours() < 12 ? (
+          <button className="brief-day-link" onClick={() => onNavigate('/?report=standup')}>
+            Write your standup →
+          </button>
+        ) : (
+          <button className="brief-day-link" onClick={() => onNavigate('/?report=1')}>
+            Send today&rsquo;s report →
+          </button>
+        )}
         <button className="brief-day-link" onClick={() => onNavigate('/?focusnow=1')}>
           Start focus time →
         </button>

@@ -90,6 +90,16 @@ export const users = pgTable(
     morningBriefHour: integer('morning_brief_hour').notNull().default(8),
     /** Local date of the last brief, so a restart cannot double-send. */
     lastBriefOn: date('last_brief_on'),
+    /** An evening reminder to send the daily report. */
+    reportEnabled: boolean('report_enabled').notNull().default(false),
+    /** Local hour, 0-23. */
+    reportHour: integer('report_hour').notNull().default(18),
+    /** Local date of the last reminder, so a restart cannot double-send. */
+    lastReportPromptOn: date('last_report_prompt_on'),
+    /** Who the report goes to: a name to greet, and where to send it. */
+    reportToName: text('report_to_name'),
+    reportToEmail: text('report_to_email'),
+    reportToPhone: text('report_to_phone'),
     /** Local hour, 0-23. */
     dailyNudgeHour: integer('daily_nudge_hour').notNull().default(19),
     /** Local date of the last nudge, so a restart cannot double-send. */

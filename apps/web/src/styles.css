@@ -4107,3 +4107,18 @@ a.tiny-btn.link-btn:hover {
     flex-wrap: wrap;
   }
 }
+
+/* ---- Daily report -------------------------------------------------- */
+
+.daily-report .report-text {
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.daily-report .waiting-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

@@ -51,7 +51,8 @@ export function personLine(c: {
   return [head || null, place].filter(Boolean).join(' · ')
 }
 
-function waNumber(phone: string): string {
+/** A number as wa.me wants it: digits only, with India's code on a bare ten-digit mobile. */
+export function waNumber(phone: string): string {
   const digits = phone.replace(/\D/g, '').replace(/^0+/, '')
   return digits.length === 10 ? `91${digits}` : digits
 }

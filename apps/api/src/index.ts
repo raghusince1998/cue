@@ -13,6 +13,7 @@ import { registerAuth } from './auth.ts'
 import { authRoutes } from './routes/auth.ts'
 import { placeRoutes } from './routes/places.ts'
 import { accountRoutes } from './routes/accounts.ts'
+import { reportRoutes } from './routes/report.ts'
 import { contactRoutes } from './routes/contacts.ts'
 import { visitRoutes } from './routes/visits.ts'
 import { commitmentRoutes } from './routes/commitments.ts'
@@ -36,6 +37,7 @@ import { intentionRoutes } from './routes/intentions.ts'
 import { startNudgeWorker } from './services/dailyNudge.ts'
 import { startFollowUpWorker } from './services/wrapUp.ts'
 import { startMorningBriefWorker } from './services/morningBrief.ts'
+import { startReportWorker } from './services/dailyReport.ts'
 import { startPrepWorker } from './services/meetingPrep.ts'
 import { startWeeklyReviewWorker } from './services/weeklyReview.ts'
 import { startFocusWorker } from './services/focus.ts'
@@ -70,6 +72,7 @@ await app.register(authRoutes, { prefix: '/api' })
 await app.register(placeRoutes, { prefix: '/api' })
 await app.register(contactRoutes, { prefix: '/api' })
 await app.register(accountRoutes, { prefix: '/api' })
+await app.register(reportRoutes, { prefix: '/api' })
 await app.register(visitRoutes, { prefix: '/api' })
 await app.register(commitmentRoutes, { prefix: '/api' })
 await app.register(pushRoutes, { prefix: '/api' })
@@ -143,6 +146,7 @@ const stopBriefs = startMorningBriefWorker()
 const stopPrep = startPrepWorker()
 const stopReviews = startWeeklyReviewWorker()
 const stopFocus = startFocusWorker()
+const stopReports = startReportWorker()
 
 // Keeps the rolling window of generated occurrences topped up. Hourly is ample
 // for a 120-day horizon, and it runs once at boot so a series created while the
@@ -185,6 +189,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   stopPrep()
   stopReviews()
   stopFocus()
+  stopReports()
     clearInterval(recurrenceTimer)
     clearInterval(feedTimer)
     clearInterval(purgeTimer)
