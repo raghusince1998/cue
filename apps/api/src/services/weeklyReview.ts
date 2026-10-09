@@ -4,6 +4,8 @@ import { sendToUser } from '../push.ts'
 import { canBeOverdue, managedByCue, takesTime } from './overdue.ts'
 import { listAccounts } from './accounts.ts'
 import { orgOf } from './keepInTouch.ts'
+import { weekTargets } from './targets.ts'
+import type { TargetProgress } from '@cue/shared'
 
 /**
  * The weekly review.
@@ -55,6 +57,8 @@ export interface WeekReview {
   }
   /** Talks or proposals with no contact for two weeks: deals going cold. */
   quiet: { name: string; stage: string; lastContact: string | null }[]
+  /** Only the targets that are set, this week against each. */
+  targets: TargetProgress[]
   reviewedAt: string | null
 }
 
@@ -164,6 +168,7 @@ export async function weekReview(userId: string, now = new Date()): Promise<Week
   const names = [...new Set(waiting.map((w) => w.who!).filter(Boolean))]
   const oldest = waiting[0]
 
+  const targets = (await weekTargets(userId, now)).metrics.filter((m) => m.target)
   const orgId = await orgOf(userId)
   const quiet = orgId
     ? (await listAccounts(orgId, userId, now))
@@ -204,6 +209,7 @@ export async function weekReview(userId: string, now = new Date()): Promise<Week
       freeMinutes: Math.max(workingMinutes - bookedWorking, 0),
     },
     quiet,
+    targets,
     reviewedAt: user?.reviewedAt ? user.reviewedAt.toISOString() : null,
   }
 }
@@ -235,6 +241,10 @@ export function composeReview(r: WeekReview): { title: string; body: string; url
     lines.push(`${r.meetings.count} meeting${r.meetings.count === 1 ? '' : 's'} (${hours(r.meetings.minutes)}).`)
   }
   if (r.focus.minutes > 0) lines.push(`${hours(r.focus.minutes)} of focus time.`)
+  if (r.targets.length > 0) {
+    const hit = r.targets.filter((t) => t.status === 'done').length
+    lines.push(`Hit ${hit} of ${r.targets.length} target${r.targets.length === 1 ? '' : 's'}.`)
+  }
   if (r.waiting.count > 0) lines.push(`${r.waiting.count} still waiting on others.`)
   if (r.quiet.length > 0) {
     const [first, ...rest] = r.quiet.map((q) => q.name)

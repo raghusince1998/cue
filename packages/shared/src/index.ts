@@ -513,6 +513,35 @@ export type LogVisitInput = z.infer<typeof logVisitInput>
 
 // ---------------------------------------------------------------- commitments
 
+/** What a week's targets can be set on — each counted from what is already logged. */
+export const TARGET_METRICS = [
+  { key: 'calls', label: 'Calls', hint: 'Every call logged, answered or not' },
+  { key: 'conversations', label: 'Conversations', hint: 'Calls where you spoke' },
+  { key: 'visits', label: 'Visits', hint: 'Visits logged in person' },
+  { key: 'meetings', label: 'Meetings', hint: 'Meetings that took place' },
+  { key: 'done', label: 'Things done', hint: 'Tasks, call backs and follow-ups closed' },
+  { key: 'people', label: 'New contacts', hint: 'People added to People' },
+] as const
+export type TargetMetric = (typeof TARGET_METRICS)[number]['key']
+export const TARGET_KEYS = TARGET_METRICS.map((m) => m.key) as [TargetMetric, ...TargetMetric[]]
+
+/** Each metric's weekly goal; 0 or null stops tracking it. */
+export const saveTargetsInput = z.object({
+  targets: z.record(z.enum(TARGET_KEYS), z.number().int().min(0).max(1000).nullable()),
+})
+
+export interface TargetProgress {
+  key: TargetMetric
+  label: string
+  hint: string
+  target: number | null
+  done: number
+  lastWeek: number
+  /** Where you would be by now at an even pace over the working week. */
+  expected: number
+  status: 'done' | 'on' | 'behind' | 'untracked'
+}
+
 export const saveTemplateInput = z.object({
   title: z.string().trim().min(1).max(80),
   body: z.string().trim().min(1).max(2000),

@@ -4169,3 +4169,144 @@ a.link-btn:hover {
   flex-shrink: 0;
   white-space: nowrap;
 }
+
+/* ---- Weekly targets ------------------------------------------------ */
+
+.target-bar {
+  position: relative;
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: visible;
+}
+
+.target-bar.is-small {
+  height: 5px;
+}
+
+.target-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.target-fill.is-done {
+  background: var(--good);
+}
+
+.target-fill.is-behind {
+  background: var(--warn);
+}
+
+/* Where an even pace would be by now. */
+.target-pace {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--muted);
+}
+
+.target-status.is-done {
+  color: var(--good);
+}
+
+.target-status.is-behind {
+  color: var(--warn);
+}
+
+.targets .target-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.target-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.target-input {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.target-input input {
+  width: 76px;
+  text-align: right;
+}
+
+.target-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+/* On the summary card: up to four, side by side. */
+.brief-targets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px 14px;
+  width: 100%;
+  margin: 2px 0 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.brief-targets:hover {
+  border-color: var(--accent);
+}
+
+.brief-target {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.brief-target-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.brief-target-label .target-status {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.brief-target-label .target-status.is-done {
+  color: var(--good);
+}
+
+.brief-target-label .target-status.is-behind {
+  color: var(--warn);
+}
+
+.review-target {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}

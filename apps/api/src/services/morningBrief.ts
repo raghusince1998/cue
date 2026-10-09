@@ -3,6 +3,7 @@ import { db, schema } from '../db/index.ts'
 import { sendToUser } from '../push.ts'
 import { buildSummary } from './insights.ts'
 import { keepInTouch, orgOf } from './keepInTouch.ts'
+import { behindLine, weekTargets } from './targets.ts'
 import { canBeOverdue, isAwaitingWrapUp, managedByCue, meetingEnd } from './overdue.ts'
 
 /**
@@ -32,6 +33,8 @@ export interface BriefStats {
   longestGap: { from: Date; to: Date } | null
   /** People it has been too long with, longest first. */
   reachOut: string[]
+  /** "Behind on calls (12 of 40)", when a weekly target is behind pace. */
+  behind: string | null
 }
 
 /** Today in the person's own zone, as SQL bounds — the server's zone is not theirs. */
@@ -102,6 +105,7 @@ export async function briefStats(userId: string, timezone: string, now = new Dat
         ? { from: new Date(summary.nextGap.from), to: new Date(summary.nextGap.to) }
         : null,
     reachOut,
+    behind: behindLine((await weekTargets(userId, now)).metrics),
   }
 }
 
@@ -130,7 +134,8 @@ export function composeBrief(
     stats.checkInsDue === 0 &&
     stats.overdue === 0 &&
     stats.wrapUps === 0 &&
-    stats.reachOut.length === 0
+    stats.reachOut.length === 0 &&
+    !stats.behind
   if (nothing) return null
 
   const head = [
@@ -152,6 +157,7 @@ export function composeBrief(
   }
   if (stats.overdue > 0) lines.push(`${stats.overdue} overdue.`)
   if (stats.reachOut.length > 0) lines.push(`Time to reach out to ${listNames(stats.reachOut)}.`)
+  if (stats.behind) lines.push(stats.behind)
 
   return { title, body: lines.join(' '), url: '/?day=1' }
 }

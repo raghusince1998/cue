@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ACCOUNT_STAGE_LABELS, type AccountStage } from '@cue/shared'
+import { ACCOUNT_STAGE_LABELS, type AccountStage, type TargetProgress } from '@cue/shared'
+import { TargetBar, statusText } from './Targets.tsx'
 import { api } from '../lib/api.ts'
 import { dayLabel, relativeDay, spanLabel } from '../lib/time.ts'
 
@@ -20,6 +21,7 @@ interface WeekReview {
     freeMinutes: number
   }
   quiet?: { name: string; stage: AccountStage; lastContact: string | null }[]
+  targets?: TargetProgress[]
   reviewedAt: string | null
 }
 
@@ -215,6 +217,32 @@ export function WeeklyReview({
               See accounts
             </button>
           </div>
+        </section>
+      )}
+
+      {(r.targets ?? []).length > 0 && (
+        <section className="review-part">
+          <span className="label-text">
+            Targets · hit {r.targets!.filter((t) => t.status === 'done').length} of {r.targets!.length}
+          </span>
+          {r.targets!.map((t) => (
+            <div className="review-target" key={t.key}>
+              <span className="small">
+                {t.label}: {t.done} of {t.target}
+                <span className={`target-status is-${t.status}`}> · {statusText(t)}</span>
+              </span>
+              <TargetBar m={t} small />
+            </div>
+          ))}
+          <button
+            className="link small fit-btn"
+            onClick={() => {
+              onDone()
+              navigate('/?targets=1')
+            }}
+          >
+            Change targets
+          </button>
         </section>
       )}
 

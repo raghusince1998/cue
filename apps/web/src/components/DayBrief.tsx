@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
+import { TargetBar, type WeekTargets } from './Targets.tsx'
 
 /**
  * What the app noticed, above what the app was told.
@@ -79,6 +80,8 @@ export function DayBrief({
   const [reloads, setReloads] = useState(0)
   /** People it has been too long with — keep in touch. */
   const [reachOut, setReachOut] = useState(0)
+  /** This week against the weekly targets, once any is set. */
+  const [targets, setTargets] = useState<WeekTargets | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -89,6 +92,9 @@ export function DayBrief({
       .catch(() => undefined)
     api<{ due: number }>('/people/keep-in-touch')
       .then((r) => !cancelled && setReachOut(r.due))
+      .catch(() => undefined)
+    api<WeekTargets>('/targets/week')
+      .then((r) => !cancelled && setTargets(r))
       .catch(() => undefined)
     return () => {
       cancelled = true
@@ -186,7 +192,32 @@ export function DayBrief({
         <button className="brief-day-link" onClick={() => openAdd({ share: true })}>
           Share when you&rsquo;re free →
         </button>
+        {targets && !targets.tracking && (
+          <button className="brief-day-link" onClick={() => onNavigate('/?targets=1')}>
+            Set weekly targets →
+          </button>
+        )}
       </div>
+
+      {/* The week's targets at a glance; the whole sheet is a tap away. */}
+      {targets?.tracking && (
+        <button className="brief-targets" onClick={() => onNavigate('/?targets=1')}>
+          {targets.metrics
+            .filter((m) => m.target)
+            .slice(0, 4)
+            .map((m) => (
+              <span className="brief-target" key={m.key}>
+                <span className="brief-target-label">
+                  {m.label}
+                  <span className={`target-status is-${m.status}`}>
+                    {m.done}/{m.target}
+                  </span>
+                </span>
+                <TargetBar m={m} small />
+              </span>
+            ))}
+        </button>
+      )}
 
       <div className="brief-stats">
         <button className="stat" onClick={() => onNavigate('/')}>

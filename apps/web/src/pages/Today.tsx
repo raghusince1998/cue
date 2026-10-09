@@ -13,6 +13,7 @@ import { WaitingForm } from '../components/WaitingForm.tsx'
 import { YourDay } from '../components/YourDay.tsx'
 import { WeeklyReview } from '../components/WeeklyReview.tsx'
 import { DailyReport } from '../components/DailyReport.tsx'
+import { Targets } from '../components/Targets.tsx'
 import { startCall } from '../lib/calls.ts'
 import { FocusStart } from '../components/FocusStart.tsx'
 import { NearbyIntentions } from '../components/NearbyIntentions.tsx'
@@ -311,6 +312,7 @@ export default function Today() {
   const [reviewOpen, setReviewOpen] = useState(false)
   /** The daily report, or the morning standup. */
   const [reportOpen, setReportOpen] = useState<'report' | 'standup' | null>(null)
+  const [targetsOpen, setTargetsOpen] = useState(false)
   /** Starting focus time: now, or for a free stretch picked in "Your day". */
   const [focusStart, setFocusStart] = useState<{ startAt?: string; maxMinutes?: number } | null>(null)
   const [showAllWaiting, setShowAllWaiting] = useState(false)
@@ -359,6 +361,14 @@ export default function Today() {
     params.delete('review')
     setParams(params, { replace: true })
     setReviewOpen(true)
+  }, [params, setParams])
+
+  // ?targets=1: the summary card's targets, or the review's link, tapped.
+  useEffect(() => {
+    if (params.get('targets') !== '1') return
+    params.delete('targets')
+    setParams(params, { replace: true })
+    setTargetsOpen(true)
   }, [params, setParams])
 
   // ?report=1: the evening reminder, or the summary card's link, tapped.
@@ -1012,6 +1022,12 @@ export default function Today() {
               void load()
             }}
           />
+        </Modal>
+      )}
+
+      {targetsOpen && (
+        <Modal title="Weekly targets" onClose={() => setTargetsOpen(false)}>
+          <Targets onSaved={() => setCalendarKey((k) => k + 1)} />
         </Modal>
       )}
 
