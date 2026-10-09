@@ -25,6 +25,7 @@ import { canBeOverdue, isAwaitingWrapUp, isCalendarHistory, managedByCue } from 
 import { wrapUpMeeting } from '../services/wrapUp.ts'
 import { prepOpenCount, relatedMeetings } from '../services/meetingPrep.ts'
 import { keepInTouch } from '../services/keepInTouch.ts'
+import { accountKey, listAccounts } from '../services/accounts.ts'
 import { activeFocus, heldCount } from '../services/focus.ts'
 import { peopleSummary, personLinks } from '../services/people.ts'
 
@@ -649,6 +650,41 @@ export async function commitmentRoutes(app: FastifyInstance) {
   app.get('/people/summary', async (req) => {
     const { orgId, sub: userId } = scope(req)
     return peopleSummary(orgId, userId)
+  })
+
+  /** One clinic or company: who is there, what is open, what happened, and its stage. */
+  app.get('/accounts/overview', async (req, reply) => {
+    const { orgId, sub: userId } = scope(req)
+    const { name } = z.object({ name: z.string().min(1).max(200) }).parse(req.query)
+    const key = accountKey(name)
+    const account = (await listAccounts(orgId, userId)).find((a) => a.key === key)
+    if (!account) return reply.code(404).send({ error: 'not_found' })
+
+    const ids = [
+      ...account.waiting,
+      ...account.owe,
+      ...account.nextMeetings,
+      ...account.pastMeetings,
+    ]
+    const rows = ids.length
+      ? await baseQuery().where(inArray(schema.commitments.id, [...new Set(ids)]))
+      : []
+    const byId = new Map(rows.map((r) => [r.id as string, toDTO(r)]))
+    const pick = (list: string[]) => list.map((x) => byId.get(x)).filter(Boolean)
+
+    return {
+      name: account.name,
+      stage: account.stage,
+      stageChangedAt: account.stageChangedAt?.toISOString() ?? null,
+      notes: account.notes,
+      people: account.people,
+      waiting: pick(account.waiting),
+      owe: pick(account.owe),
+      nextMeetings: pick(account.nextMeetings),
+      pastMeetings: pick(account.pastMeetings),
+      lastContact: account.lastContact?.toISOString() ?? null,
+      quiet: account.quiet,
+    }
   })
 
   /** One person: what they owe you, what you owe them, your meetings, history. */

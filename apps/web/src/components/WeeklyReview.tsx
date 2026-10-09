@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ACCOUNT_STAGE_LABELS, type AccountStage } from '@cue/shared'
 import { api } from '../lib/api.ts'
-import { dayLabel, spanLabel } from '../lib/time.ts'
+import { dayLabel, relativeDay, spanLabel } from '../lib/time.ts'
 
 interface WeekReview {
   week: { from: string; to: string }
@@ -17,6 +19,7 @@ interface WeekReview {
     items: number
     freeMinutes: number
   }
+  quiet?: { name: string; stage: AccountStage; lastContact: string | null }[]
   reviewedAt: string | null
 }
 
@@ -50,6 +53,7 @@ export function WeeklyReview({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [finished, setFinished] = useState(false)
+  const navigate = useNavigate()
 
   useEffect(() => {
     api<WeekReview>('/review/week')
@@ -184,6 +188,35 @@ export function WeeklyReview({
           <p className="muted small">Nobody owes you anything right now.</p>
         )}
       </section>
+
+      {(r.quiet ?? []).length > 0 && (
+        <section className="review-part">
+          <span className="label-text">Gone quiet</span>
+          <div className="review-action">
+            <span>
+              {r.quiet!
+                .slice(0, 3)
+                .map(
+                  (q) =>
+                    `${q.name} (${ACCOUNT_STAGE_LABELS[q.stage].toLowerCase()}, ${
+                      q.lastContact ? `last contact ${relativeDay(q.lastContact)}` : 'no contact on record'
+                    })`,
+                )
+                .join('; ')}
+              {r.quiet!.length > 3 ? ` and ${r.quiet!.length - 3} more` : ''}.
+            </span>
+            <button
+              className="ghost small-btn"
+              onClick={() => {
+                onDone()
+                navigate('/people?view=accounts')
+              }}
+            >
+              See accounts
+            </button>
+          </div>
+        </section>
+      )}
 
       <section className="review-part">
         <span className="label-text">Next week</span>

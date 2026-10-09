@@ -12,6 +12,7 @@ import { configFor, providerConfigured, PROVIDERS } from './services/oauthProvid
 import { registerAuth } from './auth.ts'
 import { authRoutes } from './routes/auth.ts'
 import { placeRoutes } from './routes/places.ts'
+import { accountRoutes } from './routes/accounts.ts'
 import { contactRoutes } from './routes/contacts.ts'
 import { visitRoutes } from './routes/visits.ts'
 import { commitmentRoutes } from './routes/commitments.ts'
@@ -68,6 +69,7 @@ app.get('/health', async () => ({ ok: true, push: pushConfigured }))
 await app.register(authRoutes, { prefix: '/api' })
 await app.register(placeRoutes, { prefix: '/api' })
 await app.register(contactRoutes, { prefix: '/api' })
+await app.register(accountRoutes, { prefix: '/api' })
 await app.register(visitRoutes, { prefix: '/api' })
 await app.register(commitmentRoutes, { prefix: '/api' })
 await app.register(pushRoutes, { prefix: '/api' })

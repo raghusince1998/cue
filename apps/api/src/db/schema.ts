@@ -180,6 +180,23 @@ export const contacts = pgTable(
   (t) => [index('contacts_org_idx').on(t.orgId), index('contacts_place_idx').on(t.orgId, t.placeId)],
 )
 
+/**
+ * What is said about a clinic or company itself: how far along things are,
+ * and notes. The account exists anyway, as soon as a contact's organization
+ * names it; this row is matched to them by name, without case.
+ */
+export const accounts = pgTable('accounts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id')
+    .notNull()
+    .references(() => orgs.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  stage: text('stage'),
+  stageChangedAt: timestamp('stage_changed_at', { withTimezone: true }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 /** One visit, call or meeting. */
 export const interactions = pgTable(
   'interactions',

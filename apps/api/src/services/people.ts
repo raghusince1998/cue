@@ -50,7 +50,8 @@ function formsOf(name: string): { full: string[]; short: string[] } {
   return { full: [...full], short: [...short] }
 }
 
-function wordRe(phrase: string): RegExp {
+/** Matches a phrase as whole words, ignoring case: "Ravi" is not in "Ravindra". */
+export function wordRe(phrase: string): RegExp {
   return new RegExp(`(^|[^\\p{L}])${escape(phrase)}($|[^\\p{L}])`, 'iu')
 }
 
@@ -121,7 +122,7 @@ function linksFor(personId: string, m: Matcher, rows: Row[], now: Date): PersonL
 }
 
 /** The plans worth looking through: anything open, and a year of meetings. */
-async function relevantRows(userId: string, now: Date): Promise<Row[]> {
+export async function relevantRows(userId: string, now: Date): Promise<Row[]> {
   const since = new Date(now.getTime() - HISTORY_DAYS * DAY_MS)
   return db
     .select()

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { ContactDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { dayLabel, initials, relativeDay } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { ContactEditor } from '../components/ContactEditor.tsx'
 import { PersonSheet, personLine } from '../components/PersonSheet.tsx'
+import { AccountSheet } from '../components/AccountSheet.tsx'
+import { AccountsView } from './Accounts.tsx'
 import { useOnChange } from '../lib/changes.ts'
 import {
   deviceContactsAvailable,
@@ -36,6 +39,15 @@ interface Touch {
 }
 
 export default function People() {
+  // People, or the clinics and companies they work at. In the URL, so the
+  // weekly review can link straight to accounts.
+  const [params, setParams] = useSearchParams()
+  const view = params.get('view') === 'accounts' ? 'accounts' : 'people'
+  const [viewingAccount, setViewingAccount] = useState<string | null>(null)
+  const [accountsReload, setAccountsReload] = useState(0)
+  /** Where a person being added works, when added from an account. */
+  const [newOrg, setNewOrg] = useState('')
+
   const [canPick] = useState(() => deviceContactsAvailable())
   const [pickReason] = useState(() => deviceContactsReason())
   const [importing, setImporting] = useState(false)
@@ -150,6 +162,31 @@ export default function People() {
         </span>
       </div>
 
+      <div className="viewswitch">
+        <button
+          className={view === 'people' ? 'selected' : ''}
+          onClick={() => setParams({}, { replace: true })}
+        >
+          People
+        </button>
+        <button
+          className={view === 'accounts' ? 'selected' : ''}
+          onClick={() => setParams({ view: 'accounts' }, { replace: true })}
+        >
+          Accounts
+        </button>
+      </div>
+
+      {view === 'accounts' && (
+        <AccountsView
+          onOpen={setViewingAccount}
+          onAddPerson={() => setEditing(null)}
+          reloadKey={accountsReload}
+        />
+      )}
+
+      {view === 'people' && (
+        <>
       <div className="row">
         <input
           className="grow"
@@ -313,6 +350,36 @@ export default function People() {
         </div>
       )}
 
+        </>
+      )}
+
+      {viewingAccount && (
+        <Modal title="Account" onClose={() => setViewingAccount(null)}>
+          <AccountSheet
+            key={viewingAccount}
+            name={viewingAccount}
+            onOpenPerson={(id) => {
+              setViewingAccount(null)
+              setViewing(id)
+            }}
+            onAddPerson={(org) => {
+              setViewingAccount(null)
+              setNewOrg(org)
+              setEditing(null)
+            }}
+            onRenamed={(to) => {
+              setViewingAccount(to)
+              setAccountsReload((n) => n + 1)
+              void load()
+            }}
+            onChanged={() => {
+              setAccountsReload((n) => n + 1)
+              void load()
+            }}
+          />
+        </Modal>
+      )}
+
       {viewing && (
         <Modal title="Person" onClose={() => setViewing(null)}>
           <PersonSheet
@@ -324,6 +391,10 @@ export default function People() {
             }}
             onChanged={() => void load()}
             onOpenPerson={(id) => setViewing(id)}
+            onOpenAccount={(org) => {
+              setViewing(null)
+              setViewingAccount(org)
+            }}
           />
         </Modal>
       )}
@@ -334,18 +405,23 @@ export default function People() {
           onClose={() => {
             setEditing(undefined)
             setNewName('')
+            setNewOrg('')
           }}
         >
           <ContactEditor
             contactId={editing}
             initialName={editing ? '' : newName}
+            initialOrganization={editing ? '' : newOrg}
             onClose={() => {
               setEditing(undefined)
               setNewName('')
+              setNewOrg('')
             }}
             onSaved={() => {
               setEditing(undefined)
               setNewName('')
+              setNewOrg('')
+              setAccountsReload((n) => n + 1)
               void load()
             }}
           />

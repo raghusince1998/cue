@@ -13,6 +13,7 @@ export function ContactEditor({
   onSaved,
   onClose,
   initialName = '',
+  initialOrganization = '',
 }: {
   /** null means "create a new person". */
   contactId: string | null
@@ -20,6 +21,8 @@ export function ContactEditor({
   onClose: () => void
   /** For a new person: a name already known, e.g. someone a check-in is waiting on. */
   initialName?: string
+  /** For a new person: where they work, when added from that account's page. */
+  initialOrganization?: string
 }) {
   const [profile, setProfile] = useState<ContactProfile | null>(null)
   const [places, setPlaces] = useState<PlaceDTO[]>([])
@@ -27,7 +30,7 @@ export function ContactEditor({
 
   const [name, setName] = useState(initialName)
   const [role, setRole] = useState('')
-  const [organization, setOrganization] = useState('')
+  const [organization, setOrganization] = useState(initialOrganization)
   /** Workplaces typed before, offered while typing so one clinic stays one clinic. */
   const [workplaces, setWorkplaces] = useState<string[]>([])
   const [keepDays, setKeepDays] = useState<number | null>(null)

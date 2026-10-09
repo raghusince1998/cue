@@ -512,6 +512,28 @@ export type LogVisitInput = z.infer<typeof logVisitInput>
 
 // ---------------------------------------------------------------- commitments
 
+/** How far along things are with a clinic or company. */
+export const ACCOUNT_STAGES = ['prospect', 'talking', 'proposal', 'customer', 'lost'] as const
+export type AccountStage = (typeof ACCOUNT_STAGES)[number]
+export const ACCOUNT_STAGE_LABELS: Record<AccountStage, string> = {
+  prospect: 'Prospect',
+  talking: 'In talks',
+  proposal: 'Proposal sent',
+  customer: 'Customer',
+  lost: 'Lost',
+}
+
+export const saveAccountInput = z.object({
+  name: z.string().min(1).max(200),
+  stage: z.enum(ACCOUNT_STAGES).nullable().optional(),
+  notes: z.string().max(4000).nullable().optional(),
+})
+
+export const renameAccountInput = z.object({
+  from: z.string().min(1).max(200),
+  to: z.string().min(1).max(200),
+})
+
 /** How often you mean to hear from someone, in days. */
 export const KEEP_IN_TOUCH_CHOICES: { days: number; label: string }[] = [
   { days: 7, label: 'Every week' },

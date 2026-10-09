@@ -33,32 +33,27 @@ export interface TouchStatus {
   snoozedUntil: Date | null
 }
 
-export async function keepInTouch(orgId: string, userId: string, now = new Date()): Promise<TouchStatus[]> {
-  const ct = schema.contacts
-  const tracked = await db
-    .select({
-      id: ct.id,
-      name: ct.name,
-      role: ct.role,
-      organization: ct.organization,
-      phone: ct.phone,
-      cadenceDays: ct.keepInTouchDays,
-      since: ct.keepInTouchSince,
-      lastContactedAt: ct.lastContactedAt,
-      snoozedUntil: ct.touchSnoozedUntil,
-      createdAt: ct.createdAt,
-    })
-    .from(ct)
-    .where(and(eq(ct.orgId, orgId), isNotNull(ct.keepInTouchDays)))
-  if (tracked.length === 0) return []
+/** The most recent contact with each of these people, or null when there is none on record. */
+export async function lastTouches(
+  orgId: string,
+  userId: string,
+  contactIds: string[],
+  now = new Date(),
+): Promise<Map<string, Date | null>> {
+  const out = new Map<string, Date | null>()
+  if (contactIds.length === 0) return out
 
-  const ids = tracked.map((t) => t.id)
   const since = new Date(now.getTime() - LOOK_BACK_DAYS * DAY_MS)
   const c = schema.commitments
   const i = schema.interactions
+  const ct = schema.contacts
 
-  const [people, rows, visits] = await Promise.all([
+  const [people, talked, rows, visits] = await Promise.all([
     peopleOf(orgId),
+    db
+      .select({ id: ct.id, at: ct.lastContactedAt })
+      .from(ct)
+      .where(and(eq(ct.orgId, orgId), inArray(ct.id, contactIds))),
     // Meetings that have happened, and anything finished.
     db
       .select({
@@ -85,27 +80,56 @@ export async function keepInTouch(orgId: string, userId: string, now = new Date(
     db
       .select({ contactId: i.contactId, last: max(i.startedAt) })
       .from(i)
-      .where(and(eq(i.userId, userId), inArray(i.contactId, ids)))
+      .where(and(eq(i.userId, userId), inArray(i.contactId, contactIds)))
       .groupBy(i.contactId),
   ])
 
   const matchers = matchersFor(people)
+  const talkedAt = new Map(talked.map((t) => [t.id, t.at]))
   const lastVisit = new Map(visits.map((v) => [v.contactId!, v.last ? new Date(v.last) : null]))
 
-  const out = tracked.map((t): TouchStatus => {
-    const m = matchers.get(t.id)!
+  for (const id of contactIds) {
+    const m = matchers.get(id)
     const touches: Date[] = []
-    if (t.lastContactedAt) touches.push(t.lastContactedAt)
-    const visit = lastVisit.get(t.id)
+    const t = talkedAt.get(id)
+    if (t) touches.push(t)
+    const visit = lastVisit.get(id)
     if (visit) touches.push(visit)
     for (const r of rows) {
       const withThem =
-        r.contactId === t.id || m.inTitle(r.title) || (r.waitingOn !== null && m.isName(r.waitingOn))
+        r.contactId === id ||
+        (m !== undefined && (m.inTitle(r.title) || (r.waitingOn !== null && m.isName(r.waitingOn))))
       if (!withThem) continue
       if (r.kind === 'meeting' && r.dueAt <= now) touches.push(r.dueAt)
       else if (r.status === 'done' && r.completedAt && r.completedAt <= now) touches.push(r.completedAt)
     }
-    const lastTouch = touches.length ? new Date(Math.max(...touches.map((d) => d.getTime()))) : null
+    out.set(id, touches.length ? new Date(Math.max(...touches.map((d) => d.getTime()))) : null)
+  }
+  return out
+}
+
+export async function keepInTouch(orgId: string, userId: string, now = new Date()): Promise<TouchStatus[]> {
+  const ct = schema.contacts
+  const tracked = await db
+    .select({
+      id: ct.id,
+      name: ct.name,
+      role: ct.role,
+      organization: ct.organization,
+      phone: ct.phone,
+      cadenceDays: ct.keepInTouchDays,
+      since: ct.keepInTouchSince,
+      snoozedUntil: ct.touchSnoozedUntil,
+      createdAt: ct.createdAt,
+    })
+    .from(ct)
+    .where(and(eq(ct.orgId, orgId), isNotNull(ct.keepInTouchDays)))
+  if (tracked.length === 0) return []
+
+  const touches = await lastTouches(orgId, userId, tracked.map((t) => t.id), now)
+
+  const out = tracked.map((t): TouchStatus => {
+    const lastTouch = touches.get(t.id) ?? null
     const base = lastTouch ?? t.since ?? t.createdAt
     const cadenceDays = t.cadenceDays!
     const dueAt = new Date(base.getTime() + cadenceDays * DAY_MS)

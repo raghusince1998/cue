@@ -68,6 +68,7 @@ export function PersonSheet({
   onEdit,
   onChanged,
   onOpenPerson,
+  onOpenAccount,
 }: {
   contactId: string
   onEdit: () => void
@@ -75,6 +76,8 @@ export function PersonSheet({
   onChanged: () => void
   /** Open someone else's page — a colleague at the same place. */
   onOpenPerson?: (id: string) => void
+  /** Open the clinic or company they work at. */
+  onOpenAccount?: (name: string) => void
 }) {
   const [contact, setContact] = useState<Contact | null>(null)
   const [o, setO] = useState<Overview | null>(null)
@@ -189,6 +192,11 @@ export function PersonSheet({
         <div>
           <h3 className="details-title">{contact.name}</h3>
           {personLine(contact) && <p className="muted small">{personLine(contact)}</p>}
+          {contact.organization && onOpenAccount && (
+            <button className="link small fit-btn" onClick={() => onOpenAccount(contact.organization!)}>
+              Open {contact.organization} &rarr;
+            </button>
+          )}
         </div>
         <div className="row person-reach">
           {contact.phone && (

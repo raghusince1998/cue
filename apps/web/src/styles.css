@@ -4065,3 +4065,45 @@ button:disabled {
 .reach-out a.tiny-btn:hover {
   border-color: var(--accent);
 }
+
+/* ---- Accounts ------------------------------------------------------ */
+
+/* "Call" in a list is a tel: link, styled as the buttons beside it. */
+a.tiny-btn.link-btn {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+}
+
+a.tiny-btn.link-btn:hover {
+  border-color: var(--accent);
+}
+
+.account .link {
+  padding: 0;
+  font-weight: 600;
+}
+
+/* A stage with nobody in it yet is still a filter, just a quieter one. */
+.chip.is-empty:not(.selected) {
+  opacity: 0.6;
+}
+
+/* Sized to its buttons, not stretched across a column of the page. */
+.stack > .viewswitch {
+  align-self: flex-start;
+}
+
+.inline-field-row button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Wrapping only on a phone, where a long name would push the buttons off. */
+@media (max-width: 560px) {
+  .blank .inline-field-row {
+    flex-wrap: wrap;
+  }
+}

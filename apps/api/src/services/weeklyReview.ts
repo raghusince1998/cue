@@ -2,6 +2,8 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, lt, lte, sql } from 'drizz
 import { db, schema } from '../db/index.ts'
 import { sendToUser } from '../push.ts'
 import { canBeOverdue, managedByCue, takesTime } from './overdue.ts'
+import { listAccounts } from './accounts.ts'
+import { orgOf } from './keepInTouch.ts'
 
 /**
  * The weekly review.
@@ -51,6 +53,8 @@ export interface WeekReview {
     items: number
     freeMinutes: number
   }
+  /** Talks or proposals with no contact for two weeks: deals going cold. */
+  quiet: { name: string; stage: string; lastContact: string | null }[]
   reviewedAt: string | null
 }
 
@@ -160,6 +164,13 @@ export async function weekReview(userId: string, now = new Date()): Promise<Week
   const names = [...new Set(waiting.map((w) => w.who!).filter(Boolean))]
   const oldest = waiting[0]
 
+  const orgId = await orgOf(userId)
+  const quiet = orgId
+    ? (await listAccounts(orgId, userId, now))
+        .filter((a) => a.quiet)
+        .map((a) => ({ name: a.name, stage: a.stage!, lastContact: a.lastContact?.toISOString() ?? null }))
+    : []
+
   return {
     week: { from: ymd(weekStart), to: ymd(new Date(nextStart.getTime() - DAY_MS)) },
     done: {
@@ -192,6 +203,7 @@ export async function weekReview(userId: string, now = new Date()): Promise<Week
       items: ahead.length,
       freeMinutes: Math.max(workingMinutes - bookedWorking, 0),
     },
+    quiet,
     reviewedAt: user?.reviewedAt ? user.reviewedAt.toISOString() : null,
   }
 }
@@ -213,7 +225,8 @@ export function composeReview(r: WeekReview): { title: string; body: string; url
     r.meetings.count === 0 &&
     r.slipped === 0 &&
     r.waiting.count === 0 &&
-    r.nextWeek.items === 0
+    r.nextWeek.items === 0 &&
+    r.quiet.length === 0
   if (empty) return null
 
   const head = [`${r.done.total} done`, r.slipped > 0 ? `${r.slipped} slipped` : null].filter(Boolean)
@@ -223,6 +236,10 @@ export function composeReview(r: WeekReview): { title: string; body: string; url
   }
   if (r.focus.minutes > 0) lines.push(`${hours(r.focus.minutes)} of focus time.`)
   if (r.waiting.count > 0) lines.push(`${r.waiting.count} still waiting on others.`)
+  if (r.quiet.length > 0) {
+    const [first, ...rest] = r.quiet.map((q) => q.name)
+    lines.push(`Gone quiet: ${first}${rest.length ? ` and ${rest.length} more` : ''}.`)
+  }
   if (r.nextWeek.busiest) lines.push(`Next week's busiest day: ${weekday(r.nextWeek.busiest)}.`)
   lines.push('Two minutes to review it.')
 
