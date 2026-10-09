@@ -1469,8 +1469,12 @@ a Postgres add-on for `DATABASE_URL`, set `WEB_ORIGIN` to your real URL, leave
 shell:
 
 ```bash
-npm run db:migrate
+CUE_NEW_DATABASE=1 npm run db:migrate
 ```
+
+`CUE_NEW_DATABASE=1` is for this first run only. Without it, the migrations
+refuse to run on a database with no migration history, because a new database
+and one whose tables were deleted look the same. Deploys never set it.
 
 ### Or your own server
 
@@ -1606,8 +1610,12 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 **6. Apply migrations.**
 
 ```bash
-npm run db:migrate
+CUE_NEW_DATABASE=1 npm run db:migrate
 ```
+
+`CUE_NEW_DATABASE=1` is only for this first run on a new database. Every later
+`db:migrate`, including the one each deploy runs, leaves it off, so a database
+that lost its tables stops the deploy instead of being rebuilt empty.
 
 **7. Build and start.**
 
