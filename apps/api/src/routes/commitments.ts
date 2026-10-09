@@ -25,6 +25,7 @@ import { canBeOverdue, isAwaitingWrapUp, isCalendarHistory, managedByCue } from 
 import { wrapUpMeeting } from '../services/wrapUp.ts'
 import { prepOpenCount, relatedMeetings } from '../services/meetingPrep.ts'
 import { activeFocus, heldCount } from '../services/focus.ts'
+import { peopleSummary, personLinks } from '../services/people.ts'
 
 const agendaQuery = z.object({
   /** Local day boundaries, supplied by the client which knows its timezone. */
@@ -630,6 +631,43 @@ export async function commitmentRoutes(app: FastifyInstance) {
     })
 
     return { ok: true }
+  })
+
+  /** For the People list: what is open with each person, and names not yet saved. */
+  app.get('/people/summary', async (req) => {
+    const { orgId, sub: userId } = scope(req)
+    return peopleSummary(orgId, userId)
+  })
+
+  /** One person: what they owe you, what you owe them, your meetings, history. */
+  app.get('/people/:id/overview', async (req, reply) => {
+    const { orgId, sub: userId } = scope(req)
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params)
+    const links = await personLinks(orgId, userId, id)
+    if (!links) return reply.code(404).send({ error: 'not_found' })
+
+    const ids = [
+      ...links.waitingOnThem,
+      ...links.youOwe,
+      ...links.nextMeetings,
+      ...(links.lastMeeting ? [links.lastMeeting] : []),
+      ...links.lastMeetingFollowUps,
+    ]
+    const rows = ids.length
+      ? await baseQuery().where(inArray(schema.commitments.id, [...new Set(ids)]))
+      : []
+    const byId = new Map(rows.map((r) => [r.id as string, toDTO(r)]))
+    const pick = (list: string[]) => list.map((x) => byId.get(x)).filter(Boolean)
+
+    return {
+      waitingOnThem: pick(links.waitingOnThem),
+      youOwe: pick(links.youOwe),
+      nextMeetings: pick(links.nextMeetings),
+      lastMeeting: links.lastMeeting ? (byId.get(links.lastMeeting) ?? null) : null,
+      lastMeetingFollowUps: pick(links.lastMeetingFollowUps),
+      meetingCount: links.meetingCount,
+      firstMet: links.firstMet ? links.firstMet.toISOString() : null,
+    }
   })
 
   /**

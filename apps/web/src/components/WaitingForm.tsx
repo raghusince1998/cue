@@ -7,9 +7,9 @@ import { dueChoices } from './WrapUp.tsx'
  * "Waiting on someone", added directly — not only from a meeting wrap-up.
  * Who, what, and when to check in. It claims no time on the calendar.
  */
-export function WaitingForm({ onDone }: { onDone: () => void }) {
+export function WaitingForm({ onDone, initialWho = '' }: { onDone: () => void; initialWho?: string }) {
   const choices = useMemo(() => dueChoices(), [])
-  const [who, setWho] = useState('')
+  const [who, setWho] = useState(initialWho)
   const [what, setWhat] = useState('')
   const [due, setDue] = useState('friday')
   const [busy, setBusy] = useState(false)

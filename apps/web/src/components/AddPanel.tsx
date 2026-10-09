@@ -45,6 +45,7 @@ export function AddPanel({
   initialRepeat = false,
   initialSchedule = false,
   initialShare = false,
+  initialShareWith,
 }: {
   /** Saved, or abandoned: either way the sheet's job is over. */
   onDone: () => void
@@ -56,6 +57,8 @@ export function AddPanel({
   initialSchedule?: boolean
   /** Times to offer someone, rather than something to add. */
   initialShare?: boolean
+  /** Who those times are for. */
+  initialShareWith?: string
 }) {
   // Two things belong here: something that already happened, and something
   // that has not.
@@ -535,7 +538,7 @@ export function AddPanel({
             <button className="quick-more" onClick={() => setSharing(false)}>
               Back to adding something
             </button>
-            <ShareAvailability onDone={onDone} />
+            <ShareAvailability onDone={onDone} initialWith={initialShareWith} />
           </>
         ) : schedule ? (
           <ScheduleForm

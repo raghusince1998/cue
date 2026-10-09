@@ -20,6 +20,8 @@ export interface AddOptions {
   schedule?: boolean
   /** "Share when I'm free": times to offer someone, as a message. */
   share?: boolean
+  /** Who the times are for, when it is known — booked meetings are named after them. */
+  shareWith?: string
 }
 
 const EVENT = 'cue:add'

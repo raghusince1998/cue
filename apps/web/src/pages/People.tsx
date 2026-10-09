@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ContactDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
-import { initials, relativeDay } from '../lib/time.ts'
+import { dayLabel, initials, relativeDay } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { ContactEditor } from '../components/ContactEditor.tsx'
+import { PersonSheet } from '../components/PersonSheet.tsx'
+import { useOnChange } from '../lib/changes.ts'
 import {
   deviceContactsAvailable,
   deviceContactsReason,
@@ -12,6 +14,14 @@ import {
 
 /** `undefined` = closed, `null` = creating a new person, string = editing one. */
 type Editing = string | null | undefined
+
+interface Summary {
+  people: Record<
+    string,
+    { waiting: number; waitingDue: number; owe: number; next: string | null; lastMet: string | null }
+  >
+  unsaved: string[]
+}
 
 export default function People() {
   const [canPick] = useState(() => deviceContactsAvailable())
@@ -57,10 +67,21 @@ export default function People() {
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<Editing>(undefined)
 
+  const [summary, setSummary] = useState<Summary>({ people: {}, unsaved: [] })
+  /** The person open in their page, and a name to start a new person with. */
+  const [viewing, setViewing] = useState<string | null>(null)
+  const [newName, setNewName] = useState('')
+
   const load = useCallback(async () => {
-    setContacts(await api<ContactDTO[]>('/contacts'))
+    const [list, s] = await Promise.all([
+      api<ContactDTO[]>('/contacts'),
+      api<Summary>('/people/summary').catch(() => ({ people: {}, unsaved: [] })),
+    ])
+    setContacts(list)
+    setSummary(s)
     setLoading(false)
   }, [])
+  useOnChange(() => void load())
 
   useEffect(() => {
     void load()
@@ -68,11 +89,19 @@ export default function People() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return contacts
-    return contacts.filter((c) =>
-      [c.name, c.role, c.phone, c.placeName].some((f) => f?.toLowerCase().includes(q)),
-    )
-  }, [contacts, query])
+    const matching = !q
+      ? contacts
+      : contacts.filter((c) =>
+          [c.name, c.role, c.phone, c.placeName].some((f) => f?.toLowerCase().includes(q)),
+        )
+    // People with something open between you first: they are the ones you
+    // came here about. Alphabetical within each group, as before.
+    const open = (id: string) => {
+      const s = summary.people[id]
+      return s ? (s.waitingDue > 0 ? 3 : s.waiting + s.owe > 0 ? 2 : s.next ? 1 : 0) : 0
+    }
+    return [...matching].sort((a, b) => open(b.id) - open(a.id) || a.name.localeCompare(b.name))
+  }, [contacts, query, summary])
 
   if (loading) {
     return (
@@ -115,6 +144,25 @@ export default function People() {
       </div>
 
       {importNote && <p className="muted small">{importNote}</p>}
+
+      {/* Names checked-in on that nobody saved: one tap to make them people. */}
+      {summary.unsaved.length > 0 && (
+        <div className="unsaved-people">
+          <span className="muted small">Mentioned but not saved:</span>
+          {summary.unsaved.map((n) => (
+            <button
+              key={n}
+              className="chip"
+              onClick={() => {
+                setNewName(n)
+                setEditing(null)
+              }}
+            >
+              + {n}
+            </button>
+          ))}
+        </div>
+      )}
 
       {contacts.length === 0 ? (
         <div className="blank">
@@ -160,6 +208,19 @@ export default function People() {
                 )}
 
                 <div className="tile-tags">
+                  {summary.people[c.id]?.waiting ? (
+                    <span className={`tag${summary.people[c.id]!.waitingDue ? ' is-warn' : ''}`}>
+                      Waiting · {summary.people[c.id]!.waiting}
+                    </span>
+                  ) : null}
+                  {summary.people[c.id]?.owe ? (
+                    <span className="tag">You owe · {summary.people[c.id]!.owe}</span>
+                  ) : null}
+                  {summary.people[c.id]?.next ? (
+                    <span className="tag is-live">Next: {dayLabel(summary.people[c.id]!.next!)}</span>
+                  ) : summary.people[c.id]?.lastMet ? (
+                    <span className="tag">Last met {relativeDay(summary.people[c.id]!.lastMet!)}</span>
+                  ) : null}
                   {c.phone && <span className="tag is-live">{c.phone}</span>}
                   {c.visitCount ? (
                     <span className="tag">
@@ -177,7 +238,7 @@ export default function People() {
                     Call
                   </a>
                 )}
-                <button className="ghost small-btn" onClick={() => setEditing(c.id)}>
+                <button className="ghost small-btn" onClick={() => setViewing(c.id)}>
                   Open
                 </button>
               </div>
@@ -186,13 +247,38 @@ export default function People() {
         </div>
       )}
 
+      {viewing && (
+        <Modal title="Person" onClose={() => setViewing(null)}>
+          <PersonSheet
+            key={viewing}
+            contactId={viewing}
+            onEdit={() => {
+              setEditing(viewing)
+              setViewing(null)
+            }}
+            onChanged={() => void load()}
+          />
+        </Modal>
+      )}
+
       {editing !== undefined && (
-        <Modal title={editing ? 'Person' : 'Add person'} onClose={() => setEditing(undefined)}>
+        <Modal
+          title={editing ? 'Edit person' : 'Add person'}
+          onClose={() => {
+            setEditing(undefined)
+            setNewName('')
+          }}
+        >
           <ContactEditor
             contactId={editing}
-            onClose={() => setEditing(undefined)}
+            initialName={editing ? '' : newName}
+            onClose={() => {
+              setEditing(undefined)
+              setNewName('')
+            }}
             onSaved={() => {
               setEditing(undefined)
+              setNewName('')
               void load()
             }}
           />

@@ -59,7 +59,7 @@ function compose(slots: string[], minutes: number): string {
  * count — spread over the days asked for, turned into a message to send. When
  * they reply with one, it is booked from here.
  */
-export function ShareAvailability({ onDone }: { onDone: () => void }) {
+export function ShareAvailability({ onDone, initialWith = '' }: { onDone: () => void; initialWith?: string }) {
   const [minutes, setMinutes] = useState(30)
   const [range, setRange] = useState<Range>('soon')
   const [part, setPart] = useState<Part>('any')
@@ -69,7 +69,7 @@ export function ShareAvailability({ onDone }: { onDone: () => void }) {
   const [edited, setEdited] = useState(false)
   const [copied, setCopied] = useState(false)
   const [picked, setPicked] = useState<string | null>(null)
-  const [withWhom, setWithWhom] = useState('')
+  const [withWhom, setWithWhom] = useState(initialWith)
   const [booked, setBooked] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

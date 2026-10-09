@@ -3960,3 +3960,75 @@ button:disabled {
   margin-left: 10px;
   padding: 0;
 }
+
+/* ---- A person, and everything between you ------------------------- */
+
+@media (min-width: 900px) {
+  .modal:has(.person) {
+    max-width: 640px;
+  }
+}
+
+.person-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.person-head p {
+  margin: 2px 0 0;
+}
+
+.person-reach {
+  align-items: center;
+  gap: 6px;
+}
+
+.person-part {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.person-line {
+  margin: 0;
+}
+
+.person-followups li {
+  font-size: 14px;
+}
+
+.person-followups li.is-done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.person-actions {
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.unsaved-people {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Call / WhatsApp / Email are links (tel:, wa.me, mailto:), styled as the
+   buttons they sit beside. */
+.person-reach a.small-btn {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.person-reach a.small-btn:hover {
+  border-color: var(--accent);
+}

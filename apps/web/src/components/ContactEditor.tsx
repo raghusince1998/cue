@@ -12,17 +12,20 @@ export function ContactEditor({
   contactId,
   onSaved,
   onClose,
+  initialName = '',
 }: {
   /** null means "create a new person". */
   contactId: string | null
   onSaved: () => void
   onClose: () => void
+  /** For a new person: a name already known, e.g. someone a check-in is waiting on. */
+  initialName?: string
 }) {
   const [profile, setProfile] = useState<ContactProfile | null>(null)
   const [places, setPlaces] = useState<PlaceDTO[]>([])
   const [loaded, setLoaded] = useState(false)
 
-  const [name, setName] = useState('')
+  const [name, setName] = useState(initialName)
   const [role, setRole] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
