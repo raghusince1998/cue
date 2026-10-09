@@ -8,6 +8,7 @@ import { reopenPlan } from '../lib/reopen.ts'
 import { Modal } from './Modal.tsx'
 import { CommitmentEditor } from './CommitmentEditor.tsx'
 import { Checklist } from './Checklist.tsx'
+import { WishPicker } from './WishPicker.tsx'
 import { WrapUp } from './WrapUp.tsx'
 import { Nudge } from './Nudge.tsx'
 
@@ -81,6 +82,9 @@ export function CommitmentSheet({
 }) {
   const [mode, setMode] = useState<SheetMode>(initialMode)
   const [notice, setNotice] = useState<string | undefined>(initialNotice)
+  /** Choosing wishes to add to this plan's list, and a key to reload the list after. */
+  const [picking, setPicking] = useState(false)
+  const [listKey, setListKey] = useState(0)
   const [c, setC] = useState<CommitmentDTO | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -376,7 +380,31 @@ export function CommitmentSheet({
             </div>
           )}
 
-          {c.checklistCount > 0 && <Checklist commitmentId={c.id} />}
+          {/* Several things to do for one plan, on one list: typed here, or
+              taken from the wishlist. Every open plan can have one. */}
+          {((c.status === 'pending' && !c.history) || c.checklistCount > 0) && (
+            <div className="details-todo">
+              <div className="details-todo-head">
+                <span className="label-text">Things to do</span>
+                {c.status === 'pending' && !c.history && (
+                  <button className="link small" onClick={() => setPicking((p) => !p)}>
+                    {picking ? 'Close wishlist' : 'Add from wishlist'}
+                  </button>
+                )}
+              </div>
+              {picking && (
+                <WishPicker
+                  plan={c}
+                  onAdded={() => {
+                    setPicking(false)
+                    setListKey((k) => k + 1)
+                    onChanged()
+                  }}
+                />
+              )}
+              <Checklist key={listKey} commitmentId={c.id} />
+            </div>
+          )}
 
           {error && <p className="error small">{error}</p>}
 

@@ -20,6 +20,7 @@ import {
   originalIfInformative,
   findMalformedTime,
   diagnose,
+  parseWishList,
   type CommitmentKind,
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
@@ -37,8 +38,10 @@ import {
   rememberPerson,
   resolveAnchor,
 } from '../services/memory.ts'
+import { planWishes } from '../services/wishes.ts'
 import {
   findLinks,
+  knownPlaces,
   tripLinkFor,
   upcomingTripTo,
   waitingFor,
@@ -162,55 +165,31 @@ export async function quickAddRoutes(app: FastifyInstance) {
     }
 
     if (plan.kind === 'intention') {
-      const row = takeFirst(
-        await db
-          .insert(schema.intentions)
-          .values({
+      // One wish, or several from one line: "Jaipur: visit Hawa Mahal, buy
+      // lakh chudi". Each is its own wish, kept together by their place.
+      const rows = await db
+        .insert(schema.intentions)
+        .values(
+          (plan.wishes ?? [plan.title]).map((title) => ({
             orgId,
             userId,
-            placeLabel: plan.placeLabel!,
-            title: plan.title,
-            notes: plan.notes ?? null,
-          })
-          .returning(),
-        'intention',
-      )
+            placeLabel: plan.placeLabel,
+            title,
+            notes: plan.wishes ? null : (plan.notes ?? null),
+          })),
+        )
+        .returning({ id: schema.intentions.id })
+      const ids = rows.map((r) => r.id)
 
-      // A trip there is already coming: it goes straight onto it, as
-      // something for one evening of it rather than a fixed slot.
+      // A trip there is already coming: they go straight onto it, together,
+      // as one plan for an evening of it rather than a reminder each.
       const trip = body.onTrip ? plan.upcomingTrip : null
       if (trip) {
         const [y, m, d] = trip.startsOn.split('-').map(Number)
-        const dueAt = new Date(y!, m! - 1, d!, 18, 0)
-        await db.transaction(async (tx) => {
-          const created = takeFirst(
-            await tx
-              .insert(schema.commitments)
-              .values({
-                orgId,
-                userId,
-                title: plan.title,
-                kind: 'task',
-                notes: plan.notes ?? null,
-                dueAt,
-                durationMinutes: 60,
-                tripId: trip.id,
-                placeLabel: trip.placeLabel,
-                flexibility: 'flexible',
-                preferredWindow: 'evening',
-              })
-              .returning(),
-            'commitment',
-          )
-          await scheduleFirstReminder({ orgId, commitmentId: created.id, fireAt: dueAt }, tx)
-          await tx
-            .update(schema.intentions)
-            .set({ status: 'scheduled', commitmentId: created.id })
-            .where(eq(schema.intentions.id, row.id))
-        })
-        return reply.code(201).send({ ...plan, id: row.id, scheduledOnTrip: trip })
+        await planWishes(orgId, userId, { ids, dueAt: new Date(y!, m! - 1, d!, 18, 0), tripId: trip.id })
+        return reply.code(201).send({ ...plan, id: ids[0], ids, scheduledOnTrip: trip })
       }
-      return reply.code(201).send({ ...plan, id: row.id })
+      return reply.code(201).send({ ...plan, id: ids[0], ids })
     }
 
     if (plan.kind === 'trip') {
@@ -443,6 +422,8 @@ export interface QuickPlan {
   trip: TripLink | null
   /** For "when I go to …": the next trip there, if one is already planned. */
   upcomingTrip: { id: string; placeLabel: string; startsOn: string; endsOn: string } | null
+  /** Several wishes from one line, saved together: "Jaipur: a, b". */
+  wishes: string[] | null
   /** Plain-words account of every assumption made, shown before and after saving. */
   assumptions: string[]
   /** Why the app could not tell, when it could not. */
@@ -478,6 +459,17 @@ async function enrich(userId: string, orgId: string, raw: string, plan: QuickPla
     }
   }
   return next
+}
+
+/** "2 – 4 Nov", "30 Oct – 2 Nov", "2 Nov": dates as a person writes them. */
+function tripSpan(from: string, to: string): string {
+  const day = (s: string) => new Date(`${s}T00:00:00`)
+  const a = day(from)
+  const b = day(to)
+  const month = (d: Date) => d.toLocaleDateString('en-IN', { month: 'short' })
+  if (from === to) return `${a.getDate()} ${month(a)}`
+  if (a.getMonth() === b.getMonth()) return `${a.getDate()} – ${b.getDate()} ${month(b)}`
+  return `${a.getDate()} ${month(a)} – ${b.getDate()} ${month(b)}`
 }
 
 function ymd(d: Date): string {
@@ -528,9 +520,35 @@ async function interpret(userId: string, orgId: string, raw: string): Promise<Qu
     links: { people: [], places: [], accounts: [] },
     trip: null,
     upcomingTrip: null,
+    wishes: null,
     assumptions,
     problem: null,
     summary: '',
+  }
+
+  // Several wishes in one line — "Jaipur: visit Hawa Mahal, buy lakh chudi",
+  // "wishlist: learn swimming, read Deep Work". Before the checklist is taken
+  // as a plan's list: these have no date, and each is a wish of its own.
+  const wishList = parseWishList(raw, await knownPlaces(userId))
+  if (wishList) {
+    const n = wishList.titles.length
+    const place = wishList.placeLabel
+    return {
+      ...base,
+      kind: 'intention',
+      title: wishList.titles[0]!,
+      placeLabel: place,
+      wishes: wishList.titles,
+      checklist: [],
+      assumptions: [
+        place
+          ? `No date: they wait until you plan a trip to ${place}, then go on it together.`
+          : 'No date and no place: add them to any plan from its details, whenever it suits.',
+      ],
+      summary: place
+        ? `${n} things saved for ${place}: ${wishList.titles.join(', ')}`
+        : `${n} things on your wishlist: ${wishList.titles.join(', ')}`,
+    }
   }
 
   // Order matters and mirrors the capture screen: a sentence about a place has
@@ -558,7 +576,7 @@ async function interpret(userId: string, orgId: string, raw: string): Promise<Qu
       startsOn: asTrip.startsOn,
       endsOn: asTrip.endsOn,
       notes: originalIfInformative(text, asTrip.placeLabel),
-      summary: `Trip to ${asTrip.placeLabel}, ${asTrip.startsOn} to ${asTrip.endsOn}`,
+      summary: `Trip to ${asTrip.placeLabel}, ${tripSpan(asTrip.startsOn, asTrip.endsOn)}`,
     }
   }
 

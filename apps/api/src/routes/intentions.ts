@@ -2,7 +2,10 @@ import type { FastifyInstance } from 'fastify'
 import { and, asc, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
+  attachWishesInput,
   createIntentionInput,
+  createWishesInput,
+  planWishesInput,
   scheduleIntentionInput,
   updateIntentionInput,
   type IntentionDTO,
@@ -13,6 +16,7 @@ import { scope } from '../auth.ts'
 import { scheduleFirstReminder } from '../services/reminders.ts'
 import { checkConflicts } from '../services/scheduling.ts'
 import { geocode, haversineKm } from '../services/travel.ts'
+import { attachWishes, planWishes } from '../services/wishes.ts'
 
 type Row = typeof schema.intentions.$inferSelect
 
@@ -30,6 +34,16 @@ function toDTO(row: Row): IntentionDTO {
     commitmentId: row.commitmentId,
     createdAt: row.createdAt.toISOString(),
   }
+}
+
+/** Trips to a place, soonest first: whether a wish for it is already relevant. */
+async function tripsTo(userId: string, placeLabel: string | null) {
+  if (!placeLabel) return []
+  return db
+    .select({ id: schema.trips.id, startsOn: schema.trips.startsOn })
+    .from(schema.trips)
+    .where(and(eq(schema.trips.userId, userId), sql`lower(${schema.trips.placeLabel}) = lower(${placeLabel})`))
+    .orderBy(asc(schema.trips.startsOn))
 }
 
 export async function intentionRoutes(app: FastifyInstance) {
@@ -93,8 +107,9 @@ export async function intentionRoutes(app: FastifyInstance) {
 
     if (saved.length === 0) return { near: [] }
 
-    // One geocode per distinct place, not one per wish.
-    const places = [...new Set(saved.map((i) => i.placeLabel))]
+    // One geocode per distinct place, not one per wish. A wish with no place
+    // is never "near" anywhere.
+    const places = [...new Set(saved.map((i) => i.placeLabel).filter((p): p is string => Boolean(p)))]
     const resolved = new Map<string, { lat: number; lng: number } | null>()
     for (const place of places) {
       resolved.set(place, await geocode(place))
@@ -102,7 +117,7 @@ export async function intentionRoutes(app: FastifyInstance) {
 
     const near = saved
       .map((intention) => {
-        const at = resolved.get(intention.placeLabel)
+        const at = intention.placeLabel ? resolved.get(intention.placeLabel) : null
         if (!at) return null
         const km = haversineKm(lat, lng, at.lat, at.lng)
         return km <= radiusKm ? { intention: toDTO(intention), distanceKm: Math.round(km) } : null
@@ -123,7 +138,7 @@ export async function intentionRoutes(app: FastifyInstance) {
         .values({
           orgId,
           userId,
-          placeLabel: body.placeLabel.trim(),
+          placeLabel: body.placeLabel?.trim() || null,
           placeId: body.placeId ?? null,
           title: body.title.trim(),
           notes: body.notes ?? null,
@@ -135,20 +150,53 @@ export async function intentionRoutes(app: FastifyInstance) {
       'intention',
     )
 
-    // Tell the caller whether this is already relevant — there may be a trip
-    // to that place on the books already.
-    const trips = await db
-      .select({ id: schema.trips.id, startsOn: schema.trips.startsOn })
-      .from(schema.trips)
-      .where(
-        and(
-          eq(schema.trips.userId, userId),
-          sql`lower(${schema.trips.placeLabel}) = lower(${created.placeLabel})`,
-        ),
-      )
-      .orderBy(asc(schema.trips.startsOn))
+    return reply.code(201).send({
+      intention: toDTO(created),
+      matchingTrips: await tripsTo(userId, created.placeLabel),
+    })
+  })
 
-    return reply.code(201).send({ intention: toDTO(created), matchingTrips: trips })
+  /** Several at once: "Jaipur: visit Hawa Mahal, buy lakh chudi" is two wishes. */
+  app.post('/intentions/batch', async (req, reply) => {
+    const { orgId, sub: userId } = scope(req)
+    const body = createWishesInput.parse(req.body)
+    const placeLabel = body.placeLabel?.trim() || null
+    const rows = await db
+      .insert(schema.intentions)
+      .values(
+        body.titles.map((title) => ({
+          orgId,
+          userId,
+          placeLabel,
+          title,
+          preferredWindow: body.preferredWindow ?? null,
+        })),
+      )
+      .returning()
+    return reply.code(201).send({ created: rows.map(toDTO), matchingTrips: await tripsTo(userId, placeLabel) })
+  })
+
+  /** Wishes onto a plan that exists: they become things to do on its list. */
+  app.post('/commitments/:id/attach-wishes', async (req, reply) => {
+    const { orgId, sub: userId } = scope(req)
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params)
+    const { intentionIds } = attachWishesInput.parse(req.body)
+    const result = await attachWishes(orgId, userId, id, intentionIds)
+    return result ?? reply.code(404).send({ error: 'not_found' })
+  })
+
+  /** Wishes for a trip, all together: one plan on one day, with a list. */
+  app.post('/trips/:id/plan-wishes', async (req, reply) => {
+    const { orgId, sub: userId } = scope(req)
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params)
+    const body = planWishesInput.parse(req.body)
+    const result = await planWishes(orgId, userId, {
+      ids: body.intentionIds,
+      dueAt: new Date(body.dueAt),
+      tripId: id,
+      title: body.title,
+    })
+    return result ? reply.code(201).send(result) : reply.code(404).send({ error: 'not_found' })
   })
 
   app.patch('/intentions/:id', async (req, reply) => {
@@ -159,7 +207,7 @@ export async function intentionRoutes(app: FastifyInstance) {
     const result = await db
       .update(schema.intentions)
       .set({
-        ...(body.placeLabel !== undefined ? { placeLabel: body.placeLabel.trim() } : {}),
+        ...(body.placeLabel !== undefined ? { placeLabel: body.placeLabel?.trim() || null } : {}),
         ...(body.title !== undefined ? { title: body.title.trim() } : {}),
         ...(body.notes !== undefined ? { notes: body.notes } : {}),
         ...(body.preferredWindow !== undefined

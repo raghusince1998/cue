@@ -242,6 +242,24 @@ export function SavedForTrip({
   const [onDay, setOnDay] = useState(days[0]!)
   const [done, setDone] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
+  const left = waiting.filter((w) => !done[w.id])
+
+  /** Everything still waiting, as one plan with a list: one afternoon, not a reminder each. */
+  async function addAll(hour: number, label: string) {
+    setError(null)
+    try {
+      const [y, m, d] = onDay.split('-').map(Number)
+      await api(`/trips/${trip.id}/plan-wishes`, {
+        method: 'POST',
+        body: { intentionIds: left.map((w) => w.id), dueAt: new Date(y!, m! - 1, d!, hour, 0).toISOString() },
+      })
+      const when = `${day(onDay)}, ${label.toLowerCase()}, together`
+      setDone((x) => ({ ...x, ...Object.fromEntries(left.map((w) => [w.id, when])) }))
+      announceChange()
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
 
   async function add(id: string, hour: number, label: string) {
     setError(null)
@@ -286,6 +304,21 @@ export function SavedForTrip({
           )}
         </div>
       ))}
+      {left.length > 1 && (
+        <div className="your-day-line">
+          <span>
+            <strong>All {left.length} together</strong>
+            <span className="muted small"> · one plan with a list</span>
+          </span>
+          <span className="row">
+            {WINDOWS.map((t) => (
+              <button key={t.key} className="ghost tiny-btn" onClick={() => void addAll(t.hour, t.label)}>
+                {t.label}
+              </button>
+            ))}
+          </span>
+        </div>
+      )}
       {error && <p className="error small">{error}</p>}
     </div>
   )

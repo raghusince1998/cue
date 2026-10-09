@@ -4475,3 +4475,46 @@ a.link-btn:hover {
   background: var(--good-soft);
   color: var(--good);
 }
+
+/* ---- Things to do on a plan, and the wishlist that feeds it -------- */
+
+.details-todo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.details-todo-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wish-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--accent);
+  border-radius: 12px;
+}
+
+.wish-picker ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.saved-form textarea {
+  font-family: inherit;
+  resize: vertical;
+}
+
+.together {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}

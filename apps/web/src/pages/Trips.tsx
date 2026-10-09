@@ -177,8 +177,8 @@ function NewTrip({
 }
 
 /**
- * Want to visit: what to do somewhere, written down long before any trip
- * there exists.
+ * The wishlist: what you want to do, somewhere or any time, written down long
+ * before there is a trip or a plan to do it on.
  *
  * Kept deliberately dateless: "when I'm in Pune, visit Apollo Clinic" must not
  * become a reminder for tomorrow. It waits until a Pune trip appears — and
@@ -196,7 +196,7 @@ function Wishlist({
 }) {
   const [items, setItems] = useState<IntentionDTO[]>([])
   const [placeLabel, setPlaceLabel] = useState('')
-  const [title, setTitle] = useState('')
+  const [what, setWhat] = useState('')
   const [window, setWindow] = useState<TimeWindow | null>(null)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
@@ -209,23 +209,30 @@ function Wishlist({
     void load()
   }, [load])
 
+  // Several at once: one per line, or separated by commas.
+  const titles = what
+    .split(/\n|,|;/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+  const place = placeLabel.trim()
+
   async function add() {
+    if (titles.length === 0) return
     setBusy(true)
     setNote(null)
     try {
-      const r = await api<{ matchingTrips: { startsOn: string }[] }>('/intentions', {
+      const r = await api<{ matchingTrips: { startsOn: string }[] }>('/intentions/batch', {
         method: 'POST',
-        body: {
-          placeLabel: placeLabel.trim(),
-          title: title.trim(),
-          preferredWindow: window,
-        },
+        body: { placeLabel: place || null, titles, preferredWindow: window },
       })
-      setTitle('')
+      const n = titles.length === 1 ? 'Saved' : `${titles.length} saved`
+      setWhat('')
       setNote(
-        r.matchingTrips.length > 0
-          ? `Saved — and you already have a trip to ${placeLabel.trim()} on ${r.matchingTrips[0]!.startsOn}.`
-          : `Saved. It will surface when you plan a trip to ${placeLabel.trim()}.`,
+        !place
+          ? `${n} for any time. Add them to a plan from its details when it suits.`
+          : r.matchingTrips.length > 0
+            ? `${n}, and you already have a trip to ${place} on ${r.matchingTrips[0]!.startsOn}.`
+            : `${n}. They will show up when you plan a trip to ${place}.`,
       )
       await load()
       onChanged()
@@ -240,114 +247,121 @@ function Wishlist({
     onChanged()
   }
 
+  // By place, with the ones for any time last.
   const byPlace = new Map<string, IntentionDTO[]>()
   for (const item of items) {
-    const key = item.placeLabel
+    const key = item.placeLabel ?? ''
     byPlace.set(key, [...(byPlace.get(key) ?? []), item])
   }
+  const groups = [...byPlace.entries()].sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)))
+  const places = groups.filter(([p]) => p !== '').length
 
-  const tripTo = (place: string) =>
-    upcoming.find((t) => t.placeLabel.trim().toLowerCase() === place.trim().toLowerCase()) ?? null
+  const tripTo = (p: string) =>
+    upcoming.find((t) => t.placeLabel.trim().toLowerCase() === p.trim().toLowerCase()) ?? null
 
   return (
     <section className="card saved-for-trip">
       <div className="saved-intro">
         <div className="wish-head">
-          <h2 className="section-title">Want to visit</h2>
+          <h2 className="section-title">Wishlist</h2>
           {items.length > 0 && (
             <span className="page-count">
-              {items.length} in {byPlace.size} {byPlace.size === 1 ? 'place' : 'places'}
+              {items.length} {items.length === 1 ? 'wish' : 'wishes'}
+              {places > 0 ? ` · ${places} ${places === 1 ? 'place' : 'places'}` : ''}
             </span>
           )}
         </div>
         <p className="muted small">
-          No dates: each waits until you plan a trip to that place, then shows up on it.
+          What you want to do, somewhere or any time. Wishes for a place wait for a trip there and
+          go on it together; the rest wait for a plan to add them to.
         </p>
       </div>
 
       <div className="saved-form">
-      <div className="row">
-        <input
-          className="grow"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Visit Apollo Clinic"
-          aria-label="What"
+        <textarea
+          value={what}
+          onChange={(e) => setWhat(e.target.value)}
+          rows={3}
+          placeholder={'Visit Hawa Mahal\nBuy lakh chudi'}
+          aria-label="What do you want to do?"
         />
         <input
-          className="grow"
           value={placeLabel}
           onChange={(e) => setPlaceLabel(e.target.value)}
-          placeholder="Pune"
+          placeholder="Where? (optional) e.g. Jaipur"
           aria-label="Where"
           list="wish-places"
         />
         <datalist id="wish-places">
-          {[...byPlace.keys()].map((p) => (
-            <option key={p} value={p} />
-          ))}
+          {groups
+            .filter(([p]) => p !== '')
+            .map(([p]) => (
+              <option key={p} value={p} />
+            ))}
         </datalist>
-      </div>
-      <div className="chips">
-        {TIME_WINDOWS.map((w) => (
-          <button
-            key={w}
-            className={`chip${window === w ? ' selected' : ''}`}
-            onClick={() => setWindow(window === w ? null : w)}
-          >
-            {WINDOW_LABELS[w]}
-          </button>
-        ))}
-      </div>
-      <button
-        className="primary small-btn fit-btn"
-        disabled={busy || !title.trim() || !placeLabel.trim()}
-        onClick={add}
-      >
-        Save it for there
-      </button>
-      {note && <p className="muted small">{note}</p>}
+        <p className="muted small">One per line, or separate them with commas.</p>
+        <div className="chips">
+          {TIME_WINDOWS.map((w) => (
+            <button
+              key={w}
+              className={`chip${window === w ? ' selected' : ''}`}
+              onClick={() => setWindow(window === w ? null : w)}
+            >
+              {WINDOW_LABELS[w]}
+            </button>
+          ))}
+        </div>
+        <button className="primary small-btn fit-btn" disabled={busy || titles.length === 0} onClick={add}>
+          {titles.length > 1
+            ? `Save ${titles.length} ${place ? `for ${place}` : 'for any time'}`
+            : place
+              ? `Save it for ${place}`
+              : 'Save it'}
+        </button>
+        {note && <p className="muted small">{note}</p>}
       </div>
 
       <div className="saved-list">
-      {byPlace.size === 0 && (
-        <p className="muted small">
-          Nothing yet. Add what you want to do somewhere, or type &ldquo;when I go to Pune remind
-          me to visit Apollo Clinic&rdquo; in the box on Today.
-        </p>
-      )}
-      {[...byPlace.entries()].map(([place, list]) => {
-        const trip = tripTo(place)
-        return (
-        <div key={place} className="wish-place">
-          <div className="wish-place-head">
-            <span className="label-text">
-              {place} · {list.length}
-            </span>
-            {trip ? (
-              <span className="tag is-live">Trip {spanLabel(trip.startsOn, trip.endsOn)}</span>
-            ) : (
-              <button className="link small" onClick={() => onPlan(place)}>
-                Plan a trip &rarr;
-              </button>
-            )}
-          </div>
-          <ul className="plain">
-            {list.map((item) => (
-              <li key={item.id} className="commitment-head">
-                <span className="muted small">
-                  {item.title}
-                  {item.preferredWindow ? ` · ${WINDOW_LABELS[item.preferredWindow]}` : ''}
+        {groups.length === 0 && (
+          <p className="muted small">
+            Nothing yet. Add a few above, or type &ldquo;Jaipur: visit Hawa Mahal, buy lakh
+            chudi&rdquo; in the box on Today.
+          </p>
+        )}
+        {groups.map(([p, list]) => {
+          const trip = p ? tripTo(p) : null
+          return (
+            <div key={p || 'any time'} className="wish-place">
+              <div className="wish-place-head">
+                <span className="label-text">
+                  {p || 'Any time'} · {list.length}
                 </span>
-                <button className="link danger-link" onClick={() => void drop(item.id)}>
-                  Remove
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-        )
-      })}
+                {!p ? (
+                  <span className="muted small">Add to any plan from its details</span>
+                ) : trip ? (
+                  <span className="tag is-live">Trip {spanLabel(trip.startsOn, trip.endsOn)}</span>
+                ) : (
+                  <button className="link small" onClick={() => onPlan(p)}>
+                    Plan a trip &rarr;
+                  </button>
+                )}
+              </div>
+              <ul className="plain">
+                {list.map((item) => (
+                  <li key={item.id} className="commitment-head">
+                    <span className="muted small">
+                      {item.title}
+                      {item.preferredWindow ? ` · ${WINDOW_LABELS[item.preferredWindow]}` : ''}
+                    </span>
+                    <button className="link danger-link" onClick={() => void drop(item.id)}>
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        })}
       </div>
     </section>
   )

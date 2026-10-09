@@ -204,7 +204,7 @@ export async function waitingFor(userId: string, placeLabel: string) {
 }
 
 /** Places this person has planned trips to or saved things for: cities, by their own say-so. */
-async function knownPlaces(userId: string): Promise<string[]> {
+export async function knownPlaces(userId: string): Promise<string[]> {
   const [trips, wishes] = await Promise.all([
     db.selectDistinct({ label: schema.trips.placeLabel }).from(schema.trips).where(eq(schema.trips.userId, userId)),
     db
@@ -212,7 +212,7 @@ async function knownPlaces(userId: string): Promise<string[]> {
       .from(schema.intentions)
       .where(and(eq(schema.intentions.userId, userId), isNotNull(schema.intentions.placeLabel))),
   ])
-  return [...trips, ...wishes].map((r) => r.label).filter(Boolean)
+  return [...trips, ...wishes].map((r) => r.label).filter((l): l is string => Boolean(l))
 }
 
 /** A plan in a city that is not home: which trip it belongs to, or would. */

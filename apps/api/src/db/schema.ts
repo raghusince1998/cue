@@ -472,7 +472,8 @@ export const intentions = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    placeLabel: text('place_label').notNull(),
+    /** Where it belongs; null for a wish that waits for any plan, not a trip. */
+    placeLabel: text('place_label'),
     placeId: uuid('place_id').references(() => places.id, { onDelete: 'set null' }),
     title: text('title').notNull(),
     notes: text('notes'),

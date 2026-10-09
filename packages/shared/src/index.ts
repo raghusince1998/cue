@@ -18,6 +18,7 @@ export { fillTemplate, STARTER_TEMPLATES, TEMPLATE_FIELDS, type TemplateValues }
 export { composeShared, type Shared } from './share.ts'
 export { CITIES, findCity, samePlace } from './cities.ts'
 export { reopenTime } from './reopen.ts'
+export { parseWishList, type WishList } from './wishes.ts'
 export {
   findMalformedTime,
   extractPlace,
@@ -311,8 +312,8 @@ export interface RecurrenceDTO {
 }
 
 export const createIntentionInput = z.object({
-  /** The context that makes it relevant — "Mathura", "Jaipur", "near home". */
-  placeLabel: z.string().min(1).max(200),
+  /** The context that makes it relevant — "Jaipur", "Pune". Null: any time, any plan. */
+  placeLabel: z.string().max(200).nullable().optional(),
   placeId: z.string().uuid().nullable().optional(),
   title: z.string().min(1).max(300),
   notes: z.string().max(4000).nullable().optional(),
@@ -321,6 +322,24 @@ export const createIntentionInput = z.object({
   priority: z.enum(PRIORITIES).default('nice_to_have'),
 })
 export type CreateIntentionInput = z.infer<typeof createIntentionInput>
+
+/** Several wishes at once: "Jaipur: visit Hawa Mahal, buy lakh chudi". */
+export const createWishesInput = z.object({
+  placeLabel: z.string().max(200).nullable().optional(),
+  titles: z.array(z.string().trim().min(1).max(300)).min(1).max(20),
+  preferredWindow: z.enum(TIME_WINDOWS).nullable().optional(),
+})
+
+/** Wishes put on a plan: as its checklist, or as one new plan of their own. */
+export const attachWishesInput = z.object({
+  intentionIds: z.array(z.string().uuid()).min(1).max(20),
+})
+
+export const planWishesInput = z.object({
+  intentionIds: z.array(z.string().uuid()).min(1).max(20),
+  dueAt: z.string().datetime(),
+  title: z.string().max(300).optional(),
+})
 
 export const updateIntentionInput = createIntentionInput.partial().extend({
   status: z.enum(INTENTION_STATUS).optional(),
@@ -338,7 +357,8 @@ export const scheduleIntentionInput = z.object({
 
 export interface IntentionDTO {
   id: string
-  placeLabel: string
+  /** Null for a wish with no place: it waits for a plan to attach it to. */
+  placeLabel: string | null
   placeId: string | null
   title: string
   notes: string | null

@@ -455,10 +455,18 @@ export async function buildSummary(userId: string, now = new Date()) {
       ),
     )
 
+  // "Waiting on a trip": wishes for a place. Ones for any time wait for a
+  // plan, not a trip, and are not counted here.
   const [waiting] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(schema.intentions)
-    .where(and(eq(schema.intentions.userId, userId), eq(schema.intentions.status, 'saved')))
+    .where(
+      and(
+        eq(schema.intentions.userId, userId),
+        eq(schema.intentions.status, 'saved'),
+        isNotNull(schema.intentions.placeLabel),
+      ),
+    )
 
   return {
     /** Which day the shape describes — today until it is over, then tomorrow. */

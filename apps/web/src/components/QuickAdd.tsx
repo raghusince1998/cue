@@ -54,6 +54,8 @@ interface Plan {
 
 interface Saved extends Plan {
   id: string
+  /** Several wishes saved from one line: undo takes all of them. */
+  ids?: string[]
   savedTrip?: { id: string; placeLabel: string; startsOn: string; endsOn: string; created?: boolean } | null
   waiting?: { id: string; title: string }[]
   scheduledOnTrip?: UpcomingTrip | null
@@ -197,9 +199,11 @@ export function QuickAdd({
     if (!saved) return
     setBusy(true)
     try {
-      // A trip made only for this goes with it.
+      // A trip made only for this goes with it; several wishes go together.
       const alsoTrip = saved.savedTrip?.created ? `?alsoTrip=${saved.savedTrip.id}` : ''
-      await api(`/quick/${saved.kind}/${saved.id}${alsoTrip}`, { method: 'DELETE' })
+      for (const id of saved.ids ?? [saved.id]) {
+        await api(`/quick/${saved.kind}/${id}${alsoTrip}`, { method: 'DELETE' })
+      }
       setText(saved.title)
       setSaved(null)
       onSaved()

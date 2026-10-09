@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  DEFAULT_WINDOW_HOURS,
   STRICTNESS_LABELS,
   TIME_WINDOWS,
   WINDOW_LABELS,
@@ -60,6 +61,27 @@ export function TripDetail({
   useEffect(() => {
     void load()
   }, [load])
+
+  /** Every wish for this place, together: one plan on one day, with a list. */
+  async function planAll() {
+    if (!data) return
+    setBusy(true)
+    setError(null)
+    try {
+      const day = dayOfTrip(data.trip, dayOffset)
+      day.setHours(DEFAULT_WINDOW_HOURS[window].from, 0, 0, 0)
+      await api(`/trips/${tripId}/plan-wishes`, {
+        method: 'POST',
+        body: { intentionIds: data.waiting.map((w) => w.id), dueAt: day.toISOString() },
+      })
+      await load()
+      onChanged()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function schedule(intention: IntentionDTO) {
     if (!data) return
@@ -207,6 +229,35 @@ export function TripDetail({
               </li>
             ))}
           </ul>
+
+          {/* Visiting Hawa Mahal and buying lakh chudi are one afternoon in
+              Jaipur, not two reminders. */}
+          {waiting.length > 1 && scheduling === null && (
+            <div className="stack tight together">
+              <span className="label-text">Or all together, as one plan with a list</span>
+              <div className="chips">
+                {Array.from({ length: dayCount }, (_, i) => (
+                  <button
+                    key={i}
+                    className={`chip${dayOffset === i ? ' selected' : ''}`}
+                    onClick={() => setDayOffset(i)}
+                  >
+                    {dayOfTrip(trip, i).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </button>
+                ))}
+              </div>
+              <div className="chips">
+                {TIME_WINDOWS.map((t) => (
+                  <button key={t} className={`chip${window === t ? ' selected' : ''}`} onClick={() => setWindow(t)}>
+                    {WINDOW_LABELS[t]}
+                  </button>
+                ))}
+              </div>
+              <button className="primary small-btn fit-btn" disabled={busy} onClick={() => void planAll()}>
+                {busy ? 'Adding…' : `Add all ${waiting.length} as one plan`}
+              </button>
+            </div>
+          )}
         </section>
       )}
 
