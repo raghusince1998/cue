@@ -4403,9 +4403,66 @@ a.link-btn:hover {
   margin: 0;
 }
 
-.saved-for-trip {
+.trip-wishes-now {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-top: 8px;
+}
+
+/* ---- Trips: the journeys, with Want to visit beside them ----------- */
+
+.trips-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.wish-head,
+.wish-place-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wish-place + .wish-place {
+  margin-top: 10px;
+}
+
+@media (min-width: 1000px) {
+  /* Roughly sixty-forty: the trips take the room, the wishes sit beside
+     them, and stay in view while the list of trips scrolls. */
+  .trips-layout {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    column-gap: 28px;
+    align-items: start;
+  }
+
+  .trips-aside {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+
+  /* In a column of its own the card stacks: heading, form, list. */
+  .trips-aside .saved-for-trip {
+    display: flex;
+    flex-direction: column;
+    /* The two-column version starts its items; stacked, they fill the panel. */
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .trips-aside .saved-list {
+    padding: 14px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Two trips a row still fit in sixty per cent; one does below that. */
+  .trips-main .tiles.two-up {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
 }

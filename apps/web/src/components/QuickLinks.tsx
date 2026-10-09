@@ -259,7 +259,7 @@ export function SavedForTrip({
   }
 
   return (
-    <div className="saved-for-trip">
+    <div className="trip-wishes-now">
       <span className="label-text">Saved for {trip.placeLabel}: add to this trip?</span>
       {days.length > 1 && (
         <div className="chips">

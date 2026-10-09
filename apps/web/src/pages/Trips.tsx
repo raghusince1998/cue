@@ -25,10 +25,23 @@ function whenLabel(trip: TripDTO): string {
   return ended ? `finished · ${length}` : `you are there now · ${length}`
 }
 
-function NewTrip({ onCreated }: { onCreated: () => void }) {
+function NewTrip({
+  onCreated,
+  prefill,
+}: {
+  onCreated: () => void
+  /** "Plan a trip" on a place in Want to visit: the form opens with it filled in. */
+  prefill: { place: string; key: number } | null
+}) {
   const today = new Date()
   const [open, setOpen] = useState(false)
   const [placeLabel, setPlaceLabel] = useState('')
+
+  useEffect(() => {
+    if (!prefill) return
+    setPlaceLabel(prefill.place)
+    setOpen(true)
+  }, [prefill])
   const [startsOn, setStartsOn] = useState(toDateInputValue(today))
   const [endsOn, setEndsOn] = useState(toDateInputValue(today))
   const [strictness, setStrictness] = useState<TripStrictness>('flexible')
@@ -110,7 +123,7 @@ function NewTrip({ onCreated }: { onCreated: () => void }) {
         <input
           value={placeLabel}
           onChange={(e) => setPlaceLabel(e.target.value)}
-          placeholder="Mathura"
+          placeholder="Pune"
           autoFocus
         />
       </label>
@@ -164,12 +177,23 @@ function NewTrip({ onCreated }: { onCreated: () => void }) {
 }
 
 /**
- * Where a wish gets written down, long before any trip exists.
+ * Want to visit: what to do somewhere, written down long before any trip
+ * there exists.
  *
- * Kept deliberately dateless: "when I go to Mathura, buy peda" must not become
- * a reminder for tomorrow. It simply waits until a Mathura trip appears.
+ * Kept deliberately dateless: "when I'm in Pune, visit Apollo Clinic" must not
+ * become a reminder for tomorrow. It waits until a Pune trip appears — and
+ * each place says whether one is coming, or offers to plan it.
  */
-function Wishlist({ onChanged }: { onChanged: () => void }) {
+function Wishlist({
+  onChanged,
+  upcoming,
+  onPlan,
+}: {
+  onChanged: () => void
+  /** Trips still to come, to say which places already have one. */
+  upcoming: TripDTO[]
+  onPlan: (place: string) => void
+}) {
   const [items, setItems] = useState<IntentionDTO[]>([])
   const [placeLabel, setPlaceLabel] = useState('')
   const [title, setTitle] = useState('')
@@ -222,12 +246,22 @@ function Wishlist({ onChanged }: { onChanged: () => void }) {
     byPlace.set(key, [...(byPlace.get(key) ?? []), item])
   }
 
+  const tripTo = (place: string) =>
+    upcoming.find((t) => t.placeLabel.trim().toLowerCase() === place.trim().toLowerCase()) ?? null
+
   return (
     <section className="card saved-for-trip">
       <div className="saved-intro">
-        <h2 className="section-title">Saved for when you go</h2>
+        <div className="wish-head">
+          <h2 className="section-title">Want to visit</h2>
+          {items.length > 0 && (
+            <span className="page-count">
+              {items.length} in {byPlace.size} {byPlace.size === 1 ? 'place' : 'places'}
+            </span>
+          )}
+        </div>
         <p className="muted small">
-          Things with no date — they wait until a trip to that place exists.
+          No dates: each waits until you plan a trip to that place, then shows up on it.
         </p>
       </div>
 
@@ -237,14 +271,22 @@ function Wishlist({ onChanged }: { onChanged: () => void }) {
           className="grow"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Try the famous peda"
+          placeholder="Visit Apollo Clinic"
+          aria-label="What"
         />
         <input
           className="grow"
           value={placeLabel}
           onChange={(e) => setPlaceLabel(e.target.value)}
-          placeholder="Mathura"
+          placeholder="Pune"
+          aria-label="Where"
+          list="wish-places"
         />
+        <datalist id="wish-places">
+          {[...byPlace.keys()].map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
       </div>
       <div className="chips">
         {TIME_WINDOWS.map((w) => (
@@ -268,9 +310,28 @@ function Wishlist({ onChanged }: { onChanged: () => void }) {
       </div>
 
       <div className="saved-list">
-      {[...byPlace.entries()].map(([place, list]) => (
-        <div key={place}>
-          <span className="label-text">{place}</span>
+      {byPlace.size === 0 && (
+        <p className="muted small">
+          Nothing yet. Add what you want to do somewhere, or type &ldquo;when I go to Pune remind
+          me to visit Apollo Clinic&rdquo; in the box on Today.
+        </p>
+      )}
+      {[...byPlace.entries()].map(([place, list]) => {
+        const trip = tripTo(place)
+        return (
+        <div key={place} className="wish-place">
+          <div className="wish-place-head">
+            <span className="label-text">
+              {place} · {list.length}
+            </span>
+            {trip ? (
+              <span className="tag is-live">Trip {spanLabel(trip.startsOn, trip.endsOn)}</span>
+            ) : (
+              <button className="link small" onClick={() => onPlan(place)}>
+                Plan a trip &rarr;
+              </button>
+            )}
+          </div>
           <ul className="plain">
             {list.map((item) => (
               <li key={item.id} className="commitment-head">
@@ -285,7 +346,8 @@ function Wishlist({ onChanged }: { onChanged: () => void }) {
             ))}
           </ul>
         </div>
-      ))}
+        )
+      })}
       </div>
     </section>
   )
@@ -295,6 +357,8 @@ export default function Trips() {
   const [trips, setTrips] = useState<TripDTO[]>([])
   const [loading, setLoading] = useState(true)
   const [openId, setOpenId] = useState<string | null>(null)
+  /** "Plan a trip" from Want to visit: the form, opened for that place. */
+  const [prefill, setPrefill] = useState<{ place: string; key: number } | null>(null)
 
   const load = useCallback(async () => {
     setTrips(await api<TripDTO[]>('/trips'))
@@ -329,7 +393,10 @@ export default function Trips() {
         </span>
       </div>
 
-      <NewTrip onCreated={load} />
+      {/* Trips on the left; what you want to do in places, beside them. */}
+      <div className="trips-layout">
+      <div className="trips-main stack">
+      <NewTrip onCreated={load} prefill={prefill} />
 
       {trips.length === 0 && (
         <div className="blank">
@@ -338,9 +405,9 @@ export default function Trips() {
           </span>
           <h3>No journeys planned</h3>
           <p>
-            Plan one and everything you have saved for that place surfaces on its own — the peda
-            you meant to buy, the uncle you meant to visit. Say &ldquo;going to Agra 2 to 4
-            Oct&rdquo; when adding, or use the form above.
+            Plan one and everything you want to do there surfaces on its own: the clinic you
+            meant to visit, the client you meant to meet. Say &ldquo;going to Pune 12 to 14
+            Oct&rdquo; in the box on Today, or use Plan a trip.
           </p>
         </div>
       )}
@@ -417,7 +484,19 @@ export default function Trips() {
         </section>
       )}
 
-      <Wishlist onChanged={load} />
+      </div>
+
+      <aside className="trips-aside">
+        <Wishlist
+          onChanged={load}
+          upcoming={upcoming}
+          onPlan={(place) => {
+            setPrefill({ place, key: Date.now() })
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+        />
+      </aside>
+      </div>
 
       {openId && (
         <Modal title="Trip" onClose={() => setOpenId(null)}>
