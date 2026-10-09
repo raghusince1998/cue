@@ -37,6 +37,13 @@ test('tomorrow with explicit time', () => {
   assert.equal(titleFrom('call client tomorrow 4pm', r), 'call client')
 })
 
+test('a weekday that is today, at an hour already gone, is next week', () => {
+  // NOW is Wednesday 19 August 2026, 2:30 pm.
+  assert.equal(iso(parse('client call wednesday 11am').date), '2026-08-26 11:00')
+  assert.equal(iso(parse('client call wednesday 4pm').date), '2026-08-19 16:00', 'still to come today')
+  assert.equal(iso(parse('client call friday 11am').date), '2026-08-21 11:00')
+})
+
 test('what led into the date goes with it: no title ending in "by"', () => {
   const input = 'Please send the revised quotation by friday 4pm'
   const r = parse(input)

@@ -4363,3 +4363,49 @@ a.link-btn:hover {
   margin: 6px 0 0;
   white-space: pre-wrap;
 }
+
+/* ---- What a typed plan already knows about ------------------------ */
+
+.quick-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.quick-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.quick-link.checkbox,
+.quick-link .checkbox {
+  justify-content: flex-start;
+}
+
+.quick-link-mark {
+  margin-right: 6px;
+}
+
+.quick-link-choices {
+  align-items: center;
+}
+
+.quick-link-note {
+  margin: 0;
+}
+
+.saved-for-trip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}

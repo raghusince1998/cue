@@ -2,6 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
 import { DictateButton } from './DictateButton.tsx'
 import { announceChange } from '../lib/changes.ts'
+import {
+  NO_CHOICES,
+  QuickLinks,
+  SavedForTrip,
+  range,
+  type LinkChoices,
+  type Links,
+  type TripLink,
+  type UpcomingTrip,
+} from './QuickLinks.tsx'
 
 /**
  * Type it, press Enter, it is planned.
@@ -35,10 +45,18 @@ interface Plan {
   personName: string | null
   people: Person[]
   durationMinutes: number
+  /** Who the preview attached: only ever a certain match. */
+  contactId: string | null
+  links?: Links
+  trip?: TripLink | null
+  upcomingTrip?: UpcomingTrip | null
 }
 
 interface Saved extends Plan {
   id: string
+  savedTrip?: { id: string; placeLabel: string; startsOn: string; endsOn: string; created?: boolean } | null
+  waiting?: { id: string; title: string }[]
+  scheduledOnTrip?: UpcomingTrip | null
 }
 
 interface Frequent {
@@ -90,6 +108,10 @@ export function QuickAdd({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [clash, setClash] = useState<{ titles: string[]; suggestions: string[] } | null>(null)
+  /** What was decided about the people, places and trip the preview offered. */
+  const [choices, setChoices] = useState<LinkChoices>(NO_CHOICES)
+  /** Bumped to read the sentence again, e.g. after "Pune is where I live". */
+  const [reread, setReread] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -112,7 +134,12 @@ export function QuickAdd({
         .catch(() => setPlan(null))
     }, 250)
     return () => clearTimeout(handle)
-  }, [text])
+  }, [text, reread])
+
+  async function setHome(city: string) {
+    await api('/me/preferences', { method: 'PATCH', body: { homeCity: city } }).catch(() => undefined)
+    setReread((n) => n + 1)
+  }
 
   const save = useCallback(
     async (allowConflict = false) => {
@@ -122,13 +149,24 @@ export function QuickAdd({
       setError(null)
       setClash(null)
       try {
-        const result = await api<Saved>('/quick', {
-          method: 'POST',
-          body: { text: value, allowConflict },
-        })
+        // Only choices about what this preview actually offered: a person
+        // picked for an earlier sentence must not ride along to a new one.
+        const links = plan?.links
+        const body: Record<string, unknown> = { text: value, allowConflict }
+        if (choices.contactId === null || links?.people.some((p) => p.id === choices.contactId)) {
+          body.contactId = choices.contactId
+        }
+        if (choices.placeId && links?.places.some((p) => p.id === choices.placeId)) body.placeId = choices.placeId
+        if (choices.accountName && links?.accounts.some((a) => a.name === choices.accountName)) {
+          body.accountName = choices.accountName
+        }
+        if (plan?.trip && !plan.trip.existing) body.trip = choices.trip
+        if (plan?.upcomingTrip) body.onTrip = choices.onTrip
+        const result = await api<Saved>('/quick', { method: 'POST', body })
         setSaved(result)
         setText('')
         setPlan(null)
+        setChoices(NO_CHOICES)
         onSaved()
         announceChange()
         inputRef.current?.focus()
@@ -152,14 +190,16 @@ export function QuickAdd({
         setBusy(false)
       }
     },
-    [text, onSaved],
+    [text, onSaved, plan, choices],
   )
 
   async function undo() {
     if (!saved) return
     setBusy(true)
     try {
-      await api(`/quick/${saved.kind}/${saved.id}`, { method: 'DELETE' })
+      // A trip made only for this goes with it.
+      const alsoTrip = saved.savedTrip?.created ? `?alsoTrip=${saved.savedTrip.id}` : ''
+      await api(`/quick/${saved.kind}/${saved.id}${alsoTrip}`, { method: 'DELETE' })
       setText(saved.title)
       setSaved(null)
       onSaved()
@@ -321,6 +361,19 @@ export function QuickAdd({
         </div>
       )}
 
+      {/* What the sentence already knows about: ask before attaching. */}
+      {plan && !saved && !plan.problem && plan.links && (
+        <QuickLinks
+          contactId={plan.contactId ?? null}
+          links={plan.links}
+          trip={plan.trip ?? null}
+          upcomingTrip={plan.upcomingTrip ?? null}
+          choices={choices}
+          onChange={setChoices}
+          onHome={(city) => void setHome(city)}
+        />
+      )}
+
       {clash && (
         <div className="quick-plan is-problem">
           <div>
@@ -353,6 +406,20 @@ export function QuickAdd({
             {saved.assumptions.length > 0 && (
               <p className="muted small">{saved.assumptions.join(' ')}</p>
             )}
+            {saved.savedTrip && saved.kind === 'commitment' && (
+              <p className="muted small">
+                &#9992;{' '}
+                {saved.savedTrip.created
+                  ? `Trip to ${saved.savedTrip.placeLabel} added for ${range(saved.savedTrip.startsOn, saved.savedTrip.endsOn)}.`
+                  : `Part of your ${saved.savedTrip.placeLabel} trip, ${range(saved.savedTrip.startsOn, saved.savedTrip.endsOn)}.`}
+              </p>
+            )}
+            {saved.scheduledOnTrip && (
+              <p className="muted small">
+                &#9992; On your {saved.scheduledOnTrip.placeLabel} trip, the evening of{' '}
+                {range(saved.scheduledOnTrip.startsOn, saved.scheduledOnTrip.startsOn)}.
+              </p>
+            )}
           </div>
           <div className="row">
             <button className="ghost small-btn" onClick={() => void undo()} disabled={busy}>
@@ -369,6 +436,11 @@ export function QuickAdd({
             </button>
           </div>
         </div>
+      )}
+
+      {/* A trip just made or joined: what was saved for there, a tap each. */}
+      {saved?.savedTrip && (saved.waiting ?? []).length > 0 && (
+        <SavedForTrip key={saved.id} trip={saved.savedTrip} waiting={saved.waiting!} />
       )}
 
       {error && <p className="error small">{error}</p>}

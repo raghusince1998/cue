@@ -29,6 +29,17 @@ test('the sentence that started this', () => {
   assert.equal(r.title, 'Sofgtware application demo')
 })
 
+test('a place stops where the date starts, and keeps its own numbers', () => {
+  assert.equal(roles('client meeting in Pune 15 oct 11am')!.place, 'Pune')
+  assert.equal(roles('client meeting in Pune on friday')!.place, 'Pune')
+  assert.equal(roles('site visit at Sector 5 plant with the manager tomorrow')!.place, 'Sector 5 plant')
+})
+
+test('a call keeps who it is to, with what it is about', () => {
+  assert.equal(roles('call raghu monday 11am about stock')!.title, 'Call raghu about stock')
+  assert.equal(roles('call about the renewal')!.title, 'Renewal', 'nobody named: the subject is the name')
+})
+
 test('who, where and what are each pulled out separately', () => {
   const r = roles('meeting with Ramesh at Volkswagen Pune about the Q4 contract')
   assert.ok(r)

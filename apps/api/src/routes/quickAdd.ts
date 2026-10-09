@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   DEFAULT_DURATION_MINUTES,
@@ -37,6 +37,14 @@ import {
   rememberPerson,
   resolveAnchor,
 } from '../services/memory.ts'
+import {
+  findLinks,
+  tripLinkFor,
+  upcomingTripTo,
+  waitingFor,
+  type Links,
+  type TripLink,
+} from '../services/captureLinks.ts'
 
 /**
  * One sentence in, one thing planned.
@@ -57,6 +65,19 @@ const quickInput = z.object({
   text: z.string().min(1).max(1000),
   /** Set when the user has seen a clash and chosen to book anyway. */
   allowConflict: z.boolean().optional(),
+  /**
+   * What the person decided about what the preview offered. A contact id
+   * attaches that person; null is "not them". Absent leaves the preview's own
+   * choice, which is only ever a certain match.
+   */
+  contactId: z.string().uuid().nullable().optional(),
+  placeId: z.string().uuid().nullable().optional(),
+  /** A clinic or company named in part: it becomes where the plan is. */
+  accountName: z.string().max(200).nullable().optional(),
+  /** A plan in another city: make it a trip there, or not. */
+  trip: z.enum(['add', 'skip']).optional(),
+  /** A "when I go to …" with a trip there already coming: put it on that trip. */
+  onTrip: z.boolean().optional(),
 })
 
 export type QuickKind =
@@ -88,13 +109,41 @@ export async function quickAddRoutes(app: FastifyInstance) {
    */
   app.post('/quick/preview', async (req) => {
     const { sub: userId, orgId } = scope(req)
-    return interpret(userId, orgId, quickInput.parse(req.body).text)
+    const { text } = quickInput.parse(req.body)
+    return enrich(userId, orgId, text, await interpret(userId, orgId, text))
   })
 
   app.post('/quick', async (req, reply) => {
     const { sub: userId, orgId } = scope(req)
-    const { text, allowConflict } = quickInput.parse(req.body)
-    const plan = await interpret(userId, orgId, text)
+    const body = quickInput.parse(req.body)
+    const { text, allowConflict } = body
+    const plan = await enrich(userId, orgId, text, await interpret(userId, orgId, text))
+
+    // What the person chose about what the preview offered.
+    if (body.contactId === null) {
+      plan.contactId = null
+      plan.personName = null
+    } else if (body.contactId) {
+      const [c] = await db
+        .select({ id: schema.contacts.id, name: schema.contacts.name })
+        .from(schema.contacts)
+        .where(and(eq(schema.contacts.id, body.contactId), eq(schema.contacts.orgId, orgId)))
+      if (c) {
+        plan.contactId = c.id
+        plan.personName = c.name
+      }
+    }
+    if (body.placeId === null) plan.placeId = null
+    else if (body.placeId) {
+      const [p] = await db
+        .select({ id: schema.places.id })
+        .from(schema.places)
+        .where(and(eq(schema.places.id, body.placeId), eq(schema.places.orgId, orgId)))
+      if (p) plan.placeId = p.id
+    }
+    if (body.accountName && plan.links.accounts.some((a) => a.name === body.accountName)) {
+      plan.placeLabel = body.accountName
+    }
 
     if (plan.kind === 'unclear') {
       return reply.code(422).send({ error: 'not_understood', ...plan })
@@ -126,6 +175,41 @@ export async function quickAddRoutes(app: FastifyInstance) {
           .returning(),
         'intention',
       )
+
+      // A trip there is already coming: it goes straight onto it, as
+      // something for one evening of it rather than a fixed slot.
+      const trip = body.onTrip ? plan.upcomingTrip : null
+      if (trip) {
+        const [y, m, d] = trip.startsOn.split('-').map(Number)
+        const dueAt = new Date(y!, m! - 1, d!, 18, 0)
+        await db.transaction(async (tx) => {
+          const created = takeFirst(
+            await tx
+              .insert(schema.commitments)
+              .values({
+                orgId,
+                userId,
+                title: plan.title,
+                kind: 'task',
+                notes: plan.notes ?? null,
+                dueAt,
+                durationMinutes: 60,
+                tripId: trip.id,
+                placeLabel: trip.placeLabel,
+                flexibility: 'flexible',
+                preferredWindow: 'evening',
+              })
+              .returning(),
+            'commitment',
+          )
+          await scheduleFirstReminder({ orgId, commitmentId: created.id, fireAt: dueAt }, tx)
+          await tx
+            .update(schema.intentions)
+            .set({ status: 'scheduled', commitmentId: created.id })
+            .where(eq(schema.intentions.id, row.id))
+        })
+        return reply.code(201).send({ ...plan, id: row.id, scheduledOnTrip: trip })
+      }
       return reply.code(201).send({ ...plan, id: row.id })
     }
 
@@ -144,7 +228,13 @@ export async function quickAddRoutes(app: FastifyInstance) {
           .returning(),
         'trip',
       )
-      return reply.code(201).send({ ...plan, id: row.id })
+      // Making a trip is when things saved for there become relevant.
+      return reply.code(201).send({
+        ...plan,
+        id: row.id,
+        savedTrip: { id: row.id, placeLabel: row.placeLabel, startsOn: row.startsOn, endsOn: row.endsOn },
+        waiting: await waitingFor(userId, row.placeLabel),
+      })
     }
 
     if (plan.kind === 'recurrence') {
@@ -202,7 +292,28 @@ export async function quickAddRoutes(app: FastifyInstance) {
       contactId = remembered.contactId
     }
 
+    // In another city: part of the trip already there, or a new one-day trip.
+    const tripLink = plan.trip
+    const makeTrip = tripLink && !tripLink.existing && body.trip === 'add'
+
     const row = await db.transaction(async (tx) => {
+      let tripId = tripLink?.existing?.id ?? null
+      if (makeTrip) {
+        const trip = takeFirst(
+          await tx
+            .insert(schema.trips)
+            .values({
+              orgId,
+              userId,
+              placeLabel: tripLink.placeLabel,
+              startsOn: tripLink.day,
+              endsOn: tripLink.day,
+            })
+            .returning(),
+          'trip',
+        )
+        tripId = trip.id
+      }
       const created = takeFirst(
         await tx
           .insert(schema.commitments)
@@ -217,6 +328,7 @@ export async function quickAddRoutes(app: FastifyInstance) {
             placeLabel: plan.placeLabel ?? null,
             placeId: plan.placeId ?? null,
             contactId: contactId ?? null,
+            tripId,
             flexibility: plan.flexibility,
             preferredWindow: plan.preferredWindow ?? null,
           })
@@ -238,7 +350,21 @@ export async function quickAddRoutes(app: FastifyInstance) {
       )
     }
 
-    return reply.code(201).send({ ...plan, id: row.id })
+    return reply.code(201).send({
+      ...plan,
+      id: row.id,
+      savedTrip:
+        tripLink && row.tripId
+          ? {
+              id: row.tripId,
+              placeLabel: tripLink.placeLabel,
+              startsOn: tripLink.existing?.startsOn ?? tripLink.day,
+              endsOn: tripLink.existing?.endsOn ?? tripLink.day,
+              created: Boolean(makeTrip),
+            }
+          : null,
+      waiting: tripLink && row.tripId ? tripLink.waiting : [],
+    })
   })
 
   /** Undo, for when the one-tap save was the wrong tap. */
@@ -269,6 +395,19 @@ export async function quickAddRoutes(app: FastifyInstance) {
       .returning({ id: table.id })
 
     if (removed.length === 0) return reply.code(404).send({ error: 'not_found' })
+
+    // A trip made only for this plan goes with it — unless something else
+    // has been put on it since.
+    const { alsoTrip } = z.object({ alsoTrip: z.string().uuid().optional() }).parse(req.query)
+    if (alsoTrip && kind === 'commitment') {
+      const [left] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.commitments)
+        .where(eq(schema.commitments.tripId, alsoTrip))
+      if ((left?.n ?? 0) === 0) {
+        await db.delete(schema.trips).where(and(eq(schema.trips.id, alsoTrip), eq(schema.trips.userId, userId)))
+      }
+    }
     return { ok: true }
   })
 }
@@ -298,11 +437,47 @@ export interface QuickPlan {
   rule: ReturnType<typeof parseRecurrence> extends null
     ? never
     : NonNullable<ReturnType<typeof parseRecurrence>>['rule'] | null
+  /** People, places and accounts the sentence seems to mean: attach or not. */
+  links: Links
+  /** In a city that is not home: the trip this belongs to, or would. */
+  trip: TripLink | null
+  /** For "when I go to …": the next trip there, if one is already planned. */
+  upcomingTrip: { id: string; placeLabel: string; startsOn: string; endsOn: string } | null
   /** Plain-words account of every assumption made, shown before and after saving. */
   assumptions: string[]
   /** Why the app could not tell, when it could not. */
   problem: string | null
   summary: string
+}
+
+/**
+ * What the sentence already knows about: people, places and accounts it seems
+ * to name, and — for a plan in another city — the trip it belongs to. A single
+ * certain person is attached; everything else is offered, never assumed.
+ */
+async function enrich(userId: string, orgId: string, raw: string, plan: QuickPlan): Promise<QuickPlan> {
+  if (plan.kind === 'intention' && plan.placeLabel) {
+    return { ...plan, upcomingTrip: await upcomingTripTo(userId, plan.placeLabel) }
+  }
+  if (plan.kind !== 'commitment' && plan.kind !== 'needsTime') return plan
+
+  const links = await findLinks(orgId, raw, { contactId: plan.contactId })
+  const certain = links.people.filter((p) => p.certain)
+  const next = { ...plan, links }
+  if (!next.contactId && certain.length === 1) {
+    next.contactId = certain[0]!.id
+    next.personName = certain[0]!.name
+  }
+
+  if (plan.kind === 'commitment' && plan.dueAt) {
+    const trip = await tripLinkFor(userId, raw, plan.placeLabel, new Date(plan.dueAt))
+    if (trip) {
+      next.trip = trip
+      // "client meeting pune friday" never said "in": where it is, it is.
+      if (!next.placeLabel) next.placeLabel = trip.placeLabel
+    }
+  }
+  return next
 }
 
 function ymd(d: Date): string {
@@ -350,6 +525,9 @@ async function interpret(userId: string, orgId: string, raw: string): Promise<Qu
     hour: null,
     minute: null,
     rule: null,
+    links: { people: [], places: [], accounts: [] },
+    trip: null,
+    upcomingTrip: null,
     assumptions,
     problem: null,
     summary: '',

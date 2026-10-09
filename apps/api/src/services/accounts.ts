@@ -84,10 +84,14 @@ export async function listAccounts(orgId: string, userId: string, now = new Date
     // A short name like "ABC" is too likely to turn up inside other words'
     // company; the place is only recognised in a title from four letters.
     const named = key.length >= 4 ? wordRe(key) : null
-    const mentions = (title: string) => (named?.test(title) ?? false) || ms.some((m) => m.inTitle(title))
+    // Named in the title, or where it is: "Demo" at "Mehta Physio Clinic".
+    const mentions = (r: { title: string; placeLabel: string | null }) =>
+      (named?.test(r.title) ?? false) ||
+      (r.placeLabel !== null && (named?.test(r.placeLabel) ?? false)) ||
+      ms.some((m) => m.inTitle(r.title))
 
     const meetings = rows.filter(
-      (r) => r.kind === 'meeting' && r.status !== 'cancelled' && (ids.has(r.contactId ?? '') || mentions(r.title)),
+      (r) => r.kind === 'meeting' && r.status !== 'cancelled' && (ids.has(r.contactId ?? '') || mentions(r)),
     )
     const meetingIds = new Set(meetings.map((r) => r.id))
     const past = meetings.filter((r) => r.dueAt < now).sort((a, b) => +b.dueAt - +a.dueAt)
@@ -105,7 +109,7 @@ export async function listAccounts(orgId: string, userId: string, now = new Date
           !r.waitingOn &&
           (ids.has(r.contactId ?? '') ||
             (r.fromCommitmentId !== null && meetingIds.has(r.fromCommitmentId)) ||
-            mentions(r.title)),
+            mentions(r)),
       )
       .sort((a, b) => +a.dueAt - +b.dueAt)
 

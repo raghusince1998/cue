@@ -104,12 +104,25 @@ export interface ExtractedRoles {
   evidence: RoleEvidence[]
 }
 
-/** Trims a captured phrase at the first word that belongs to another role. */
+const MONTH_OR_CLOCK = /^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december|am|pm|o'?clock)$/i
+
+/**
+ * Where a date begins: "15 oct", "11am", "friday". A bare number only counts
+ * when a month or a clock follows it, so "Sector 5" and "Phase 2" stay whole.
+ */
+function startsDate(words: string[], i: number): boolean {
+  const word = words[i]!
+  if (/^\d{1,2}$/.test(word)) return MONTH_OR_CLOCK.test(words[i + 1] ?? '')
+  return DATE_WORD.test(word)
+}
+
+/** Trims a captured phrase at the first word that belongs to another role, or to the date. */
 function clip(text: string): string {
   const words = text.trim().split(/\s+/)
   const out: string[] = []
-  for (const word of words) {
-    if (out.length > 0 && BOUNDARY.test(word)) break
+  for (let i = 0; i < words.length; i += 1) {
+    const word = words[i]!
+    if (out.length > 0 && (BOUNDARY.test(word) || startsDate(words, i))) break
     out.push(word)
     if (out.length >= 6) break
   }
@@ -118,6 +131,16 @@ function clip(text: string): string {
     .replace(/^(?:a|an|the|my|our|his|her|their)\s+/i, '')
     .replace(/[,.;:]+$/, '')
     .trim()
+}
+
+/**
+ * Where a clipped capture ends in the text it came from. clip() drops a
+ * leading "the", so counting its length from the marker would cut short:
+ * "with the manager tomorrow" lost "with the man" and left "ager" behind.
+ */
+function endOf(text: string, from: number, captured: string): number {
+  const at = text.indexOf(captured, from)
+  return at === -1 ? from + captured.length : at + captured.length
 }
 
 function titleCase(text: string): string {
@@ -199,7 +222,7 @@ export function extractRoles(input: string): ExtractedRoles | null {
       place = captured
       evidence.push({ field: 'place', from: `${m[0].trim()} ${captured}` })
       usedMarker = true
-      rest = `${rest.slice(0, m.index)} ${rest.slice(m.index + m[0].length + captured.length)}`.trim()
+      rest = `${rest.slice(0, m.index)} ${rest.slice(endOf(rest, m.index + m[0].length, captured))}`.trim()
     }
     break
   }
@@ -215,7 +238,7 @@ export function extractRoles(input: string): ExtractedRoles | null {
       person = captured
       evidence.push({ field: 'person', from: `${personMarker[0]} ${captured}` })
       usedMarker = true
-      rest = `${rest.slice(0, personMarker.index)} ${rest.slice(personMarker.index + personMarker[0].length + captured.length)}`.trim()
+      rest = `${rest.slice(0, personMarker.index)} ${rest.slice(endOf(rest, personMarker.index + personMarker[0].length, captured))}`.trim()
     }
   }
 
@@ -250,7 +273,7 @@ export function extractRoles(input: string): ExtractedRoles | null {
         usedMarker = true
         // Taken out of the remainder like every other role, or the leftover
         // title ends up being the place that was just extracted from it.
-        rest = `${rest.slice(0, marker.index)} ${rest.slice(marker.index + marker[0].length + captured.length + 1)}`.trim()
+        rest = `${rest.slice(0, marker.index)} ${rest.slice(endOf(rest, marker.index + marker[0].length, captured))}`.trim()
       }
     }
   }
@@ -277,8 +300,14 @@ export function extractRoles(input: string): ExtractedRoles | null {
     .replace(/^[\s,.;:-]+|[\s,.;:-]+$/g, '')
     .trim()
 
+  // A call is an action on someone: "call raghu monday about stock" is "Call
+  // raghu about stock", not "Stock". Meetings and appointments keep the
+  // subject as their name, as they always have.
+  const named = person ?? (leftover.split(/\s+/).filter((w) => w && !DATE_WORD.test(w)).join(' ') || null)
   const title = subject
-    ? titleCase(subject)
+    ? kind === 'call' && named
+      ? `Call ${named} about ${subject}`
+      : titleCase(subject)
     : person
       ? `${kind ? titleCase(kind) : 'Meeting'} with ${person}`
       : leftover.length >= 3

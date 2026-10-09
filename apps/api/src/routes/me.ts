@@ -35,6 +35,8 @@ const preferencesInput = z.object({
     message: 'That email address does not look right.',
   }),
   reportToPhone: optionalText(40),
+  /** Where they live: plans in this city are not trips. */
+  homeCity: optionalText(120),
 })
 
 const selection = {
@@ -53,6 +55,7 @@ const selection = {
   reportToName: schema.users.reportToName,
   reportToEmail: schema.users.reportToEmail,
   reportToPhone: schema.users.reportToPhone,
+  homeCity: schema.users.homeCity,
 }
 
 export async function meRoutes(app: FastifyInstance) {
@@ -101,6 +104,7 @@ export async function meRoutes(app: FastifyInstance) {
         ...(body.reportToName !== undefined ? { reportToName: body.reportToName } : {}),
         ...(body.reportToEmail !== undefined ? { reportToEmail: body.reportToEmail } : {}),
         ...(body.reportToPhone !== undefined ? { reportToPhone: body.reportToPhone } : {}),
+        ...(body.homeCity !== undefined ? { homeCity: body.homeCity } : {}),
       })
       .where(eq(schema.users.id, sub))
 

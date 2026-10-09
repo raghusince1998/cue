@@ -90,6 +90,8 @@ export const users = pgTable(
     morningBriefHour: integer('morning_brief_hour').notNull().default(8),
     /** Local date of the last brief, so a restart cannot double-send. */
     lastBriefOn: date('last_brief_on'),
+    /** Where they live: a plan in this city is not a trip. */
+    homeCity: text('home_city'),
     /** Weekly goals by metric: { calls: 40, visits: 10 }. Absent means not tracked. */
     weeklyTargets: jsonb('weekly_targets').$type<Record<string, number>>().notNull().default({}),
     /** An evening reminder to send the daily report. */

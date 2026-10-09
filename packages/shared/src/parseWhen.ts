@@ -333,6 +333,8 @@ interface DateFound {
   impliedHour?: number
   /** "tonight" and "this evening" name a window as well as a day. */
   impliedWindow?: ParsedWindow
+  /** A weekday name that came out as today: "friday" said on a Friday. */
+  weekdayIsToday?: boolean
 }
 
 function findDate(text: string, now: Date): DateFound | null {
@@ -506,9 +508,11 @@ function findDate(text: string, now: Date): DateFound | null {
   const weekday = new RegExp(`\\b(next|this|coming)?\\s*(${weekdayNames})\\b`, 'i').exec(text)
   if (weekday) {
     const forceNext = weekday[1]?.toLowerCase() === 'next'
+    const date = resolveWeekday(now, WEEKDAYS[weekday[2]!.toLowerCase()]!, forceNext)
     return {
-      date: resolveWeekday(now, WEEKDAYS[weekday[2]!.toLowerCase()]!, forceNext),
+      date,
       match: { start: weekday.index, end: weekday.index + weekday[0].length },
+      weekdayIsToday: date.getTime() === startOfDay(now).getTime(),
     }
   }
 
@@ -548,6 +552,9 @@ export function parseWhen(input: string, now: Date = new Date()): ParsedWhen | n
   if (dateFound && usableTime && timeFound) {
     date = new Date(dateFound.date)
     date.setHours(timeFound.hour, timeFound.minute, 0, 0)
+    // "friday 1pm" said at 2pm on a Friday is next Friday: a plan for an
+    // hour that has already gone is never what anyone means.
+    if (dateFound.weekdayIsToday && date <= now) date.setDate(date.getDate() + 7)
   } else if (dateFound) {
     date = new Date(dateFound.date)
     if (dateFound.impliedHour !== undefined) {
