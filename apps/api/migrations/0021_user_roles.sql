@@ -6,7 +6,18 @@
 -- is my evening", which is a question only the admin should be answering. In a
 -- production deployment that is somebody else's credential and somebody else's
 -- bill.
-create type user_role as enum ('owner', 'member');
+--
+-- Guarded, because a database can hold the type without a record of this
+-- file in _migrations: its tables dropped while the type stayed behind, or a
+-- schema rebuilt by hand. A bare `create type` then stops every deploy at
+-- this line, and nothing after it ever runs.
+do $$
+begin
+  create type user_role as enum ('owner', 'member');
+exception
+  when duplicate_object then null;
+end
+$$;
 
 alter table users add column if not exists role user_role not null default 'member';
 
