@@ -61,16 +61,33 @@ export function PersonSheet({
   const [busy, setBusy] = useState(false)
   const choices = useMemo(() => dueChoices(), [])
 
+  /** True when the person loaded but what is open with them could not. */
+  const [partial, setPartial] = useState(false)
+
   const load = useCallback(async () => {
     try {
-      const [c, ov] = await Promise.all([
-        api<Contact>(`/contacts/${contactId}`),
-        api<Overview>(`/people/${contactId}/overview`),
-      ])
-      setContact(c)
-      setO(ov)
+      setContact(await api<Contact>(`/contacts/${contactId}`))
     } catch (err) {
       setError((err as Error).message)
+      return
+    }
+    // The person still opens if this part fails — their number and Edit
+    // details matter more than the summary, and a half-deployed server or a
+    // dropped request should not lock anyone out of a contact.
+    try {
+      setO(await api<Overview>(`/people/${contactId}/overview`))
+      setPartial(false)
+    } catch {
+      setO({
+        waitingOnThem: [],
+        youOwe: [],
+        nextMeetings: [],
+        lastMeeting: null,
+        lastMeetingFollowUps: [],
+        meetingCount: 0,
+        firstMet: null,
+      })
+      setPartial(true)
     }
   }, [contactId])
 
@@ -146,6 +163,13 @@ export function PersonSheet({
         </div>
       </div>
 
+      {partial && (
+        <p className="muted small">
+          Could not load what is open with {first} just now. Their details are here; try again
+          in a moment for the rest.
+        </p>
+      )}
+
       {o.nextMeetings.length > 0 && (
         <section className="person-part">
           <span className="label-text">Next meeting</span>
@@ -161,6 +185,9 @@ export function PersonSheet({
         </section>
       )}
 
+      {/* Unknown is not "Nothing": hidden when it could not be loaded. */}
+      {!partial && (
+        <>
       <section className="person-part">
         <span className="label-text">Waiting on {first}</span>
         {o.waitingOnThem.length === 0 ? (
@@ -209,6 +236,8 @@ export function PersonSheet({
           ))
         )}
       </section>
+        </>
+      )}
 
       {o.lastMeeting && (
         <section className="person-part">
@@ -237,7 +266,7 @@ export function PersonSheet({
           {contact.visitCount ? ` · ${contact.visitCount} visit${contact.visitCount === 1 ? '' : 's'} logged` : ''}.
         </p>
       )}
-      {nothingOpen && !o.lastMeeting && (
+      {nothingOpen && !o.lastMeeting && !partial && (
         <p className="muted small">Nothing open with {first} yet. Add something below, or offer a time to meet.</p>
       )}
 
