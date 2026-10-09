@@ -640,6 +640,8 @@ export interface CommitmentDTO {
   escalationCount: number
   placeId: string | null
   placeName: string | null
+  /** Where, in words — "BKC, Mumbai". Typed, or a calendar event's location. */
+  placeLabel?: string | null
   contactId: string | null
   contactName: string | null
   /** Lets the reminder offer a Call button instead of just a nag. */

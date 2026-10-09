@@ -269,10 +269,10 @@ export function CommitmentSheet({
                 <dd>{PRIORITY_LABELS[c.priority]}</dd>
               </div>
             )}
-            {c.placeName && (
+            {(c.placeName || c.placeLabel) && (
               <div>
                 <dt>Where</dt>
-                <dd>{c.placeName}</dd>
+                <dd>{[c.placeName, c.placeLabel].filter(Boolean).join(' · ')}</dd>
               </div>
             )}
             {c.contactName && (

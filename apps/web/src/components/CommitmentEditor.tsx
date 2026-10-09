@@ -37,6 +37,9 @@ export function CommitmentEditor({
   const [durationMinutes, setDurationMinutes] = useState(15)
   const [status, setStatus] = useState<CommitmentStatus>('pending')
   const [placeId, setPlaceId] = useState<string | null>(null)
+  /** Where, in words. Sent only when changed, so coordinates that came with it stay. */
+  const [placeLabel, setPlaceLabel] = useState('')
+  const [savedLabel, setSavedLabel] = useState('')
   /** From a connected calendar, dated before Cue was reading it. */
   const [history, setHistory] = useState(false)
 
@@ -57,6 +60,8 @@ export function CommitmentEditor({
       setDurationMinutes(c.durationMinutes)
       setStatus(c.status)
       setPlaceId(c.placeId)
+      setPlaceLabel(c.placeLabel ?? '')
+      setSavedLabel(c.placeLabel ?? '')
       setHistory(Boolean(c.history))
       setPlaces(p)
       setLoaded(true)
@@ -119,6 +124,7 @@ export function CommitmentEditor({
           durationMinutes,
           status,
           placeId,
+          ...(placeLabel.trim() !== savedLabel.trim() ? { placeLabel: placeLabel.trim() || null } : {}),
           allowConflict,
         },
       })
@@ -205,16 +211,33 @@ export function CommitmentEditor({
       </div>
 
       <label>
-        Place
-        <select value={placeId ?? ''} onChange={(e) => setPlaceId(e.target.value || null)}>
-          <option value="">— none —</option>
-          {places.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        Where? (optional)
+        <input
+          value={placeLabel}
+          onChange={(e) => setPlaceLabel(e.target.value)}
+          placeholder="e.g. BKC, Mumbai"
+        />
       </label>
+      <p className="muted small">
+        A town, area or address. Cue uses it to warn you when two plans are too far apart to get
+        between in time, or clash with a trip.
+      </p>
+
+      {/* Saved places come from logging a visit somewhere with your location on.
+          Most people have none, and a list that only says "none" explains nothing. */}
+      {(places.length > 0 || placeId) && (
+        <label>
+          Saved place
+          <select value={placeId ?? ''} onChange={(e) => setPlaceId(e.target.value || null)}>
+            <option value="">— none —</option>
+            {places.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <span className="label-text">Status</span>
       <div className="chips">

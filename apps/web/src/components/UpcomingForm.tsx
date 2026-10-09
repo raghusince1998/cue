@@ -1077,11 +1077,11 @@ ${original}` : original))
         <h2 className="section-title">Anything else? (optional)</h2>
 
         <label>
-          Which town or city?
+          Where?
           <input
             value={placeLabel}
             onChange={(e) => setPlaceLabel(e.target.value)}
-            placeholder="Jaipur"
+            placeholder="e.g. BKC, Mumbai"
           />
         </label>
         <p className="muted small">
@@ -1091,7 +1091,7 @@ ${original}` : original))
 
         {places.length > 0 && (
           <label>
-            Where
+            Saved place
             <select value={placeId ?? ''} onChange={(e) => setPlaceId(e.target.value || null)}>
               <option value="">— not tied to a place —</option>
               {places.map((p) => (

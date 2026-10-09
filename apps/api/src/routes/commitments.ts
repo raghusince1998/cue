@@ -71,6 +71,7 @@ const selection = {
   escalationCount: schema.commitments.escalationCount,
   placeId: schema.commitments.placeId,
   placeName: schema.places.name,
+  placeLabel: schema.commitments.placeLabel,
   contactId: schema.commitments.contactId,
   // The linked contact wins; the interaction's free text is the fallback for
   // anything logged before contacts became real records.
@@ -121,6 +122,7 @@ function toDTO(row: SelectedRow): CommitmentDTO {
     escalationCount: row.escalationCount as number,
     placeId: (row.placeId as string | null) ?? null,
     placeName: (row.placeName as string | null) ?? null,
+    placeLabel: (row.placeLabel as string | null) ?? null,
     contactId: (row.contactId as string | null) ?? null,
     contactName: (row.contactName as string | null) ?? null,
     contactPhone: (row.contactPhone as string | null) ?? null,
@@ -540,6 +542,15 @@ export async function commitmentRoutes(app: FastifyInstance) {
           ...(body.title !== undefined ? { title: body.title } : {}),
           ...(body.kind !== undefined ? { kind: body.kind } : {}),
           ...(body.placeId !== undefined ? { placeId: body.placeId } : {}),
+          // New words for where mean the old coordinates are for somewhere
+          // else: they go too, unless new ones came with the words.
+          ...(body.placeLabel !== undefined
+            ? {
+                placeLabel: body.placeLabel?.trim() || null,
+                lat: body.lat ?? null,
+                lng: body.lng ?? null,
+              }
+            : {}),
           ...(body.contactId !== undefined ? { contactId: body.contactId } : {}),
           ...(body.notes !== undefined ? { notes: body.notes } : {}),
           ...(body.allDay !== undefined ? { allDay: body.allDay } : {}),
