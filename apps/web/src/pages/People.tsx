@@ -8,6 +8,7 @@ import { ContactEditor } from '../components/ContactEditor.tsx'
 import { PersonSheet, personLine } from '../components/PersonSheet.tsx'
 import { AccountSheet } from '../components/AccountSheet.tsx'
 import { AccountsView } from './Accounts.tsx'
+import { QuickMessage } from '../components/QuickMessage.tsx'
 import { useOnChange } from '../lib/changes.ts'
 import {
   deviceContactsAvailable,
@@ -93,6 +94,8 @@ export default function People() {
 
   const [summary, setSummary] = useState<Summary>({ people: {}, unsaved: [] })
   const [touches, setTouches] = useState<Touch[]>([])
+  /** Someone due a word, being sent a quick message. */
+  const [messaging, setMessaging] = useState<Touch | null>(null)
   const dueToReach = touches.filter((t) => t.due)
   const reachIds = new Set(dueToReach.map((t) => t.id))
   /** The person open in their page, and a name to start a new person with. */
@@ -256,6 +259,9 @@ export default function People() {
                     Call
                   </a>
                 )}
+                <button className="ghost tiny-btn" onClick={() => setMessaging(t)}>
+                  Message
+                </button>
                 <button className="ghost tiny-btn" onClick={() => void touch(t.id, 'touched')}>
                   Talked
                 </button>
@@ -356,6 +362,16 @@ export default function People() {
       )}
 
         </>
+      )}
+
+      {messaging && (
+        <Modal title={`Message ${messaging.name}`} onClose={() => setMessaging(null)}>
+          <QuickMessage
+            to={{ name: messaging.name, company: messaging.organization, phone: messaging.phone }}
+            suggest={/remind|touch|catch/i}
+            onDone={() => setMessaging(null)}
+          />
+        </Modal>
       )}
 
       {viewingAccount && (

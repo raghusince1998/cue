@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { CalendarFeeds } from './CalendarFeeds.tsx'
 import { ProfilePhoto } from './ProfilePhoto.tsx'
 import { InfoTip } from './InfoTip.tsx'
+import { Modal } from './Modal.tsx'
+import { TemplateManager } from './QuickMessage.tsx'
 import { api } from '../lib/api.ts'
 
 interface Me {
@@ -51,6 +53,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const [passwordNote, setPasswordNote] = useState<string | null>(null)
   const [prefs, setPrefs] = useState<Preferences | null>(null)
   const [busy, setBusy] = useState(false)
+  const [editingMessages, setEditingMessages] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -309,6 +312,26 @@ export function Settings({ onClose }: { onClose: () => void }) {
             Send today&rsquo;s brief now
           </button>
         </>
+      )}
+
+      <hr className="rule" />
+
+      {/* Quick messages: written once, filled in for whoever they go to. */}
+      <div className="setting-row has-infotip">
+        <span>Quick messages</span>
+        <InfoTip label="What are quick messages?">
+          The things you send over and over (thanks for meeting, missed your call, a gentle
+          reminder) written once. On anyone&rsquo;s page, tap Message and pick one: their name,
+          their clinic and yours are filled in, ready for WhatsApp, a text or email.
+        </InfoTip>
+      </div>
+      <button className="ghost small-btn" onClick={() => setEditingMessages(true)}>
+        Edit quick messages
+      </button>
+      {editingMessages && (
+        <Modal title="Quick messages" onClose={() => setEditingMessages(false)}>
+          <TemplateManager onClose={() => setEditingMessages(false)} />
+        </Modal>
       )}
 
       <hr className="rule" />

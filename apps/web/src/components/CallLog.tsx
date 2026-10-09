@@ -4,6 +4,7 @@ import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import type { PendingCall } from '../lib/calls.ts'
 import { dueChoices } from './WrapUp.tsx'
+import { QuickMessage } from './QuickMessage.tsx'
 
 type Next = 'none' | 'again' | 'followup' | 'waiting'
 
@@ -23,6 +24,8 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
   const [markDone, setMarkDone] = useState(true)
   const [name, setName] = useState(call.name ?? '')
   const [busy, setBusy] = useState(false)
+  /** Saved, and now writing them a message: "missed your call", "thanks". */
+  const [messaging, setMessaging] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const choices = useMemo(() => dueChoices(), [])
 
@@ -41,7 +44,7 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
     }
   }
 
-  async function save() {
+  async function save(thenMessage = false) {
     if (!outcome) return
     const at = choices.find((c) => c.key === due)?.at ?? choices[1]!.at
     setBusy(true)
@@ -62,7 +65,8 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
         },
       })
       announceChange()
-      onDone(true)
+      if (thenMessage) setMessaging(true)
+      else onDone(true)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -71,6 +75,22 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
   }
 
   const dueLabel = choices.find((c) => c.key === due)?.label.toLowerCase() ?? 'tomorrow'
+
+  if (messaging) {
+    return (
+      <div className="stack tight call-log">
+        <p className="muted small">Saved. Now a message to {who}:</p>
+        <QuickMessage
+          to={{ name: call.name ?? (name.trim() || null), phone: call.phone || null }}
+          suggest={answered ? /thank|detail/i : /missed|call/i}
+          onDone={() => onDone(true)}
+        />
+        <button className="ghost small-btn fit-btn" onClick={() => onDone(true)}>
+          Done
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="stack tight call-log">
@@ -157,6 +177,9 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
       <div className="row">
         <button className="primary" onClick={() => void save()} disabled={busy || !outcome}>
           {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button className="ghost" onClick={() => void save(true)} disabled={busy || !outcome}>
+          Save and send a message
         </button>
         <button className="ghost" onClick={() => onDone(false)} disabled={busy}>
           Not now

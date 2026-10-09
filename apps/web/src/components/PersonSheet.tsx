@@ -6,6 +6,7 @@ import { openAdd } from '../lib/addSheet.ts'
 import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
 import { Modal } from './Modal.tsx'
 import { CallLog } from './CallLog.tsx'
+import { QuickMessage } from './QuickMessage.tsx'
 import type { PendingCall } from '../lib/calls.ts'
 import { Nudge, waitingWhat } from './Nudge.tsx'
 import { WaitingForm } from './WaitingForm.tsx'
@@ -89,6 +90,7 @@ export function PersonSheet({
   const [nudging, setNudging] = useState<CommitmentDTO | null>(null)
   /** A call made outside Cue — from the phone's own dialler — being logged. */
   const [loggingCall, setLoggingCall] = useState<PendingCall | null>(null)
+  const [messaging, setMessaging] = useState(false)
   const [adding, setAdding] = useState<'waiting' | 'owe' | null>(null)
   const [what, setWhat] = useState('')
   const [due, setDue] = useState('tomorrow')
@@ -221,6 +223,9 @@ export function PersonSheet({
               Email
             </a>
           )}
+          <button className="ghost small-btn" onClick={() => setMessaging(true)}>
+            Message
+          </button>
           <button
             className="link small"
             onClick={() =>
@@ -471,6 +476,15 @@ export function PersonSheet({
           Share when I&rsquo;m free
         </button>
       </div>
+
+      {messaging && (
+        <Modal title={`Message ${first}`} onClose={() => setMessaging(false)}>
+          <QuickMessage
+            to={{ name: contact.name, company: contact.organization, phone: contact.phone, email: contact.email }}
+            onDone={() => setMessaging(false)}
+          />
+        </Modal>
+      )}
 
       {loggingCall && (
         <Modal title="Log a call" onClose={() => setLoggingCall(null)}>

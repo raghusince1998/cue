@@ -14,6 +14,7 @@ export {
   type ScheduleTemplate,
 } from './scheduleTemplates.ts'
 export { nameParts, shortName, type NameParts } from './names.ts'
+export { fillTemplate, STARTER_TEMPLATES, TEMPLATE_FIELDS, type TemplateValues } from './templates.ts'
 export {
   findMalformedTime,
   extractPlace,
@@ -511,6 +512,18 @@ export const logVisitInput = z.object({
 export type LogVisitInput = z.infer<typeof logVisitInput>
 
 // ---------------------------------------------------------------- commitments
+
+export const saveTemplateInput = z.object({
+  title: z.string().trim().min(1).max(80),
+  body: z.string().trim().min(1).max(2000),
+})
+
+export interface MessageTemplateDTO {
+  id: string
+  title: string
+  body: string
+  uses: number
+}
 
 /** How a call went. Only "spoke" is contact; the rest are attempts. */
 export const CALL_OUTCOMES = ['spoke', 'no_answer', 'busy', 'message'] as const

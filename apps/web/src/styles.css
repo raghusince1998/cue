@@ -4069,15 +4069,16 @@ button:disabled {
 /* ---- Accounts ------------------------------------------------------ */
 
 /* "Call" in a list is a tel: link, styled as the buttons beside it. */
-a.tiny-btn.link-btn {
+a.link-btn {
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--border);
+  border-radius: 10px;
   color: var(--text);
   text-decoration: none;
 }
 
-a.tiny-btn.link-btn:hover {
+a.link-btn:hover {
   border-color: var(--accent);
 }
 
