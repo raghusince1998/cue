@@ -13,6 +13,7 @@ export {
   INDIA_UIP_CHILD,
   type ScheduleTemplate,
 } from './scheduleTemplates.ts'
+export { nameParts, shortName, type NameParts } from './names.ts'
 export {
   findMalformedTime,
   extractPlace,
@@ -511,9 +512,19 @@ export type LogVisitInput = z.infer<typeof logVisitInput>
 
 // ---------------------------------------------------------------- commitments
 
+/** How often you mean to hear from someone, in days. */
+export const KEEP_IN_TOUCH_CHOICES: { days: number; label: string }[] = [
+  { days: 7, label: 'Every week' },
+  { days: 14, label: 'Every 2 weeks' },
+  { days: 30, label: 'Every month' },
+  { days: 90, label: 'Every 3 months' },
+]
+
 export const createContactInput = z.object({
   name: z.string().min(1).max(200),
   role: z.string().max(120).optional(),
+  organization: z.string().max(200).optional(),
+  keepInTouchDays: z.number().int().min(1).max(366).nullable().optional(),
   phone: z.string().max(40).optional(),
   email: z.string().email().max(200).optional().or(z.literal('')),
   notes: z.string().max(4000).optional(),
@@ -674,6 +685,9 @@ export interface ContactDTO {
   id: string
   name: string
   role: string | null
+  /** Where they work — a clinic, a company. */
+  organization: string | null
+  keepInTouchDays: number | null
   phone: string | null
   email: string | null
   notes: string | null

@@ -4032,3 +4032,36 @@ button:disabled {
 .person-reach a.small-btn:hover {
   border-color: var(--accent);
 }
+
+/* ---- Keep in touch ------------------------------------------------- */
+
+.reach-out {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reach-out-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.reach-out .link {
+  padding: 0;
+  font-weight: 600;
+}
+
+/* "Call" is a tel: link, styled as the buttons beside it. */
+.reach-out a.tiny-btn {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.reach-out a.tiny-btn:hover {
+  border-color: var(--accent);
+}

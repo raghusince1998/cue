@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ContactDTO, PlaceDTO } from '@cue/shared'
+import { KEEP_IN_TOUCH_CHOICES, type ContactDTO, type PlaceDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { formatDateTime } from '../lib/time.ts'
 
@@ -27,6 +27,10 @@ export function ContactEditor({
 
   const [name, setName] = useState(initialName)
   const [role, setRole] = useState('')
+  const [organization, setOrganization] = useState('')
+  /** Workplaces typed before, offered while typing so one clinic stays one clinic. */
+  const [workplaces, setWorkplaces] = useState<string[]>([])
+  const [keepDays, setKeepDays] = useState<number | null>(null)
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [notes, setNotes] = useState('')
@@ -38,14 +42,18 @@ export function ContactEditor({
 
   useEffect(() => {
     void (async () => {
-      const [p, loadedPlaces] = await Promise.all([
+      const [p, loadedPlaces, names] = await Promise.all([
         contactId ? api<ContactProfile>(`/contacts/${contactId}`) : Promise.resolve(null),
         api<PlaceDTO[]>('/places'),
+        api<string[]>('/contacts/organizations').catch(() => [] as string[]),
       ])
+      setWorkplaces(names)
       if (p) {
         setProfile(p)
         setName(p.name)
         setRole(p.role ?? '')
+        setOrganization(p.organization ?? '')
+        setKeepDays(p.keepInTouchDays ?? null)
         setPhone(p.phone ?? '')
         setEmail(p.email ?? '')
         setNotes(p.notes ?? '')
@@ -63,6 +71,8 @@ export function ContactEditor({
       const body = {
         name: name.trim(),
         role: role.trim(),
+        organization: organization.trim(),
+        keepInTouchDays: keepDays,
         phone: phone.trim(),
         email: email.trim(),
         notes: notes.trim(),
@@ -117,8 +127,23 @@ export function ContactEditor({
         <input
           value={role}
           onChange={(e) => setRole(e.target.value)}
-          placeholder="Dermatologist, Owner, Receptionist…"
+          placeholder="Physiotherapist, Owner, Purchase manager…"
         />
+      </label>
+
+      <label>
+        Works at
+        <input
+          value={organization}
+          onChange={(e) => setOrganization(e.target.value)}
+          placeholder="Clinic, hospital or company, e.g. Mehta Physio Clinic"
+          list="workplace-options"
+        />
+        <datalist id="workplace-options">
+          {workplaces.map((w) => (
+            <option key={w} value={w} />
+          ))}
+        </datalist>
       </label>
 
       <label>
@@ -136,17 +161,43 @@ export function ContactEditor({
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
       </label>
 
-      <label>
-        Place
-        <select value={placeId ?? ''} onChange={(e) => setPlaceId(e.target.value || null)}>
-          <option value="">— none —</option>
-          {places.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      {/* Saved places come from logging a visit with location on. Without
+          any, a list offering only "none" explained nothing. */}
+      {(places.length > 0 || placeId) && (
+        <label>
+          Saved place
+          <select value={placeId ?? ''} onChange={(e) => setPlaceId(e.target.value || null)}>
+            <option value="">— none —</option>
+            {places.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      <span className="label-text">Keep in touch</span>
+      <div className="chips">
+        <button className={`chip${keepDays === null ? ' selected' : ''}`} onClick={() => setKeepDays(null)}>
+          Off
+        </button>
+        {KEEP_IN_TOUCH_CHOICES.map((k) => (
+          <button
+            key={k.days}
+            className={`chip${keepDays === k.days ? ' selected' : ''}`}
+            onClick={() => setKeepDays(k.days)}
+          >
+            {k.label}
+          </button>
+        ))}
+      </div>
+      {keepDays !== null && (
+        <p className="muted small">
+          Cue tells you when it has been longer than this since you last met, talked or finished
+          something with them.
+        </p>
+      )}
 
       <label>
         Notes

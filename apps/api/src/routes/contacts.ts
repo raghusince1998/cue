@@ -1,16 +1,47 @@
 import type { FastifyInstance } from 'fastify'
-import { and, desc, eq, ilike, ne, sql } from 'drizzle-orm'
+import { and, desc, eq, ilike, isNotNull, ne, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { createContactInput, updateContactInput, type ContactDTO } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { takeFirst } from '../db/util.ts'
 import { scope } from '../auth.ts'
+import { keepInTouch } from '../services/keepInTouch.ts'
+
+const DAY_MS = 86_400_000
 
 /** Empty strings from HTML inputs should clear a column, not store "". */
 function blankToNull(value: string | undefined | null): string | null | undefined {
   if (value === undefined) return undefined
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
+}
+
+/**
+ * One workplace, one spelling: "mehta physio clinic " typed in a hurry becomes
+ * the "Mehta Physio Clinic" already saved, so colleagues find each other.
+ */
+async function canonicalWorkplace(orgId: string, value: string | undefined): Promise<string | null | undefined> {
+  const typed = blankToNull(value)
+  if (typed === undefined || typed === null) return typed
+  const clean = typed.replace(/\s+/g, ' ')
+  const same = sql`lower(${clean})`
+  const [person] = await db
+    .select({ name: schema.contacts.organization })
+    .from(schema.contacts)
+    .where(
+      and(
+        eq(schema.contacts.orgId, orgId),
+        sql`lower(regexp_replace(btrim(${schema.contacts.organization}), '[[:space:]]+', ' ', 'g')) = ${same}`,
+      ),
+    )
+    .limit(1)
+  if (person?.name) return person.name.trim().replace(/\s+/g, ' ')
+  const [place] = await db
+    .select({ name: schema.places.name })
+    .from(schema.places)
+    .where(and(eq(schema.places.orgId, orgId), sql`lower(btrim(${schema.places.name})) = ${same}`))
+    .limit(1)
+  return place?.name.trim() ?? clean
 }
 
 export async function contactRoutes(app: FastifyInstance) {
@@ -20,6 +51,8 @@ export async function contactRoutes(app: FastifyInstance) {
     id: schema.contacts.id,
     name: schema.contacts.name,
     role: schema.contacts.role,
+    organization: schema.contacts.organization,
+    keepInTouchDays: schema.contacts.keepInTouchDays,
     phone: schema.contacts.phone,
     email: schema.contacts.email,
     notes: schema.contacts.notes,
@@ -32,6 +65,8 @@ export async function contactRoutes(app: FastifyInstance) {
     id: string
     name: string
     role: string | null
+    organization: string | null
+    keepInTouchDays: number | null
     phone: string | null
     email: string | null
     notes: string | null
@@ -78,6 +113,75 @@ export async function contactRoutes(app: FastifyInstance) {
       visitCount: r.visitCount ?? 0,
       lastSeenAt: r.lastSeenAt ? new Date(r.lastSeenAt).toISOString() : null,
     }))
+  })
+
+  /**
+   * Names people work at, for suggestions while typing one: what has been
+   * typed before, and saved places. "ABC Clinic" and "abc clinic " should not
+   * become two workplaces because one was typed in a hurry.
+   */
+  app.get('/contacts/organizations', async (req) => {
+    const { orgId } = scope(req)
+    const [fromPeople, fromPlaces] = await Promise.all([
+      db
+        .selectDistinct({ name: schema.contacts.organization })
+        .from(schema.contacts)
+        .where(and(eq(schema.contacts.orgId, orgId), isNotNull(schema.contacts.organization))),
+      db
+        .select({ name: schema.places.name })
+        .from(schema.places)
+        .where(eq(schema.places.orgId, orgId)),
+    ])
+    const names = new Map<string, string>()
+    for (const { name } of [...fromPeople, ...fromPlaces]) {
+      const clean = name?.trim().replace(/\s+/g, ' ')
+      if (clean && !names.has(clean.toLowerCase())) names.set(clean.toLowerCase(), clean)
+    }
+    return [...names.values()].sort((a, b) => a.localeCompare(b)).slice(0, 300)
+  })
+
+  /** Everyone you mean to keep in touch with, longest overdue first. */
+  app.get('/people/keep-in-touch', async (req) => {
+    const { orgId, sub: userId } = scope(req)
+    const list = await keepInTouch(orgId, userId)
+    return {
+      due: list.filter((p) => p.due).length,
+      people: list.map((p) => ({
+        ...p,
+        lastTouch: p.lastTouch?.toISOString() ?? null,
+        dueAt: p.dueAt.toISOString(),
+        snoozedUntil: p.snoozedUntil?.toISOString() ?? null,
+      })),
+    }
+  })
+
+  /** "Talked today": contact that happened outside Cue, on a call or a chat. */
+  app.post('/contacts/:id/touched', async (req, reply) => {
+    const { orgId } = scope(req)
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params)
+    const rows = await db
+      .update(schema.contacts)
+      .set({ lastContactedAt: new Date(), touchSnoozedUntil: null })
+      .where(and(eq(schema.contacts.id, id), eq(schema.contacts.orgId, orgId)))
+      .returning({ id: schema.contacts.id })
+    if (rows.length === 0) return reply.code(404).send({ error: 'not_found' })
+    return { ok: true }
+  })
+
+  /** "Not now": quiet about this person for a while, without pretending you talked. */
+  app.post('/contacts/:id/touch-later', async (req, reply) => {
+    const { orgId } = scope(req)
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params)
+    const { days } = z
+      .object({ days: z.number().int().min(1).max(90).default(7) })
+      .parse(req.body ?? {})
+    const rows = await db
+      .update(schema.contacts)
+      .set({ touchSnoozedUntil: new Date(Date.now() + days * DAY_MS) })
+      .where(and(eq(schema.contacts.id, id), eq(schema.contacts.orgId, orgId)))
+      .returning({ id: schema.contacts.id })
+    if (rows.length === 0) return reply.code(404).send({ error: 'not_found' })
+    return { ok: true }
   })
 
   /** One person's profile: who they are, what is open with them, and history. */
@@ -221,10 +325,13 @@ export async function contactRoutes(app: FastifyInstance) {
           orgId,
           name: body.name.trim(),
           role: blankToNull(body.role) ?? null,
+          organization: (await canonicalWorkplace(orgId, body.organization)) ?? null,
           phone: blankToNull(body.phone) ?? null,
           email: blankToNull(body.email) ?? null,
           notes: blankToNull(body.notes) ?? null,
           placeId: body.placeId ?? null,
+          keepInTouchDays: body.keepInTouchDays ?? null,
+          keepInTouchSince: body.keepInTouchDays ? new Date() : null,
         })
         .returning(),
       'contact',
@@ -239,17 +346,33 @@ export async function contactRoutes(app: FastifyInstance) {
     const body = updateContactInput.parse(req.body)
 
     const existing = await db
-      .select({ id: schema.contacts.id })
+      .select({ id: schema.contacts.id, keepInTouchDays: schema.contacts.keepInTouchDays })
       .from(schema.contacts)
       .where(and(eq(schema.contacts.id, id), eq(schema.contacts.orgId, orgId)))
       .limit(1)
     if (existing.length === 0) return reply.code(404).send({ error: 'not_found' })
 
+    // Starting to keep in touch starts the clock; changing the rhythm keeps
+    // it; stopping clears it, so starting again later is a fresh start.
+    const wasTracked = existing[0]!.keepInTouchDays !== null
+    const touch =
+      body.keepInTouchDays === undefined
+        ? {}
+        : body.keepInTouchDays === null
+          ? { keepInTouchDays: null, keepInTouchSince: null, touchSnoozedUntil: null }
+          : wasTracked
+            ? { keepInTouchDays: body.keepInTouchDays }
+            : { keepInTouchDays: body.keepInTouchDays, keepInTouchSince: new Date(), touchSnoozedUntil: null }
+
     await db
       .update(schema.contacts)
       .set({
+        ...touch,
         ...(body.name !== undefined ? { name: body.name.trim() } : {}),
         ...(body.role !== undefined ? { role: blankToNull(body.role) ?? null } : {}),
+        ...(body.organization !== undefined
+          ? { organization: (await canonicalWorkplace(orgId, body.organization)) ?? null }
+          : {}),
         ...(body.phone !== undefined ? { phone: blankToNull(body.phone) ?? null } : {}),
         ...(body.email !== undefined ? { email: blankToNull(body.email) ?? null } : {}),
         ...(body.notes !== undefined ? { notes: blankToNull(body.notes) ?? null } : {}),

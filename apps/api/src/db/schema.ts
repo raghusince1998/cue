@@ -163,9 +163,18 @@ export const contacts = pgTable(
     placeId: uuid('place_id').references(() => places.id, { onDelete: 'set null' }),
     name: text('name').notNull(),
     role: text('role'),
+    /** Where they work: a clinic, a company. Free text, not a saved place. */
+    organization: text('organization'),
     phone: text('phone'),
     email: text('email'),
     notes: text('notes'),
+    /** How many days you are happy to go without contact. Null: not tracked. */
+    keepInTouchDays: integer('keep_in_touch_days'),
+    /** When that rhythm was set — the starting point while nothing has happened yet. */
+    keepInTouchSince: timestamp('keep_in_touch_since', { withTimezone: true }),
+    /** "Talked today", for contact that never became a plan here. */
+    lastContactedAt: timestamp('last_contacted_at', { withTimezone: true }),
+    touchSnoozedUntil: timestamp('touch_snoozed_until', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('contacts_org_idx').on(t.orgId), index('contacts_place_idx').on(t.orgId, t.placeId)],

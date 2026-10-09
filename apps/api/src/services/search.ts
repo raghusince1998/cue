@@ -106,13 +106,13 @@ export async function searchEverything(
 
       union all
       select 'contact', ct.id::text, ct.name, null,
-             coalesce(ct.role, '') ||
-               case when ct.phone is not null then ' · ' || ct.phone else '' end,
+             concat_ws(' · ', ct.role, ct.organization, ct.phone),
              greatest(${rank(sql`ct.name`, q)}, ${rank(sql`ct.role`, q)},
+                      ${rank(sql`ct.organization`, q)},
                       ${rank(sql`ct.phone`, q)}, ${rank(sql`ct.notes`, q)})
       from contacts ct
       where ct.org_id = ${orgId}
-        and (ct.name ilike ${like} or ct.role ilike ${like}
+        and (ct.name ilike ${like} or ct.role ilike ${like} or ct.organization ilike ${like}
              or ct.phone ilike ${like} or ct.notes ilike ${like})
 
       union all

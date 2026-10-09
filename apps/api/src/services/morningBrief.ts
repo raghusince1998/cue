@@ -2,6 +2,7 @@ import { and, asc, eq, gte, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm'
 import { db, schema } from '../db/index.ts'
 import { sendToUser } from '../push.ts'
 import { buildSummary } from './insights.ts'
+import { keepInTouch, orgOf } from './keepInTouch.ts'
 import { canBeOverdue, isAwaitingWrapUp, managedByCue, meetingEnd } from './overdue.ts'
 
 /**
@@ -29,6 +30,8 @@ export interface BriefStats {
   overdue: number
   wrapUps: number
   longestGap: { from: Date; to: Date } | null
+  /** People it has been too long with, longest first. */
+  reachOut: string[]
 }
 
 /** Today in the person's own zone, as SQL bounds — the server's zone is not theirs. */
@@ -81,6 +84,10 @@ export async function briefStats(userId: string, timezone: string, now = new Dat
 
   const summary = await buildSummary(userId, now)
   const names = [...new Set(checkInRows.map((r) => r.who!).filter(Boolean))]
+  const orgId = await orgOf(userId)
+  const reachOut = orgId
+    ? (await keepInTouch(orgId, userId, now)).filter((p) => p.due).map((p) => p.name)
+    : []
 
   return {
     meetings: meetingRows.length,
@@ -94,6 +101,7 @@ export async function briefStats(userId: string, timezone: string, now = new Dat
       summary.subject === 'today' && summary.nextGap
         ? { from: new Date(summary.nextGap.from), to: new Date(summary.nextGap.to) }
         : null,
+    reachOut,
   }
 }
 
@@ -121,7 +129,8 @@ export function composeBrief(
     stats.tasks === 0 &&
     stats.checkInsDue === 0 &&
     stats.overdue === 0 &&
-    stats.wrapUps === 0
+    stats.wrapUps === 0 &&
+    stats.reachOut.length === 0
   if (nothing) return null
 
   const head = [
@@ -142,6 +151,7 @@ export function composeBrief(
     lines.push(`${plural(stats.wrapUps, 'meeting')} still ${stats.wrapUps === 1 ? 'needs' : 'need'} follow-ups.`)
   }
   if (stats.overdue > 0) lines.push(`${stats.overdue} overdue.`)
+  if (stats.reachOut.length > 0) lines.push(`Time to reach out to ${listNames(stats.reachOut)}.`)
 
   return { title, body: lines.join(' '), url: '/?day=1' }
 }

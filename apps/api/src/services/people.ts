@@ -1,4 +1,5 @@
 import { and, eq, gte, inArray, ne, or } from 'drizzle-orm'
+import { nameParts } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 
 /**
@@ -31,26 +32,46 @@ function escape(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/** How to recognise each person, given everyone saved — a first name only counts when it is unambiguous. */
+const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase()
+
+/**
+ * The ways one person is written. Full forms always mean them: "Dr. Anil
+ * Mehta", or "Anil Mehta" without the title. Short forms ("Anil", "Dr. Mehta")
+ * mean them only when nobody else saved has the same one.
+ */
+function formsOf(name: string): { full: string[]; short: string[] } {
+  const p = nameParts(name)
+  const full = new Set([norm(name)])
+  const short = new Set<string>()
+  if (p.bare.includes(' ')) full.add(norm(p.bare))
+  if (p.given.length >= 3) short.add(norm(p.given))
+  if (p.title) short.add(norm(`${p.title} ${p.last ?? p.given}`))
+  for (const f of full) short.delete(f)
+  return { full: [...full], short: [...short] }
+}
+
+function wordRe(phrase: string): RegExp {
+  return new RegExp(`(^|[^\\p{L}])${escape(phrase)}($|[^\\p{L}])`, 'iu')
+}
+
+/** How to recognise each person, given everyone saved — a short form only counts when it is unambiguous. */
 export function matchersFor(people: Person[]): Map<string, Matcher> {
-  const firstCounts = new Map<string, number>()
-  for (const p of people) {
-    const first = p.name.trim().split(/\s+/)[0]!.toLowerCase()
-    firstCounts.set(first, (firstCounts.get(first) ?? 0) + 1)
+  const forms = new Map(people.map((p) => [p.id, formsOf(p.name)]))
+  const shortCounts = new Map<string, number>()
+  for (const f of forms.values()) {
+    for (const s of f.short) shortCounts.set(s, (shortCounts.get(s) ?? 0) + 1)
   }
   const out = new Map<string, Matcher>()
   for (const p of people) {
-    const full = p.name.trim().replace(/\s+/g, ' ').toLowerCase()
-    const first = full.split(' ')[0]!
-    const firstUsable = firstCounts.get(first) === 1 && first.length >= 3
-    const fullRe = new RegExp(`(^|[^\\p{L}])${escape(full)}($|[^\\p{L}])`, 'iu')
-    const firstRe = new RegExp(`(^|[^\\p{L}])${escape(first)}($|[^\\p{L}])`, 'iu')
+    const f = forms.get(p.id)!
+    const usable = [...f.full, ...f.short.filter((s) => shortCounts.get(s) === 1)]
+    const res = usable.map(wordRe)
     out.set(p.id, {
       isName: (value) => {
-        const v = (value ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
-        return v.length > 0 && (v === full || (firstUsable && v === first))
+        const v = norm(value ?? '')
+        return v.length > 0 && usable.includes(v)
       },
-      inTitle: (title) => fullRe.test(title) || (firstUsable && firstRe.test(title)),
+      inTitle: (title) => res.some((re) => re.test(title)),
     })
   }
   return out
@@ -118,7 +139,7 @@ async function relevantRows(userId: string, now: Date): Promise<Row[]> {
     .limit(5000)
 }
 
-async function peopleOf(orgId: string): Promise<Person[]> {
+export async function peopleOf(orgId: string): Promise<Person[]> {
   return db
     .select({ id: schema.contacts.id, name: schema.contacts.name })
     .from(schema.contacts)

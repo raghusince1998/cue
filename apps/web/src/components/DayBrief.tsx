@@ -77,6 +77,8 @@ export function DayBrief({
   const [dismissed, setDismissed] = useState<string[]>([])
   const [expanded, setExpanded] = useState(false)
   const [reloads, setReloads] = useState(0)
+  /** People it has been too long with — keep in touch. */
+  const [reachOut, setReachOut] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -84,6 +86,9 @@ export function DayBrief({
       .then((r) => !cancelled && setData(r))
       // A brief that fails is not worth an error on the main screen; the lists
       // below it are the actual work and still render.
+      .catch(() => undefined)
+    api<{ due: number }>('/people/keep-in-touch')
+      .then((r) => !cancelled && setReachOut(r.due))
       .catch(() => undefined)
     return () => {
       cancelled = true
@@ -199,6 +204,12 @@ export function DayBrief({
               waiting on others
               {(summary.checkInsDue ?? 0) > 0 ? ` · ${summary.checkInsDue} to chase` : ''}
             </span>
+          </button>
+        )}
+        {reachOut > 0 && (
+          <button className="stat is-alert" onClick={() => onNavigate('/people')}>
+            <strong>{reachOut}</strong>
+            <span>to reach out</span>
           </button>
         )}
         <button className="stat" onClick={() => onNavigate('/trips')}>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { CommitmentDTO } from '@cue/shared'
+import { KEEP_IN_TOUCH_CHOICES, shortName, type CommitmentDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
@@ -13,6 +13,8 @@ interface Contact {
   id: string
   name: string
   role: string | null
+  organization: string | null
+  keepInTouchDays: number | null
   phone: string | null
   email: string | null
   placeName: string | null
@@ -27,6 +29,26 @@ interface Overview {
   lastMeetingFollowUps: CommitmentDTO[]
   meetingCount: number
   firstMet: string | null
+  keepInTouch: {
+    cadenceDays: number
+    lastTouch: string | null
+    dueAt: string
+    due: boolean
+    snoozedUntil: string | null
+  } | null
+  colleagues: { id: string; name: string; role: string | null }[]
+}
+
+/** "Physiotherapist at Mehta Physio Clinic", or whichever half is known. */
+export function personLine(c: {
+  role: string | null
+  organization?: string | null
+  placeName?: string | null
+}): string {
+  const org = c.organization?.trim()
+  const head = c.role && org ? `${c.role} at ${org}` : (c.role ?? org ?? '')
+  const place = c.placeName && c.placeName.toLowerCase() !== org?.toLowerCase() ? c.placeName : null
+  return [head || null, place].filter(Boolean).join(' · ')
 }
 
 function waNumber(phone: string): string {
@@ -45,11 +67,14 @@ export function PersonSheet({
   contactId,
   onEdit,
   onChanged,
+  onOpenPerson,
 }: {
   contactId: string
   onEdit: () => void
   /** Something was closed or added, so the list behind should reload. */
   onChanged: () => void
+  /** Open someone else's page — a colleague at the same place. */
+  onOpenPerson?: (id: string) => void
 }) {
   const [contact, setContact] = useState<Contact | null>(null)
   const [o, setO] = useState<Overview | null>(null)
@@ -86,6 +111,8 @@ export function PersonSheet({
         lastMeetingFollowUps: [],
         meetingCount: 0,
         firstMet: null,
+        keepInTouch: null,
+        colleagues: [],
       })
       setPartial(true)
     }
@@ -100,6 +127,29 @@ export function PersonSheet({
     try {
       await api(`/commitments/${id}/done`, { method: 'POST' })
       announceChange()
+      onChanged()
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Starts, changes or stops keeping in touch, straight from the page. */
+  async function setCadence(days: number | null) {
+    setBusy(true)
+    try {
+      await api(`/contacts/${contactId}`, { method: 'PATCH', body: { keepInTouchDays: days } })
+      onChanged()
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function touch(action: 'touched' | 'touch-later') {
+    setBusy(true)
+    try {
+      await api(`/contacts/${contactId}/${action}`, { method: 'POST', body: action === 'touch-later' ? { days: 7 } : {} })
       onChanged()
       await load()
     } finally {
@@ -129,7 +179,8 @@ export function PersonSheet({
   if (error) return <p className="error small">{error}</p>
   if (!contact || !o) return <p className="muted small">Gathering everything with them…</p>
 
-  const first = contact.name.trim().split(/\s+/)[0]!
+  // "Dr. Mehta", not "Dr.": how they are addressed, in "Waiting on …".
+  const first = shortName(contact.name)
   const nothingOpen = !o.waitingOnThem.length && !o.youOwe.length && !o.nextMeetings.length
 
   return (
@@ -137,9 +188,7 @@ export function PersonSheet({
       <div className="person-head">
         <div>
           <h3 className="details-title">{contact.name}</h3>
-          {(contact.role || contact.placeName) && (
-            <p className="muted small">{[contact.role, contact.placeName].filter(Boolean).join(' · ')}</p>
-          )}
+          {personLine(contact) && <p className="muted small">{personLine(contact)}</p>}
         </div>
         <div className="row person-reach">
           {contact.phone && (
@@ -256,6 +305,71 @@ export function PersonSheet({
               ))}
             </ul>
           )}
+        </section>
+      )}
+
+      <section className="person-part">
+        <span className="label-text">Keep in touch</span>
+        <div className="chips">
+          <button
+            className={`chip${contact.keepInTouchDays === null ? ' selected' : ''}`}
+            onClick={() => void setCadence(null)}
+            disabled={busy}
+          >
+            Off
+          </button>
+          {KEEP_IN_TOUCH_CHOICES.map((k) => (
+            <button
+              key={k.days}
+              className={`chip${contact.keepInTouchDays === k.days ? ' selected' : ''}`}
+              onClick={() => void setCadence(k.days)}
+              disabled={busy}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
+        {o.keepInTouch && (
+          <div className="your-day-line">
+            <span className="small">
+              {o.keepInTouch.lastTouch
+                ? `Last contact ${relativeDay(o.keepInTouch.lastTouch)}`
+                : 'No contact on record yet'}
+              <span className={`small ${o.keepInTouch.due ? 'due-now' : 'muted'}`}>
+                {' '}
+                ·{' '}
+                {o.keepInTouch.due
+                  ? 'time to reach out'
+                  : o.keepInTouch.snoozedUntil
+                    ? `reminding you ${dayLabel(o.keepInTouch.snoozedUntil)}`
+                    : `next due ${dayLabel(o.keepInTouch.dueAt)}`}
+              </span>
+            </span>
+            <span className="row">
+              <button className="ghost tiny-btn" onClick={() => void touch('touched')} disabled={busy}>
+                Talked today
+              </button>
+              {o.keepInTouch.due && (
+                <button className="ghost tiny-btn" onClick={() => void touch('touch-later')} disabled={busy}>
+                  Next week
+                </button>
+              )}
+            </span>
+          </div>
+        )}
+      </section>
+
+      {o.colleagues.length > 0 && contact.organization && (
+        <section className="person-part">
+          <span className="label-text">Also at {contact.organization}</span>
+          <div className="chips">
+            {o.colleagues.map((p) => (
+              <button key={p.id} className="chip" onClick={() => onOpenPerson?.(p.id)}>
+                {p.name}
+                {p.role ? <span className="muted"> · {p.role}</span> : null}
+              </button>
+            ))}
+          </div>
         </section>
       )}
 

@@ -65,6 +65,21 @@ test('names: the full name always, a first name only when it is unambiguous, who
   assert.ok(!m.get('priya')!.inTitle('Lunch with Priya'))
 })
 
+test('names: a title is not a first name, and "Dr. Mehta" is how a doctor is mentioned', () => {
+  const m = svc.matchersFor([
+    { id: 'mehta', name: 'Dr. Anil Mehta' },
+    { id: 'sharma', name: 'Dr. Sharma' },
+    { id: 'rao', name: 'Mrs Kavita Rao' },
+  ])
+  const mehta = m.get('mehta')!
+  assert.ok(mehta.inTitle('Call Dr. Mehta about the order') && mehta.inTitle('Visit Anil Mehta'))
+  assert.ok(mehta.inTitle('Send Anil the brochure') && mehta.isName('Dr. Mehta') && mehta.isName('anil'))
+  assert.ok(!mehta.inTitle('Call Dr. Sharma'), 'another doctor')
+  assert.ok(!mehta.isName('Dr.'))
+  assert.ok(m.get('sharma')!.inTitle('Call Dr. Sharma'))
+  assert.ok(m.get('rao')!.inTitle('Lunch with Kavita'))
+})
+
 test('what they owe you, what you owe them, and your meetings', async () => {
   const ravi = await contact('Ravi Kumar')
   await contact('Priya Shah')

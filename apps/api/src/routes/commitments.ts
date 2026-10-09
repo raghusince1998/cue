@@ -24,6 +24,7 @@ import { detectLocationConflicts } from '../services/locationConflict.ts'
 import { canBeOverdue, isAwaitingWrapUp, isCalendarHistory, managedByCue } from '../services/overdue.ts'
 import { wrapUpMeeting } from '../services/wrapUp.ts'
 import { prepOpenCount, relatedMeetings } from '../services/meetingPrep.ts'
+import { keepInTouch } from '../services/keepInTouch.ts'
 import { activeFocus, heldCount } from '../services/focus.ts'
 import { peopleSummary, personLinks } from '../services/people.ts'
 
@@ -670,7 +671,43 @@ export async function commitmentRoutes(app: FastifyInstance) {
     const byId = new Map(rows.map((r) => [r.id as string, toDTO(r)]))
     const pick = (list: string[]) => list.map((x) => byId.get(x)).filter(Boolean)
 
+    // How often you mean to hear from them, and others where they work.
+    const [touchList, [me]] = await Promise.all([
+      keepInTouch(orgId, userId),
+      db
+        .select({ organization: schema.contacts.organization })
+        .from(schema.contacts)
+        .where(eq(schema.contacts.id, id))
+        .limit(1),
+    ])
+    const touch = touchList.find((p) => p.id === id) ?? null
+    const workplace = me?.organization?.trim()
+    const colleagues = workplace
+      ? await db
+          .select({ id: schema.contacts.id, name: schema.contacts.name, role: schema.contacts.role })
+          .from(schema.contacts)
+          .where(
+            and(
+              eq(schema.contacts.orgId, orgId),
+              ne(schema.contacts.id, id),
+              sql`lower(btrim(${schema.contacts.organization})) = lower(${workplace})`,
+            ),
+          )
+          .orderBy(schema.contacts.name)
+          .limit(12)
+      : []
+
     return {
+      keepInTouch: touch
+        ? {
+            cadenceDays: touch.cadenceDays,
+            lastTouch: touch.lastTouch?.toISOString() ?? null,
+            dueAt: touch.dueAt.toISOString(),
+            due: touch.due,
+            snoozedUntil: touch.snoozedUntil?.toISOString() ?? null,
+          }
+        : null,
+      colleagues,
       waitingOnThem: pick(links.waitingOnThem),
       youOwe: pick(links.youOwe),
       nextMeetings: pick(links.nextMeetings),

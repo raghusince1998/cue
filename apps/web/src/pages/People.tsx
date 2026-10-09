@@ -4,7 +4,7 @@ import { api } from '../lib/api.ts'
 import { dayLabel, initials, relativeDay } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { ContactEditor } from '../components/ContactEditor.tsx'
-import { PersonSheet } from '../components/PersonSheet.tsx'
+import { PersonSheet, personLine } from '../components/PersonSheet.tsx'
 import { useOnChange } from '../lib/changes.ts'
 import {
   deviceContactsAvailable,
@@ -21,6 +21,18 @@ interface Summary {
     { waiting: number; waitingDue: number; owe: number; next: string | null; lastMet: string | null }
   >
   unsaved: string[]
+}
+
+interface Touch {
+  id: string
+  name: string
+  role: string | null
+  organization: string | null
+  phone: string | null
+  cadenceDays: number
+  lastTouch: string | null
+  dueAt: string
+  due: boolean
 }
 
 export default function People() {
@@ -68,17 +80,22 @@ export default function People() {
   const [editing, setEditing] = useState<Editing>(undefined)
 
   const [summary, setSummary] = useState<Summary>({ people: {}, unsaved: [] })
+  const [touches, setTouches] = useState<Touch[]>([])
+  const dueToReach = touches.filter((t) => t.due)
+  const reachIds = new Set(dueToReach.map((t) => t.id))
   /** The person open in their page, and a name to start a new person with. */
   const [viewing, setViewing] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
 
   const load = useCallback(async () => {
-    const [list, s] = await Promise.all([
+    const [list, s, t] = await Promise.all([
       api<ContactDTO[]>('/contacts'),
       api<Summary>('/people/summary').catch(() => ({ people: {}, unsaved: [] })),
+      api<{ people: Touch[] }>('/people/keep-in-touch').catch(() => ({ people: [] as Touch[] })),
     ])
     setContacts(list)
     setSummary(s)
+    setTouches(t.people)
     setLoading(false)
   }, [])
   useOnChange(() => void load())
@@ -92,16 +109,28 @@ export default function People() {
     const matching = !q
       ? contacts
       : contacts.filter((c) =>
-          [c.name, c.role, c.phone, c.placeName].some((f) => f?.toLowerCase().includes(q)),
+          [c.name, c.role, c.organization, c.phone, c.placeName].some((f) =>
+            f?.toLowerCase().includes(q),
+          ),
         )
     // People with something open between you first: they are the ones you
     // came here about. Alphabetical within each group, as before.
+    const due = new Set(touches.filter((t) => t.due).map((t) => t.id))
     const open = (id: string) => {
       const s = summary.people[id]
-      return s ? (s.waitingDue > 0 ? 3 : s.waiting + s.owe > 0 ? 2 : s.next ? 1 : 0) : 0
+      if (s?.waitingDue || due.has(id)) return 3
+      return s ? (s.waiting + s.owe > 0 ? 2 : s.next ? 1 : 0) : 0
     }
     return [...matching].sort((a, b) => open(b.id) - open(a.id) || a.name.localeCompare(b.name))
-  }, [contacts, query, summary])
+  }, [contacts, query, summary, touches])
+
+  async function touch(id: string, action: 'touched' | 'touch-later') {
+    await api(`/contacts/${id}/${action}`, {
+      method: 'POST',
+      body: action === 'touch-later' ? { days: 7 } : {},
+    })
+    await load()
+  }
 
   if (loading) {
     return (
@@ -126,7 +155,7 @@ export default function People() {
           className="grow"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name, role, phone or place"
+          placeholder="Search by name, role, workplace or phone"
         />
         <button className="primary" onClick={() => setEditing(null)}>
           Add
@@ -162,6 +191,44 @@ export default function People() {
             </button>
           ))}
         </div>
+      )}
+
+      {/* Keep in touch: who it has been too long with, longest first. */}
+      {dueToReach.length > 0 && !query.trim() && (
+        <section className="card reach-out">
+          <div className="reach-out-head">
+            <strong>Time to reach out</strong>
+            <span className="muted small">
+              {dueToReach.length} {dueToReach.length === 1 ? 'person' : 'people'}
+            </span>
+          </div>
+          {dueToReach.map((t) => (
+            <div className="your-day-line" key={t.id}>
+              <span>
+                <button className="link" onClick={() => setViewing(t.id)}>
+                  {t.name}
+                </button>
+                <span className="muted small">
+                  {t.organization ? ` · ${t.organization}` : ''} ·{' '}
+                  {t.lastTouch ? `last contact ${relativeDay(t.lastTouch)}` : 'no contact on record'}
+                </span>
+              </span>
+              <span className="row">
+                {t.phone && (
+                  <a className="ghost tiny-btn" href={`tel:${t.phone}`}>
+                    Call
+                  </a>
+                )}
+                <button className="ghost tiny-btn" onClick={() => void touch(t.id, 'touched')}>
+                  Talked
+                </button>
+                <button className="ghost tiny-btn" onClick={() => void touch(t.id, 'touch-later')}>
+                  Next week
+                </button>
+              </span>
+            </div>
+          ))}
+        </section>
       )}
 
       {contacts.length === 0 ? (
@@ -203,11 +270,10 @@ export default function People() {
                 <p className="tile-title">{c.name}</p>
                 {/* Only facts that exist. "No role recorded" and "Not met yet"
                     were two lines per card saying nothing. */}
-                {(c.role || c.placeName) && (
-                  <p className="tile-sub">{[c.role, c.placeName].filter(Boolean).join(' · ')}</p>
-                )}
+                {personLine(c) && <p className="tile-sub">{personLine(c)}</p>}
 
                 <div className="tile-tags">
+                  {reachIds.has(c.id) && <span className="tag is-warn">Reach out</span>}
                   {summary.people[c.id]?.waiting ? (
                     <span className={`tag${summary.people[c.id]!.waitingDue ? ' is-warn' : ''}`}>
                       Waiting · {summary.people[c.id]!.waiting}
@@ -257,6 +323,7 @@ export default function People() {
               setViewing(null)
             }}
             onChanged={() => void load()}
+            onOpenPerson={(id) => setViewing(id)}
           />
         </Modal>
       )}
