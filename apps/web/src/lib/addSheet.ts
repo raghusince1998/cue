@@ -22,6 +22,8 @@ export interface AddOptions {
   share?: boolean
   /** Who the times are for, when it is known — booked meetings are named after them. */
   shareWith?: string
+  /** A sentence to start from: "Fill it in myself" from the box on Today. */
+  text?: string
 }
 
 const EVENT = 'cue:add'

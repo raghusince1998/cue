@@ -15,6 +15,7 @@ export {
 } from './scheduleTemplates.ts'
 export { nameParts, shortName, type NameParts } from './names.ts'
 export { fillTemplate, STARTER_TEMPLATES, TEMPLATE_FIELDS, type TemplateValues } from './templates.ts'
+export { composeShared, type Shared } from './share.ts'
 export {
   findMalformedTime,
   extractPlace,

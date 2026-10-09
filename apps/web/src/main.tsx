@@ -4,9 +4,13 @@ import { BrowserRouter } from 'react-router-dom'
 import { registerSW } from 'virtual:pwa-register'
 import { AuthProvider } from './lib/auth.tsx'
 import App from './App.tsx'
+import { catchShare } from './lib/share.ts'
 import './styles.css'
 
 registerSW({ immediate: true })
+
+// Shared in from another app: before routing, so /share never renders.
+catchShare()
 
 const container = document.getElementById('root')
 if (!container) throw new Error('#root missing from index.html')

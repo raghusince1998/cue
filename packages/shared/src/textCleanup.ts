@@ -125,7 +125,9 @@ export function cleanTitle(input: string, options: { place?: string | null } = {
       // Repeating groups: "for the pause awareness session" has two leading
       // filler words, and stripping only one leaves "for the" behind.
       .replace(/^\s*(?:\b(?:for|of|on|in|at|the|a|an|and)\b\s*)+/i, '')
-      .replace(/(?:\b(?:for|of|on|in|at|the|a|an|and)\b\s*)+$/i, '')
+      // And what led into a date that has been cut out: "send the quotation
+      // by [friday 4pm]" is "send the quotation", not "... by".
+      .replace(/(?:\b(?:for|of|on|in|at|the|a|an|and|by|before|until|till)\b\s*)+$/i, '')
       .replace(/^[\s,.:;-]+|[\s,.:;-]+$/g, '')
       .trim()
   )

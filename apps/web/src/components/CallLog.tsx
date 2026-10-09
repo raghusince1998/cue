@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CALL_OUTCOMES, CALL_OUTCOME_LABELS, shortName, type CallOutcome } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
@@ -29,8 +29,22 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
   const [error, setError] = useState<string | null>(null)
   const choices = useMemo(() => dueChoices(), [])
 
-  const who = call.name ?? (name.trim() || call.phone)
-  const short = call.name ? shortName(call.name) : 'them'
+  /** Nobody known yet: opened from "Log a call" on the home screen. */
+  const unknown = !call.contactId && !call.name
+  const [people, setPeople] = useState<{ name: string; phone: string | null }[]>([])
+  useEffect(() => {
+    if (!unknown) return
+    api<{ name: string; phone: string | null }[]>('/contacts')
+      .then((list) => setPeople(list.map((p) => ({ name: p.name, phone: p.phone }))))
+      .catch(() => undefined)
+  }, [unknown])
+
+  // A typed number is a number, not a name.
+  const typed = name.trim()
+  const typedPhone = /^[+\d][\d\s-]{5,}$/.test(typed) ? typed : null
+  const typedName = typedPhone ? null : typed || null
+  const who = call.name ?? (typed || call.phone)
+  const short = call.name ? shortName(call.name) : typedName ? shortName(typedName) : 'them'
   const answered = outcome === 'spoke' || outcome === 'message'
 
   function pick(o: CallOutcome) {
@@ -54,8 +68,8 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
         method: 'POST',
         body: {
           contactId: call.contactId,
-          name: call.name ?? (name.trim() || null),
-          phone: call.phone || null,
+          name: call.name ?? typedName,
+          phone: call.phone || typedPhone,
           outcome,
           notes: notes.trim() || null,
           startedAt: new Date(call.startedAt).toISOString(),
@@ -81,7 +95,10 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
       <div className="stack tight call-log">
         <p className="muted small">Saved. Now a message to {who}:</p>
         <QuickMessage
-          to={{ name: call.name ?? (name.trim() || null), phone: call.phone || null }}
+          to={{
+            name: call.name ?? typedName,
+            phone: call.phone || typedPhone || people.find((p) => p.name === typedName)?.phone || null,
+          }}
           suggest={answered ? /thank|detail/i : /missed|call/i}
           onDone={() => onDone(true)}
         />
@@ -94,12 +111,32 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
 
   return (
     <div className="stack tight call-log">
-      <p className="call-who">
-        <strong>{who}</strong>
-        {call.name && call.phone ? <span className="muted small"> · {call.phone}</span> : null}
-      </p>
-      {!call.contactId && !call.name && (
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Who was it? (optional)" aria-label="Who" />
+      {unknown && !call.phone ? (
+        <label>
+          Who was it?
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="A name from People, or a number"
+            list="call-people"
+            autoFocus
+          />
+          <datalist id="call-people">
+            {people.map((p) => (
+              <option key={p.name} value={p.name} />
+            ))}
+          </datalist>
+        </label>
+      ) : (
+        <>
+          <p className="call-who">
+            <strong>{who}</strong>
+            {call.name && call.phone ? <span className="muted small"> · {call.phone}</span> : null}
+          </p>
+          {unknown && (
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Who was it? (optional)" aria-label="Who" />
+          )}
+        </>
       )}
 
       <div className="chips">

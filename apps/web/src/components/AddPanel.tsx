@@ -42,6 +42,7 @@ export function AddPanel({
   onDone,
   initialMode = 'upcoming',
   initialFull = false,
+  initialText,
   initialRepeat = false,
   initialSchedule = false,
   initialShare = false,
@@ -51,6 +52,8 @@ export function AddPanel({
   onDone: () => void
   initialMode?: 'past' | 'upcoming'
   initialFull?: boolean
+  /** A sentence handed over to the detailed form. */
+  initialText?: string
   /** The detailed form with "every week" chosen. */
   initialRepeat?: boolean
   /** The schedule form, for dates that follow a plan rather than a rhythm. */
@@ -72,7 +75,7 @@ export function AddPanel({
     initialSchedule ? { title: '' } : null,
   )
   /** A sentence the quick box could not read, carried into the detailed form. */
-  const [handedOver, setHandedOver] = useState('')
+  const [handedOver, setHandedOver] = useState(initialText ?? '')
   /** Remounts the detailed form after a quick save, so it starts clean. */
   const [quickSaves, setQuickSaves] = useState(0)
 

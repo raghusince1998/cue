@@ -42,6 +42,39 @@ export default defineConfig(({ mode }) => {
             { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
             { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
           ],
+          // Long-press the icon on the home screen. Each opens Today ready
+          // for that one thing, so capture starts from outside the app.
+          shortcuts: [
+            {
+              name: 'Speak a reminder',
+              short_name: 'Speak',
+              description: 'Say it, and it is planned',
+              url: '/?capture=voice',
+              icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }],
+            },
+            {
+              name: 'Add something',
+              short_name: 'Add',
+              description: 'One line: call Dr. Mehta tomorrow 4pm',
+              url: '/?capture=1',
+              icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }],
+            },
+            {
+              name: 'Log a call',
+              short_name: 'Log a call',
+              description: 'How it went, and what happens next',
+              url: '/?logcall=1',
+              icons: [{ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }],
+            },
+          ],
+          // In the share sheet of other apps: WhatsApp, Gmail, Messages. What
+          // is shared arrives in the box on Today (see lib/share.ts).
+          share_target: {
+            action: '/share',
+            method: 'GET',
+            enctype: 'application/x-www-form-urlencoded',
+            params: { title: 'title', text: 'text', url: 'url' },
+          },
         },
       }),
     ],

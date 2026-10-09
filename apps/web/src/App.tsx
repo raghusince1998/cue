@@ -230,6 +230,7 @@ export default function App() {
             initialSchedule={addOptions.schedule}
             initialShare={addOptions.share}
             initialShareWith={addOptions.shareWith}
+            initialText={addOptions.text}
             onDone={() => setAddOpen(false)}
           />
         </Modal>

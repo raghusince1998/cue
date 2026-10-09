@@ -37,6 +37,15 @@ test('tomorrow with explicit time', () => {
   assert.equal(titleFrom('call client tomorrow 4pm', r), 'call client')
 })
 
+test('what led into the date goes with it: no title ending in "by"', () => {
+  const input = 'Please send the revised quotation by friday 4pm'
+  const r = parse(input)
+  assert.equal(iso(r.date), '2026-08-21 16:00')
+  assert.equal(titleFrom(input, r), 'send the revised quotation')
+  const until = 'finish the tender document before monday 10am'
+  assert.equal(titleFrom(until, parse(until)), 'finish the tender document')
+})
+
 test('day after tomorrow is not swallowed by tomorrow', () => {
   assert.equal(iso(parse('review day after tomorrow').date), '2026-08-21 09:00')
 })

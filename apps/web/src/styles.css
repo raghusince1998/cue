@@ -4310,3 +4310,56 @@ a.link-btn:hover {
   gap: 4px;
   margin-bottom: 6px;
 }
+
+/* ---- Capture on Today ---------------------------------------------- */
+
+.today {
+  grid-template-areas:
+    'capture'
+    'search'
+    'aside'
+    'main';
+}
+
+.today-capture {
+  grid-area: capture;
+  min-width: 0;
+}
+
+.today-capture .quick {
+  margin: 0;
+}
+
+@media (min-width: 1000px) {
+  .today {
+    grid-template-areas:
+      'capture aside'
+      'search  aside'
+      'main    aside';
+    grid-template-rows: auto auto 1fr;
+  }
+
+  .today-aside {
+    grid-row: 1 / span 3;
+  }
+}
+
+.shared-note {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border: 1px dashed var(--accent);
+  border-radius: 12px;
+}
+
+.shared-original {
+  margin-top: 6px;
+}
+
+.shared-original p {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}

@@ -63,14 +63,27 @@ export function QuickAdd({
   onSaved,
   onDone,
   onFillIn,
+  initialText = '',
+  autoFocus = true,
+  listen = false,
+  inline = false,
 }: {
   onSaved: () => void
   /** Called by "Done": the sheet this lives in closes. */
   onDone: () => void
   /** "Fill it in myself" — hands the sentence to the detailed form. */
   onFillIn: (text: string) => void
+  /** Already written: shared in from another app. */
+  initialText?: string
+  /** Off on Today, where a keyboard springing up on every visit would be in the way. */
+  autoFocus?: boolean
+  /** Start listening at once: opened from "Speak a reminder". */
+  listen?: boolean
+  /** On Today rather than in the Add sheet: examples only once it is in use. */
+  inline?: boolean
 }) {
-  const [text, setText] = useState('')
+  const [text, setText] = useState(initialText)
+  const [focused, setFocused] = useState(false)
   const [plan, setPlan] = useState<Plan | null>(null)
   const [saved, setSaved] = useState<Saved | null>(null)
   const [frequent, setFrequent] = useState<Frequent[]>([])
@@ -185,18 +198,20 @@ export function QuickAdd({
               void save()
             }
           }}
-          placeholder="dentist friday 6pm"
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder={inline ? 'Plan something: call Dr. Mehta tomorrow 4pm' : 'call Dr. Mehta tomorrow 4pm'}
           aria-label="What do you want to plan?"
-          autoFocus
+          autoFocus={autoFocus}
         />
-        <DictateButton value={text} onChange={setText} />
+        <DictateButton value={text} onChange={setText} autoStart={listen} label="Speak" />
         <button className="primary" onClick={() => void save()} disabled={!ready || busy}>
           {busy ? 'Saving…' : 'Plan it'}
         </button>
       </div>
 
       {/* Nothing typed: the fastest capture is the one with no typing at all. */}
-      {!text && !saved && frequent.length > 0 && (
+      {!text && !saved && frequent.length > 0 && (!inline || focused) && (
         <div className="quick-frequent">
           <span className="muted small">You often add</span>
           {frequent.map((f) => (
@@ -207,13 +222,13 @@ export function QuickAdd({
         </div>
       )}
 
-      {!text && !saved && frequent.length === 0 && (
+      {!text && !saved && frequent.length === 0 && (!inline || focused) && (
         <p className="muted small quick-hint">
-          One line is enough. &ldquo;dentist friday 6pm&rdquo; ·
-          &ldquo;gym every mon wed fri at 7&rdquo; ·
-          &ldquo;go shopping this evening: milk, bread, peda&rdquo; ·
-          &ldquo;when I go to Mathura remind me to buy peda&rdquo; ·
-          &ldquo;going to Jaipur 12 to 14 October&rdquo;.
+          One line is enough. &ldquo;call Dr. Mehta tomorrow 4pm&rdquo; ·
+          &ldquo;team review every mon wed fri at 10&rdquo; ·
+          &ldquo;prepare for the demo tomorrow 5pm: deck, pricing, samples&rdquo; ·
+          &ldquo;when I go to Pune remind me to visit Apollo Clinic&rdquo; ·
+          &ldquo;going to Pune 12 to 14 October&rdquo;.
         </p>
       )}
 
@@ -343,7 +358,13 @@ export function QuickAdd({
             <button className="ghost small-btn" onClick={() => void undo()} disabled={busy}>
               Undo
             </button>
-            <button className="ghost small-btn" onClick={onDone}>
+            <button
+              className="ghost small-btn"
+              onClick={() => {
+                setSaved(null)
+                onDone()
+              }}
+            >
               Done
             </button>
           </div>

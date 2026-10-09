@@ -8,9 +8,14 @@ import { dictationSupported, startDictation, type DictationHandle } from '../lib
 export function DictateButton({
   value,
   onChange,
+  autoStart = false,
+  label = 'Dictate',
 }: {
   value: string
   onChange: (next: string) => void
+  /** Start listening at once — opened from "Speak a reminder". */
+  autoStart?: boolean
+  label?: string
 }) {
   const [listening, setListening] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -19,6 +24,15 @@ export function DictateButton({
   const base = useRef('')
 
   useEffect(() => () => handle.current?.stop(), [])
+
+  // Once, when opened that way. Some browsers refuse to listen before a tap;
+  // then the button is there to tap.
+  const autoStarted = useRef(false)
+  useEffect(() => {
+    if (!autoStart || autoStarted.current || !dictationSupported()) return
+    autoStarted.current = true
+    toggle()
+  }, [autoStart])
 
   if (!dictationSupported()) return null
 
@@ -54,7 +68,7 @@ export function DictateButton({
         className={listening ? 'primary small-btn' : 'ghost small-btn'}
         onClick={toggle}
       >
-        {listening ? 'Stop dictating' : 'Dictate'}
+        {listening ? 'Stop' : label}
       </button>
       {error && <p className="error small">{error}</p>}
     </>

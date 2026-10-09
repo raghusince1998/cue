@@ -15,6 +15,10 @@ import { WeeklyReview } from '../components/WeeklyReview.tsx'
 import { DailyReport } from '../components/DailyReport.tsx'
 import { Targets } from '../components/Targets.tsx'
 import { startCall } from '../lib/calls.ts'
+import { clearShared, readShared, type Shared } from '../lib/share.ts'
+import { openAdd } from '../lib/addSheet.ts'
+import { QuickAdd } from '../components/QuickAdd.tsx'
+import { CallLog } from '../components/CallLog.tsx'
 import { FocusStart } from '../components/FocusStart.tsx'
 import { NearbyIntentions } from '../components/NearbyIntentions.tsx'
 import { DayBrief } from '../components/DayBrief.tsx'
@@ -313,6 +317,12 @@ export default function Today() {
   /** The daily report, or the morning standup. */
   const [reportOpen, setReportOpen] = useState<'report' | 'standup' | null>(null)
   const [targetsOpen, setTargetsOpen] = useState(false)
+  /** Something shared in from another app, waiting in the box. */
+  const [shared, setShared] = useState<Shared | null>(() => readShared())
+  /** The box, remounted to focus it or start listening: a home-screen shortcut. */
+  const [capture, setCapture] = useState({ key: 0, focus: false, listen: false })
+  /** "Log a call" from the home screen, and when it was opened. */
+  const [loggingCallAt, setLoggingCallAt] = useState<number | null>(null)
   /** Starting focus time: now, or for a free stretch picked in "Your day". */
   const [focusStart, setFocusStart] = useState<{ startAt?: string; maxMinutes?: number } | null>(null)
   const [showAllWaiting, setShowAllWaiting] = useState(false)
@@ -361,6 +371,23 @@ export default function Today() {
     params.delete('review')
     setParams(params, { replace: true })
     setReviewOpen(true)
+  }, [params, setParams])
+
+  // ?capture=1|voice|shared and ?logcall=1: the home-screen shortcuts and the
+  // share sheet. Capture happens from outside the app; this is where it lands.
+  useEffect(() => {
+    const how = params.get('capture')
+    const call = params.get('logcall')
+    if (!how && !call) return
+    params.delete('capture')
+    params.delete('logcall')
+    setParams(params, { replace: true })
+    if (how) {
+      setShared(readShared())
+      setCapture((c) => ({ key: c.key + 1, focus: true, listen: how === 'voice' }))
+      window.scrollTo({ top: 0 })
+    }
+    if (call) setLoggingCallAt(Date.now())
   }, [params, setParams])
 
   // ?targets=1: the summary card's targets, or the review's link, tapped.
@@ -651,6 +678,47 @@ export default function Today() {
 
       {/* Above the brief, where people look for it. Quiet until used: no
           helper text and no results, so it costs one line and nothing else. */}
+      {/* The first thing on the screen: say what you need to remember, here. */}
+      <div className="today-capture">
+        {shared && (
+          <div className="shared-note">
+            <span className="muted small">
+              Shared from another app. Make it a plan, with a time if it needs one, and press
+              Enter.
+            </span>
+            <button
+              className="link small"
+              onClick={() => {
+                clearShared()
+                setShared(null)
+                setCapture((c) => ({ key: c.key + 1, focus: false, listen: false }))
+              }}
+            >
+              Discard
+            </button>
+          </div>
+        )}
+        <QuickAdd
+          key={capture.key}
+          inline
+          autoFocus={capture.focus}
+          listen={capture.listen}
+          initialText={shared?.text ?? ''}
+          onSaved={() => {
+            clearShared()
+            setShared(null)
+          }}
+          onDone={() => undefined}
+          onFillIn={(text) => openAdd({ full: true, text })}
+        />
+        {shared?.original && (
+          <details className="shared-original">
+            <summary className="muted small">The whole message</summary>
+            <p className="small">{shared.original}</p>
+          </details>
+        )}
+      </div>
+
       <div className="today-search">
         <Search variant="inline" />
       </div>
@@ -1021,6 +1089,15 @@ export default function Today() {
               setFocusStart(null)
               void load()
             }}
+          />
+        </Modal>
+      )}
+
+      {loggingCallAt !== null && (
+        <Modal title="Log a call" onClose={() => setLoggingCallAt(null)}>
+          <CallLog
+            call={{ phone: '', contactId: null, name: null, commitmentId: null, commitmentTitle: null, startedAt: loggingCallAt }}
+            onDone={() => setLoggingCallAt(null)}
           />
         </Modal>
       )}
