@@ -15,6 +15,8 @@ interface Report {
   date: string
   meetings: Item[]
   visits: Item[]
+  /** Who as the title, how it went as `who`, what was said as the note. */
+  calls?: Item[]
   done: Item[]
   agreed: Item[]
   waiting: Item[]
@@ -72,6 +74,7 @@ function compose(r: Report, format: Format, o: Options, toName: string | null): 
     return `• ${m.at ? `${clock(m.at)} ` : ''}${m.title}${who ? ` with ${who}` : ''}${o.notes && m.note ? `. ${m.note}` : ''}`
   }
   const visit = (v: Item) => `• ${v.title}${v.who ? `, ${v.who}` : ''}${o.notes && v.note ? `: ${v.note}` : ''}`
+  const call = (c: Item) => `• ${c.title}: ${(c.who ?? 'Call').toLowerCase()}${o.notes && c.note ? `. ${c.note}` : ''}`
   const planned = (n: Item) => `• ${n.at ? `${clock(n.at)} ` : ''}${n.title}`
 
   if (format === 'report') {
@@ -80,6 +83,7 @@ function compose(r: Report, format: Format, o: Options, toName: string | null): 
     const body: string[] = []
     section(body, 'Meetings', r.meetings.map(meeting))
     section(body, 'Visits', r.visits.map(visit))
+    section(body, 'Calls', (r.calls ?? []).map(call))
     section(body, 'Done', r.done.map((d) => `• ${d.title}`))
     section(body, 'Next steps agreed', r.agreed.map((a) => `• ${a.title}${a.at ? ` (by ${shortDay(a.at)})` : ''}`))
     if (o.waiting) section(body, 'Waiting on', r.waiting.map((w) => `• ${w.title}`))
@@ -98,6 +102,7 @@ function compose(r: Report, format: Format, o: Options, toName: string | null): 
   const past = [
     ...r.meetings.map(meeting),
     ...r.visits.map(visit),
+    ...(r.calls ?? []).map(call),
     ...r.done.map((d) => `• ${d.title}`),
   ]
   section(lines, daysBetween(r.date, todayYmd) === 1 ? 'Yesterday' : weekday(r.date), past.length ? past : ['• Nothing recorded'])

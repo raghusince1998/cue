@@ -233,6 +233,10 @@ export const interactions = pgTable(
     lat: doublePrecision('lat'),
     lng: doublePrecision('lng'),
     accuracyM: doublePrecision('accuracy_m'),
+    /** 'visit' or 'call'. */
+    channel: text('channel').notNull().default('visit'),
+    /** Whether you actually spoke. An unanswered call is not contact. */
+    connected: boolean('connected').notNull().default(true),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

@@ -30,6 +30,8 @@ export interface DayReport {
   date: string
   meetings: ReportItem[]
   visits: ReportItem[]
+  /** Calls logged: who as the title, how it went as `who`, what was said as the note. */
+  calls: ReportItem[]
   done: ReportItem[]
   /** Next steps agreed in the day's meetings: yours, and what others will do. */
   agreed: ReportItem[]
@@ -140,6 +142,7 @@ export async function dayReport(
   const i = schema.interactions
   const visitRows = await db
     .select({
+      channel: i.channel,
       startedAt: i.startedAt,
       outcome: i.outcome,
       notes: i.notes,
@@ -213,12 +216,20 @@ export async function dayReport(
       who: withWhom(m.who, m.org),
       note: firstLine(m.notes),
     })),
-    visits: visitRows.map((v) => ({
+    visits: visitRows.filter((v) => v.channel !== 'call').map((v) => ({
       title: v.place ?? v.org ?? 'Visit',
       at: v.startedAt.toISOString(),
       who: v.contact,
       note: firstLine([v.outcome, v.notes].filter(Boolean).join(' — ') || null),
     })),
+    calls: visitRows
+      .filter((v) => v.channel === 'call')
+      .map((v) => ({
+        title: withWhom(v.contact, v.org) ?? 'Unknown number',
+        at: v.startedAt.toISOString(),
+        who: v.outcome,
+        note: firstLine(v.notes),
+      })),
     done: doneRows.map((d) => ({
       // A check-in that was answered reads as what arrived, not as a chore.
       title: d.waitingOn ? `Received from ${d.waitingOn}: ${waitingWhat(d.title)}` : d.title,
@@ -255,6 +266,7 @@ export function composeReminder(r: DayReport, toName: string | null): { title: s
   const parts = [
     r.meetings.length ? `${r.meetings.length} meeting${r.meetings.length === 1 ? '' : 's'}` : null,
     r.visits.length ? `${r.visits.length} visit${r.visits.length === 1 ? '' : 's'}` : null,
+    r.calls.length ? `${r.calls.length} call${r.calls.length === 1 ? '' : 's'}` : null,
     r.done.length ? `${r.done.length} done` : null,
   ].filter(Boolean)
   if (parts.length === 0) return null

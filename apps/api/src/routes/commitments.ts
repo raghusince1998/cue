@@ -26,6 +26,7 @@ import { wrapUpMeeting } from '../services/wrapUp.ts'
 import { prepOpenCount, relatedMeetings } from '../services/meetingPrep.ts'
 import { keepInTouch } from '../services/keepInTouch.ts'
 import { accountKey, listAccounts } from '../services/accounts.ts'
+import { recentCalls } from '../services/calls.ts'
 import { activeFocus, heldCount } from '../services/focus.ts'
 import { peopleSummary, personLinks } from '../services/people.ts'
 
@@ -717,6 +718,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
         .limit(1),
     ])
     const touch = touchList.find((p) => p.id === id) ?? null
+    const calls = await recentCalls(orgId, id, 3)
     const workplace = me?.organization?.trim()
     const colleagues = workplace
       ? await db
@@ -744,6 +746,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
           }
         : null,
       colleagues,
+      calls,
       waitingOnThem: pick(links.waitingOnThem),
       youOwe: pick(links.youOwe),
       nextMeetings: pick(links.nextMeetings),

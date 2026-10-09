@@ -80,7 +80,8 @@ export async function lastTouches(
     db
       .select({ contactId: i.contactId, last: max(i.startedAt) })
       .from(i)
-      .where(and(eq(i.userId, userId), inArray(i.contactId, contactIds)))
+      // An unanswered call is an attempt, not contact.
+      .where(and(eq(i.userId, userId), inArray(i.contactId, contactIds), eq(i.connected, true)))
       .groupBy(i.contactId),
   ])
 

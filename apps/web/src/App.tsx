@@ -7,6 +7,7 @@ import { Modal } from './components/Modal.tsx'
 import { Settings } from './components/Settings.tsx'
 import { Search } from './components/Search.tsx'
 import { AddPanel } from './components/AddPanel.tsx'
+import { CallTracker } from './components/CallTracker.tsx'
 import { api } from './lib/api.ts'
 import { useOpenAdd, type AddOptions } from './lib/addSheet.ts'
 import { resyncPush } from './lib/push.ts'
@@ -216,6 +217,9 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+
+      {/* Asks how a call went when you come back from it. */}
+      <CallTracker />
 
       {addOpen && (
         <Modal title="Add" onClose={() => setAddOpen(false)} closeOnBackdrop={false}>

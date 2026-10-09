@@ -4122,3 +4122,49 @@ a.tiny-btn.link-btn:hover {
   flex-direction: column;
   gap: 8px;
 }
+
+/* ---- Calls --------------------------------------------------------- */
+
+/* "How did it go?", waiting above the tab bar until answered or waved away. */
+.call-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.35);
+  font-size: 14px;
+}
+
+.call-banner span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .call-banner {
+    bottom: 24px;
+  }
+}
+
+.call-who {
+  margin: 0;
+}
+
+.call-log textarea {
+  font-family: inherit;
+}
+
+.call-banner button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

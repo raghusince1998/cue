@@ -5,6 +5,8 @@ import { announceChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
 import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
 import { Modal } from './Modal.tsx'
+import { CallLog } from './CallLog.tsx'
+import type { PendingCall } from '../lib/calls.ts'
 import { Nudge, waitingWhat } from './Nudge.tsx'
 import { WaitingForm } from './WaitingForm.tsx'
 import { dueChoices } from './WrapUp.tsx'
@@ -37,6 +39,7 @@ interface Overview {
     snoozedUntil: string | null
   } | null
   colleagues: { id: string; name: string; role: string | null }[]
+  calls: { at: string; outcome: string | null; notes: string | null; connected: boolean }[]
 }
 
 /** "Physiotherapist at Mehta Physio Clinic", or whichever half is known. */
@@ -84,6 +87,8 @@ export function PersonSheet({
   const [o, setO] = useState<Overview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [nudging, setNudging] = useState<CommitmentDTO | null>(null)
+  /** A call made outside Cue — from the phone's own dialler — being logged. */
+  const [loggingCall, setLoggingCall] = useState<PendingCall | null>(null)
   const [adding, setAdding] = useState<'waiting' | 'owe' | null>(null)
   const [what, setWhat] = useState('')
   const [due, setDue] = useState('tomorrow')
@@ -117,6 +122,7 @@ export function PersonSheet({
         firstMet: null,
         keepInTouch: null,
         colleagues: [],
+        calls: [],
       })
       setPartial(true)
     }
@@ -201,7 +207,7 @@ export function PersonSheet({
         </div>
         <div className="row person-reach">
           {contact.phone && (
-            <a className="ghost small-btn" href={`tel:${contact.phone}`}>
+            <a className="ghost small-btn" href={`tel:${contact.phone}`} data-contact-id={contact.id} data-name={contact.name}>
               Call
             </a>
           )}
@@ -215,6 +221,21 @@ export function PersonSheet({
               Email
             </a>
           )}
+          <button
+            className="link small"
+            onClick={() =>
+              setLoggingCall({
+                phone: contact.phone ?? '',
+                contactId: contact.id,
+                name: contact.name,
+                commitmentId: null,
+                commitmentTitle: null,
+                startedAt: Date.now(),
+              })
+            }
+          >
+            Log a call
+          </button>
           <button className="link small" onClick={onEdit}>
             Edit details
           </button>
@@ -368,6 +389,20 @@ export function PersonSheet({
         )}
       </section>
 
+      {o.calls.length > 0 && (
+        <section className="person-part">
+          <span className="label-text">Recent calls</span>
+          <ul className="plain person-followups">
+            {o.calls.map((c) => (
+              <li key={c.at} className={c.connected ? '' : 'muted'}>
+                {relativeDay(c.at).replace(/^./, (ch) => ch.toUpperCase())} · {c.outcome ?? 'Call'}
+                {c.notes ? <span className="muted"> — {c.notes}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {o.colleagues.length > 0 && contact.organization && (
         <section className="person-part">
           <span className="label-text">Also at {contact.organization}</span>
@@ -436,6 +471,21 @@ export function PersonSheet({
           Share when I&rsquo;m free
         </button>
       </div>
+
+      {loggingCall && (
+        <Modal title="Log a call" onClose={() => setLoggingCall(null)}>
+          <CallLog
+            call={loggingCall}
+            onDone={(saved) => {
+              setLoggingCall(null)
+              if (saved) {
+                onChanged()
+                void load()
+              }
+            }}
+          />
+        </Modal>
+      )}
 
       {nudging && (
         <Modal title="Nudge" onClose={() => setNudging(null)}>

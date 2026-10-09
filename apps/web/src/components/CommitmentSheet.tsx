@@ -283,7 +283,15 @@ export function CommitmentSheet({
                   {c.contactPhone && (
                     <>
                       {' · '}
-                      <a href={`tel:${c.contactPhone}`}>Call {c.contactPhone}</a>
+                      <a
+                        href={`tel:${c.contactPhone}`}
+                        data-contact-id={c.contactId ?? undefined}
+                        data-name={c.contactName ?? undefined}
+                        data-commitment-id={c.id}
+                        data-commitment-title={c.title}
+                      >
+                        Call {c.contactPhone}
+                      </a>
                     </>
                   )}
                 </dd>

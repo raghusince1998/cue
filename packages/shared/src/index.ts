@@ -512,6 +512,38 @@ export type LogVisitInput = z.infer<typeof logVisitInput>
 
 // ---------------------------------------------------------------- commitments
 
+/** How a call went. Only "spoke" is contact; the rest are attempts. */
+export const CALL_OUTCOMES = ['spoke', 'no_answer', 'busy', 'message'] as const
+export type CallOutcome = (typeof CALL_OUTCOMES)[number]
+export const CALL_OUTCOME_LABELS: Record<CallOutcome, string> = {
+  spoke: 'Spoke',
+  no_answer: 'No answer',
+  busy: 'Busy, call back',
+  message: 'Left a message',
+}
+
+export const logCallInput = z.object({
+  contactId: z.string().uuid().nullable().optional(),
+  /** Who, when there is no saved contact to point at. */
+  name: z.string().max(200).nullable().optional(),
+  phone: z.string().max(40).nullable().optional(),
+  outcome: z.enum(CALL_OUTCOMES),
+  notes: z.string().max(4000).nullable().optional(),
+  startedAt: z.string().datetime().optional(),
+  /** The plan the call was made from, e.g. a call back: closed or moved with it. */
+  commitmentId: z.string().uuid().nullable().optional(),
+  markDone: z.boolean().optional(),
+  next: z
+    .object({
+      kind: z.enum(['again', 'followup', 'waiting']),
+      title: z.string().max(300).optional(),
+      dueAt: z.string().datetime(),
+    })
+    .nullable()
+    .optional(),
+})
+export type LogCallInput = z.infer<typeof logCallInput>
+
 /** How far along things are with a clinic or company. */
 export const ACCOUNT_STAGES = ['prospect', 'talking', 'proposal', 'customer', 'lost'] as const
 export type AccountStage = (typeof ACCOUNT_STAGES)[number]

@@ -176,7 +176,7 @@ export function AccountSheet({
               {p.reachOut && <span className="small due-now"> · time to reach out</span>}
             </span>
             {p.phone && (
-              <a className="ghost tiny-btn link-btn" href={`tel:${p.phone}`}>
+              <a className="ghost tiny-btn link-btn" href={`tel:${p.phone}`} data-contact-id={p.id} data-name={p.name}>
                 Call
               </a>
             )}

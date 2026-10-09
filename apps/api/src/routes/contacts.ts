@@ -92,7 +92,9 @@ export async function contactRoutes(app: FastifyInstance) {
         lastSeenAt: sql<Date>`max(${schema.interactions.startedAt})`.as('last_seen_at'),
       })
       .from(schema.interactions)
-      .where(eq(schema.interactions.orgId, orgId))
+      // Visits only: calls have their own place on the person's page, and
+      // "3 meetings" for three phone calls would be wrong.
+      .where(and(eq(schema.interactions.orgId, orgId), eq(schema.interactions.channel, 'visit')))
       .groupBy(schema.interactions.contactId)
       .as('visit_stats')
 
@@ -222,10 +224,11 @@ export async function contactRoutes(app: FastifyInstance) {
         .limit(50),
     ])
 
+    const inPerson = visits.filter((v) => v.channel === 'visit')
     return {
       ...toDTO(contact),
-      visitCount: visits.length,
-      lastSeenAt: visits[0]?.startedAt.toISOString() ?? null,
+      visitCount: inPerson.length,
+      lastSeenAt: inPerson[0]?.startedAt.toISOString() ?? null,
       visits: visits.map((v) => ({
         id: v.id,
         purpose: v.purpose,

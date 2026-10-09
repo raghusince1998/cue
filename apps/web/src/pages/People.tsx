@@ -252,7 +252,7 @@ export default function People() {
               </span>
               <span className="row">
                 {t.phone && (
-                  <a className="ghost tiny-btn" href={`tel:${t.phone}`}>
+                  <a className="ghost tiny-btn" href={`tel:${t.phone}`} data-contact-id={t.id} data-name={t.name}>
                     Call
                   </a>
                 )}
@@ -337,7 +337,12 @@ export default function People() {
 
               <div className="tile-actions">
                 {c.phone && (
-                  <a className="primary small-btn call-btn" href={`tel:${c.phone}`}>
+                  <a
+                    className="primary small-btn call-btn"
+                    href={`tel:${c.phone}`}
+                    data-contact-id={c.id}
+                    data-name={c.name}
+                  >
                     Call
                   </a>
                 )}

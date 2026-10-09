@@ -13,6 +13,7 @@ import { WaitingForm } from '../components/WaitingForm.tsx'
 import { YourDay } from '../components/YourDay.tsx'
 import { WeeklyReview } from '../components/WeeklyReview.tsx'
 import { DailyReport } from '../components/DailyReport.tsx'
+import { startCall } from '../lib/calls.ts'
 import { FocusStart } from '../components/FocusStart.tsx'
 import { NearbyIntentions } from '../components/NearbyIntentions.tsx'
 import { DayBrief } from '../components/DayBrief.tsx'
@@ -189,7 +190,14 @@ function Card({
           </span>
         )}
         {commitment.contactPhone && (
-          <a className="ghost small-btn call-btn" href={`tel:${commitment.contactPhone}`}>
+          <a
+            className="ghost small-btn call-btn"
+            href={`tel:${commitment.contactPhone}`}
+            data-contact-id={commitment.contactId ?? undefined}
+            data-name={commitment.contactName ?? undefined}
+            data-commitment-id={commitment.id}
+            data-commitment-title={commitment.title}
+          >
             Call {commitment.contactName ?? ''}
           </a>
         )}
@@ -467,7 +475,15 @@ export default function Today() {
     if (action === 'call') {
       void api<CommitmentDTO>(`/commitments/${id}`)
         .then((c) => {
-          if (c.contactPhone) window.location.href = `tel:${c.contactPhone}`
+          if (!c.contactPhone) return
+          startCall({
+            phone: c.contactPhone,
+            contactId: c.contactId,
+            name: c.contactName,
+            commitmentId: c.id,
+            commitmentTitle: c.title,
+          })
+          window.location.href = `tel:${c.contactPhone}`
         })
         .finally(() => setParams({}, { replace: true }))
       return

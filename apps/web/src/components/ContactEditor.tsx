@@ -115,7 +115,12 @@ export function ContactEditor({
   return (
     <div className="stack tight">
       {phone.trim() && (
-        <a className="primary call-cta" href={`tel:${phone.trim()}`}>
+        <a
+          className="primary call-cta"
+          href={`tel:${phone.trim()}`}
+          data-contact-id={contactId ?? undefined}
+          data-name={name.trim() || undefined}
+        >
           Call {name || phone}
         </a>
       )}
@@ -231,9 +236,7 @@ export function ContactEditor({
 
           {profile.visits.length > 0 && (
             <>
-              <span className="label-text">
-                {profile.visits.length} meeting{profile.visits.length === 1 ? '' : 's'}
-              </span>
+              <span className="label-text">Calls and visits · {profile.visits.length}</span>
               <ul className="plain">
                 {profile.visits.slice(0, 8).map((v) => (
                   <li key={v.id} className="muted small">
