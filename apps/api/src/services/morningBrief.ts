@@ -4,6 +4,7 @@ import { sendToUser } from '../push.ts'
 import { buildSummary } from './insights.ts'
 import { keepInTouch, orgOf } from './keepInTouch.ts'
 import { behindLine, weekTargets } from './targets.ts'
+import { occasionLabel, upcomingOccasions } from './occasions.ts'
 import { canBeOverdue, isAwaitingWrapUp, managedByCue, meetingEnd } from './overdue.ts'
 
 /**
@@ -35,6 +36,8 @@ export interface BriefStats {
   reachOut: string[]
   /** "Behind on calls (12 of 40)", when a weekly target is behind pace. */
   behind: string | null
+  /** Today's occasions: "Dr. Mehta's birthday". */
+  occasions: string[]
 }
 
 /** Today in the person's own zone, as SQL bounds — the server's zone is not theirs. */
@@ -106,6 +109,7 @@ export async function briefStats(userId: string, timezone: string, now = new Dat
         : null,
     reachOut,
     behind: behindLine((await weekTargets(userId, now)).metrics),
+    occasions: orgId ? (await upcomingOccasions(orgId, 0, now)).map(occasionLabel) : [],
   }
 }
 
@@ -135,7 +139,8 @@ export function composeBrief(
     stats.overdue === 0 &&
     stats.wrapUps === 0 &&
     stats.reachOut.length === 0 &&
-    !stats.behind
+    !stats.behind &&
+    stats.occasions.length === 0
   if (nothing) return null
 
   const head = [
@@ -145,6 +150,7 @@ export function composeBrief(
   const title = head.length > 0 ? `Today: ${head.join(', ')}` : 'Nothing booked today'
 
   const lines: string[] = []
+  if (stats.occasions.length > 0) lines.push(`Today: ${listNames(stats.occasions)}.`)
   if (stats.first) lines.push(`First up: ${stats.first.title} at ${clockIn(stats.first.dueAt, timezone)}.`)
   if (stats.longestGap && (stats.meetings > 0 || stats.tasks > 0)) {
     lines.push(

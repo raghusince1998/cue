@@ -4518,3 +4518,62 @@ a.link-btn:hover {
   padding-top: 10px;
   border-top: 1px solid var(--border);
 }
+
+/* ---- Occasions and greetings --------------------------------------- */
+
+.month-day-row {
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.month-day {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.month-day select {
+  width: auto;
+}
+
+.occasions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.occasions .link {
+  padding: 0;
+  font-weight: 600;
+}
+
+.greet-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.greet-resume {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.greet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.greet-pick ul {
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+
+.greetings textarea {
+  font-family: inherit;
+}

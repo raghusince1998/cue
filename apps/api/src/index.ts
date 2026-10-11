@@ -17,6 +17,7 @@ import { reportRoutes } from './routes/report.ts'
 import { callRoutes } from './routes/calls.ts'
 import { templateRoutes } from './routes/templates.ts'
 import { targetRoutes } from './routes/targets.ts'
+import { occasionRoutes } from './routes/occasions.ts'
 import { contactRoutes } from './routes/contacts.ts'
 import { visitRoutes } from './routes/visits.ts'
 import { commitmentRoutes } from './routes/commitments.ts'
@@ -79,6 +80,7 @@ await app.register(reportRoutes, { prefix: '/api' })
 await app.register(callRoutes, { prefix: '/api' })
 await app.register(templateRoutes, { prefix: '/api' })
 await app.register(targetRoutes, { prefix: '/api' })
+await app.register(occasionRoutes, { prefix: '/api' })
 await app.register(visitRoutes, { prefix: '/api' })
 await app.register(commitmentRoutes, { prefix: '/api' })
 await app.register(pushRoutes, { prefix: '/api' })

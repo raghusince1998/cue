@@ -21,10 +21,13 @@ export interface Recipient {
 export function QuickMessage({
   to,
   suggest,
+  preset,
   onDone,
 }: {
   to: Recipient
   suggest?: RegExp
+  /** A message for this moment — "Birthday wishes" — first and chosen, not saved as a template. */
+  preset?: { title: string; body: string }
   onDone?: () => void
 }) {
   const { me } = useAuth()
@@ -55,9 +58,13 @@ export function QuickMessage({
     return list
   }, [])
 
+  const presetTemplate: MessageTemplateDTO | null = preset
+    ? { id: 'preset', title: preset.title, body: preset.body, uses: 0 }
+    : null
+
   useEffect(() => {
     void load().then((list) => {
-      const pick = (suggest && list.find((t) => suggest.test(t.title))) || list[0]
+      const pick = presetTemplate ?? ((suggest && list.find((t) => suggest.test(t.title))) || list[0])
       if (pick) choose(pick)
     })
     // Once, on opening: later reloads must not undo what was picked or typed.
@@ -76,7 +83,9 @@ export function QuickMessage({
 
   /** Sent, or as good as: it moves up the list for next time. */
   function used() {
-    if (chosen) void api(`/templates/${chosen.id}/used`, { method: 'POST' }).catch(() => undefined)
+    if (chosen && chosen.id !== 'preset') {
+      void api(`/templates/${chosen.id}/used`, { method: 'POST' }).catch(() => undefined)
+    }
   }
 
   async function copy() {
@@ -110,7 +119,7 @@ export function QuickMessage({
 
   if (templates === null) return <p className="muted small">Loading your messages…</p>
 
-  if (templates.length === 0) {
+  if (templates.length === 0 && !presetTemplate) {
     return (
       <div className="stack tight">
         <p className="muted small">
@@ -137,7 +146,7 @@ export function QuickMessage({
   return (
     <div className="stack tight quick-message">
       <div className="chips">
-        {templates.map((t) => (
+        {[...(presetTemplate ? [presetTemplate] : []), ...templates].map((t) => (
           <button key={t.id} className={`chip${chosen?.id === t.id ? ' selected' : ''}`} onClick={() => choose(t)}>
             {t.title}
           </button>

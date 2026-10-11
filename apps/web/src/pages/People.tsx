@@ -9,6 +9,8 @@ import { PersonSheet, personLine } from '../components/PersonSheet.tsx'
 import { AccountSheet } from '../components/AccountSheet.tsx'
 import { AccountsView } from './Accounts.tsx'
 import { QuickMessage } from '../components/QuickMessage.tsx'
+import { Greetings } from '../components/Greetings.tsx'
+import { OCCASION_MESSAGES, type OccasionKind } from '@cue/shared'
 import { useOnChange } from '../lib/changes.ts'
 import {
   deviceContactsAvailable,
@@ -25,6 +27,16 @@ interface Summary {
     { waiting: number; waitingDue: number; owe: number; next: string | null; lastMet: string | null }
   >
   unsaved: string[]
+}
+
+interface Occasion {
+  contactId: string
+  name: string
+  organization: string | null
+  phone: string | null
+  kind: OccasionKind
+  date: string
+  daysAway: number
 }
 
 interface Touch {
@@ -44,6 +56,17 @@ export default function People() {
   // weekly review can link straight to accounts.
   const [params, setParams] = useSearchParams()
   const view = params.get('view') === 'accounts' ? 'accounts' : 'people'
+
+  // ?wish=<id>&for=birthday: "Send wishes" on Today's card.
+  useEffect(() => {
+    const id = params.get('wish')
+    if (!id) return
+    const kind = params.get('for') === 'anniversary' ? 'anniversary' : 'birthday'
+    setWishing({ contactId: id, kind })
+    params.delete('wish')
+    params.delete('for')
+    setParams(params, { replace: true })
+  }, [params, setParams])
   const [viewingAccount, setViewingAccount] = useState<string | null>(null)
   const [accountsReload, setAccountsReload] = useState(0)
   /** Where a person being added works, when added from an account. */
@@ -96,6 +119,11 @@ export default function People() {
   const [touches, setTouches] = useState<Touch[]>([])
   /** Someone due a word, being sent a quick message. */
   const [messaging, setMessaging] = useState<Touch | null>(null)
+  /** Birthdays and anniversaries in the next few weeks. */
+  const [occasions, setOccasions] = useState<Occasion[]>([])
+  /** Wishing someone on their day: from Today's card, or the list below. */
+  const [wishing, setWishing] = useState<{ contactId: string; kind: OccasionKind } | null>(null)
+  const [greeting, setGreeting] = useState(false)
   const dueToReach = touches.filter((t) => t.due)
   const reachIds = new Set(dueToReach.map((t) => t.id))
   /** The person open in their page, and a name to start a new person with. */
@@ -103,14 +131,16 @@ export default function People() {
   const [newName, setNewName] = useState('')
 
   const load = useCallback(async () => {
-    const [list, s, t] = await Promise.all([
+    const [list, s, t, occ] = await Promise.all([
       api<ContactDTO[]>('/contacts'),
       api<Summary>('/people/summary').catch(() => ({ people: {}, unsaved: [] })),
       api<{ people: Touch[] }>('/people/keep-in-touch').catch(() => ({ people: [] as Touch[] })),
+      api<Occasion[]>('/occasions/upcoming', { query: { days: '30' } }).catch(() => [] as Occasion[]),
     ])
     setContacts(list)
     setSummary(s)
     setTouches(t.people)
+    setOccasions(occ)
     setLoading(false)
   }, [])
   useOnChange(() => void load())
@@ -202,6 +232,9 @@ export default function People() {
         </button>
         {/* The native picker, where there is one. Not a sync, and the note
             below says so rather than implying one that cannot exist. */}
+        <button className="ghost" onClick={() => setGreeting(true)} disabled={contacts.length === 0}>
+          Send greetings
+        </button>
         <button
           className="ghost"
           disabled={!canPick || importing}
@@ -231,6 +264,40 @@ export default function People() {
             </button>
           ))}
         </div>
+      )}
+
+      {/* Birthdays and anniversaries coming up: the day itself is the one to act on. */}
+      {occasions.length > 0 && !query.trim() && (
+        <section className="card occasions">
+          <div className="reach-out-head">
+            <strong>Coming up</strong>
+            <span className="muted small">next 30 days</span>
+          </div>
+          {occasions.slice(0, 6).map((o) => (
+            <div className="your-day-line" key={`${o.contactId}-${o.kind}`}>
+              <span>
+                <span aria-hidden>{o.kind === 'birthday' ? '\u{1F382} ' : '\u{1F389} '}</span>
+                <button className="link" onClick={() => setViewing(o.contactId)}>
+                  {o.name}
+                </button>
+                <span className="muted small">
+                  {' '}
+                  · {o.kind} ·{' '}
+                  {o.daysAway === 0
+                    ? 'today'
+                    : o.daysAway === 1
+                      ? 'tomorrow'
+                      : new Date(`${o.date}T00:00:00`).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}
+                </span>
+              </span>
+              {o.daysAway <= 1 && (
+                <button className="ghost tiny-btn" onClick={() => setWishing({ contactId: o.contactId, kind: o.kind })}>
+                  Send wishes
+                </button>
+              )}
+            </div>
+          ))}
+        </section>
       )}
 
       {/* Keep in touch: who it has been too long with, longest first. */}
@@ -363,6 +430,29 @@ export default function People() {
 
         </>
       )}
+
+      {greeting && (
+        <Modal title="Send greetings" onClose={() => setGreeting(false)}>
+          <Greetings contacts={contacts} onClose={() => setGreeting(false)} />
+        </Modal>
+      )}
+
+      {wishing && (() => {
+        const c = contacts.find((x) => x.id === wishing.contactId)
+        if (!c) return null
+        return (
+          <Modal title={`Wish ${c.name}`} onClose={() => setWishing(null)}>
+            <QuickMessage
+              to={{ name: c.name, company: c.organization, phone: c.phone, email: c.email }}
+              preset={{
+                title: wishing.kind === 'birthday' ? 'Birthday wishes' : 'Anniversary wishes',
+                body: OCCASION_MESSAGES[wishing.kind],
+              }}
+              onDone={() => setWishing(null)}
+            />
+          </Modal>
+        )
+      })()}
 
       {messaging && (
         <Modal title={`Message ${messaging.name}`} onClose={() => setMessaging(null)}>

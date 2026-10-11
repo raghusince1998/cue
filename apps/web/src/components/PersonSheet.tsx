@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { KEEP_IN_TOUCH_CHOICES, shortName, type CommitmentDTO } from '@cue/shared'
+import {
+  KEEP_IN_TOUCH_CHOICES,
+  OCCASION_MESSAGES,
+  daysUntil,
+  monthDayLabel,
+  nextMonthDay,
+  shortName,
+  type CommitmentDTO,
+  type OccasionKind,
+} from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
@@ -18,6 +27,8 @@ interface Contact {
   role: string | null
   organization: string | null
   keepInTouchDays: number | null
+  birthday?: string | null
+  anniversary?: string | null
   phone: string | null
   email: string | null
   placeName: string | null
@@ -91,6 +102,8 @@ export function PersonSheet({
   /** A call made outside Cue — from the phone's own dialler — being logged. */
   const [loggingCall, setLoggingCall] = useState<PendingCall | null>(null)
   const [messaging, setMessaging] = useState(false)
+  /** Wishes for an occasion: the message starts as "Happy birthday". */
+  const [wishing, setWishing] = useState<OccasionKind | null>(null)
   const [adding, setAdding] = useState<'waiting' | 'owe' | null>(null)
   const [what, setWhat] = useState('')
   const [due, setDue] = useState('tomorrow')
@@ -394,6 +407,33 @@ export function PersonSheet({
         )}
       </section>
 
+      {(contact.birthday || contact.anniversary) && (
+        <section className="person-part">
+          {(['birthday', 'anniversary'] as const)
+            .filter((k) => contact[k])
+            .map((k) => {
+              const next = nextMonthDay(contact[k]!)
+              const away = next ? daysUntil(next) : null
+              return (
+                <div className="your-day-line" key={k}>
+                  <span className="small">
+                    {k === 'birthday' ? 'Birthday' : 'Anniversary'} · {monthDayLabel(contact[k]!)}
+                    <span className={`small ${away === 0 ? 'due-now' : 'muted'}`}>
+                      {' '}
+                      · {away === 0 ? 'today' : away === 1 ? 'tomorrow' : `in ${away} days`}
+                    </span>
+                  </span>
+                  {away !== null && away <= 1 && (
+                    <button className="ghost tiny-btn" onClick={() => setWishing(k)}>
+                      Send wishes
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+        </section>
+      )}
+
       {o.calls.length > 0 && (
         <section className="person-part">
           <span className="label-text">Recent calls</span>
@@ -476,6 +516,19 @@ export function PersonSheet({
           Share when I&rsquo;m free
         </button>
       </div>
+
+      {wishing && (
+        <Modal title={`Wish ${first}`} onClose={() => setWishing(null)}>
+          <QuickMessage
+            to={{ name: contact.name, company: contact.organization, phone: contact.phone, email: contact.email }}
+            preset={{
+              title: wishing === 'birthday' ? 'Birthday wishes' : 'Anniversary wishes',
+              body: OCCASION_MESSAGES[wishing],
+            }}
+            onDone={() => setWishing(null)}
+          />
+        </Modal>
+      )}
 
       {messaging && (
         <Modal title={`Message ${first}`} onClose={() => setMessaging(false)}>

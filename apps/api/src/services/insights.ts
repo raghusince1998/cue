@@ -1,4 +1,6 @@
 import { and, asc, eq, gte, isNull, lt, lte, ne, or, sql, isNotNull } from 'drizzle-orm'
+import { occasionLabel, upcomingOccasions } from './occasions.ts'
+import { orgOf } from './keepInTouch.ts'
 import { db, schema } from '../db/index.ts'
 import { estimateTravel, geocode, sameLabel } from './travel.ts'
 import { canBeOverdue, takesTime } from './overdue.ts'
@@ -366,6 +368,22 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
       detail: 'They stay out of your way until you do, then surface on their own.',
       action: { label: 'Plan a trip', href: '/trips' },
       weight: 30,
+    })
+  }
+
+  // ------------------------------------------- birthdays and anniversaries
+  const orgId = await orgOf(userId)
+  const occasions = orgId ? (await upcomingOccasions(orgId, 1, now)).slice(0, 3) : []
+  for (const o of occasions) {
+    insights.push({
+      id: `occasion-${o.contactId}-${o.kind}-${o.date}`,
+      tone: 'opportunity',
+      headline: `${occasionLabel(o)} ${o.daysAway === 0 ? 'today' : 'tomorrow'}`,
+      detail: o.organization
+        ? `${o.organization}. A message on the day is remembered.`
+        : 'A message on the day is remembered.',
+      action: { label: 'Send wishes', href: `/people?wish=${o.contactId}&for=${o.kind}` },
+      weight: o.daysAway === 0 ? 88 : 60,
     })
   }
 

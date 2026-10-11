@@ -20,6 +20,15 @@ export { CITIES, findCity, samePlace } from './cities.ts'
 export { reopenTime } from './reopen.ts'
 export { parseWishList, type WishList } from './wishes.ts'
 export {
+  GREETING_OCCASIONS,
+  MONTH_DAY,
+  OCCASION_MESSAGES,
+  daysUntil,
+  monthDayLabel,
+  nextMonthDay,
+  type OccasionKind,
+} from './occasions.ts'
+export {
   findMalformedTime,
   extractPlace,
   cleanTitle,
@@ -565,6 +574,12 @@ export interface TargetProgress {
   status: 'done' | 'on' | 'behind' | 'untracked'
 }
 
+export const startGreetingsInput = z.object({
+  occasion: z.string().trim().min(1).max(80),
+  message: z.string().trim().min(1).max(2000),
+  contactIds: z.array(z.string().uuid()).min(1).max(500),
+})
+
 export const saveTemplateInput = z.object({
   title: z.string().trim().min(1).max(80),
   body: z.string().trim().min(1).max(2000),
@@ -644,6 +659,9 @@ export const createContactInput = z.object({
   role: z.string().max(120).optional(),
   organization: z.string().max(200).optional(),
   keepInTouchDays: z.number().int().min(1).max(366).nullable().optional(),
+  /** "MM-DD", no year. */
+  birthday: z.string().regex(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/).nullable().optional(),
+  anniversary: z.string().regex(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/).nullable().optional(),
   phone: z.string().max(40).optional(),
   email: z.string().email().max(200).optional().or(z.literal('')),
   notes: z.string().max(4000).optional(),
@@ -807,6 +825,9 @@ export interface ContactDTO {
   /** Where they work — a clinic, a company. */
   organization: string | null
   keepInTouchDays: number | null
+  /** "MM-DD". */
+  birthday?: string | null
+  anniversary?: string | null
   phone: string | null
   email: string | null
   notes: string | null

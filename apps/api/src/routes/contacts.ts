@@ -53,6 +53,8 @@ export async function contactRoutes(app: FastifyInstance) {
     role: schema.contacts.role,
     organization: schema.contacts.organization,
     keepInTouchDays: schema.contacts.keepInTouchDays,
+    birthday: schema.contacts.birthday,
+    anniversary: schema.contacts.anniversary,
     phone: schema.contacts.phone,
     email: schema.contacts.email,
     notes: schema.contacts.notes,
@@ -67,6 +69,8 @@ export async function contactRoutes(app: FastifyInstance) {
     role: string | null
     organization: string | null
     keepInTouchDays: number | null
+    birthday: string | null
+    anniversary: string | null
     phone: string | null
     email: string | null
     notes: string | null
@@ -335,6 +339,8 @@ export async function contactRoutes(app: FastifyInstance) {
           placeId: body.placeId ?? null,
           keepInTouchDays: body.keepInTouchDays ?? null,
           keepInTouchSince: body.keepInTouchDays ? new Date() : null,
+          birthday: body.birthday ?? null,
+          anniversary: body.anniversary ?? null,
         })
         .returning(),
       'contact',
@@ -371,6 +377,8 @@ export async function contactRoutes(app: FastifyInstance) {
       .update(schema.contacts)
       .set({
         ...touch,
+        ...(body.birthday !== undefined ? { birthday: body.birthday } : {}),
+        ...(body.anniversary !== undefined ? { anniversary: body.anniversary } : {}),
         ...(body.name !== undefined ? { name: body.name.trim() } : {}),
         ...(body.role !== undefined ? { role: blankToNull(body.role) ?? null } : {}),
         ...(body.organization !== undefined

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { KEEP_IN_TOUCH_CHOICES, type ContactDTO, type PlaceDTO } from '@cue/shared'
+import { MonthDayInput } from './MonthDayInput.tsx'
 import { api } from '../lib/api.ts'
 import { formatDateTime } from '../lib/time.ts'
 
@@ -34,6 +35,8 @@ export function ContactEditor({
   /** Workplaces typed before, offered while typing so one clinic stays one clinic. */
   const [workplaces, setWorkplaces] = useState<string[]>([])
   const [keepDays, setKeepDays] = useState<number | null>(null)
+  const [birthday, setBirthday] = useState<string | null>(null)
+  const [anniversary, setAnniversary] = useState<string | null>(null)
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [notes, setNotes] = useState('')
@@ -57,6 +60,8 @@ export function ContactEditor({
         setRole(p.role ?? '')
         setOrganization(p.organization ?? '')
         setKeepDays(p.keepInTouchDays ?? null)
+        setBirthday(p.birthday ?? null)
+        setAnniversary(p.anniversary ?? null)
         setPhone(p.phone ?? '')
         setEmail(p.email ?? '')
         setNotes(p.notes ?? '')
@@ -76,6 +81,8 @@ export function ContactEditor({
         role: role.trim(),
         organization: organization.trim(),
         keepInTouchDays: keepDays,
+        birthday,
+        anniversary,
         phone: phone.trim(),
         email: email.trim(),
         notes: notes.trim(),
@@ -206,6 +213,13 @@ export function ContactEditor({
           something with them.
         </p>
       )}
+
+      {/* Remembered for them, so the day itself is not missed. Keyed so a
+          loaded value reaches the pickers, which keep their own halves. */}
+      <div className="row month-day-row">
+        <MonthDayInput key={`b-${loaded}`} label="Birthday" value={birthday} onChange={setBirthday} />
+        <MonthDayInput key={`a-${loaded}`} label="Anniversary" value={anniversary} onChange={setAnniversary} />
+      </div>
 
       <label>
         Notes

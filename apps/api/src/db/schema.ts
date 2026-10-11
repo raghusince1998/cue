@@ -12,6 +12,7 @@ import {
   pgEnum,
   customType,
   jsonb,
+  primaryKey,
 } from 'drizzle-orm/pg-core'
 
 /** Drizzle has no first-class bytea, so map it to a Node Buffer explicitly. */
@@ -189,6 +190,9 @@ export const contacts = pgTable(
     /** "Talked today", for contact that never became a plan here. */
     lastContactedAt: timestamp('last_contacted_at', { withTimezone: true }),
     touchSnoozedUntil: timestamp('touch_snoozed_until', { withTimezone: true }),
+    /** "MM-DD", no year. */
+    birthday: text('birthday'),
+    anniversary: text('anniversary'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('contacts_org_idx').on(t.orgId), index('contacts_place_idx').on(t.orgId, t.placeId)],
@@ -229,6 +233,41 @@ export const messageTemplates = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('message_templates_user_idx').on(t.userId)],
+)
+
+/** One round of greetings across a contact list: Diwali, New Year. */
+export const greetingRuns = pgTable(
+  'greeting_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => orgs.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    occasion: text('occasion').notNull(),
+    message: text('message').notNull(),
+    /** Who it is for, in order, fixed when the round starts. */
+    contactIds: uuid('contact_ids').array().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('greeting_runs_user_idx').on(t.userId, t.createdAt)],
+)
+
+/** Who in a round has been sent the greeting. */
+export const greetingSends = pgTable(
+  'greeting_sends',
+  {
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => greetingRuns.id, { onDelete: 'cascade' }),
+    contactId: uuid('contact_id')
+      .notNull()
+      .references(() => contacts.id, { onDelete: 'cascade' }),
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.runId, t.contactId] })],
 )
 
 /** One visit, call or meeting. */
