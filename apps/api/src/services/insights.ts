@@ -1,5 +1,6 @@
 import { and, asc, eq, gte, isNull, lt, lte, ne, or, sql, isNotNull } from 'drizzle-orm'
-import { BOARDS, formatRupees } from '@cue/shared'
+import { BOARDS, daysToDue, dueLabel, formatRupees } from '@cue/shared'
+import { listBills } from './bills.ts'
 import { owedPeople } from './owed.ts'
 import { quietItems } from './trackers.ts'
 import { occasionLabel, upcomingOccasions } from './occasions.ts'
@@ -469,6 +470,63 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
       detail: overdueDebts.map((p) => p.name).slice(0, 3).join(', ') + (overdueDebts.length > 3 ? ' and others.' : '.'),
       action: { label: 'Remind them', href: '/expenses?owed=1' },
       weight: 46,
+    })
+  }
+
+  // ---------------------------------------------------- bills and renewals
+  const { bills } = await listBills(userId, now)
+  const amount = (paise: number | null) => (paise ? ` (${formatRupees(paise)})` : '')
+  const overdueBills = bills.filter((x) => x.kind === 'bill' && daysToDue(x.dueOn, now) < 0)
+  const soonBills = bills.filter((x) => {
+    const n = daysToDue(x.dueOn, now)
+    return x.kind === 'bill' && n >= 0 && n <= Math.max(x.remindDays, 1)
+  })
+  const expiring = bills.filter((x) => x.kind === 'renewal' && daysToDue(x.dueOn, now) <= x.remindDays)
+  if (overdueBills.length > 0) {
+    const one = overdueBills[0]!
+    insights.push({
+      id: `bills-overdue-${overdueBills.map((x) => `${x.id}-${x.dueOn}`).join('-')}`,
+      tone: 'urgent',
+      headline:
+        overdueBills.length === 1
+          ? `${one.name}${amount(one.amountPaise)} is ${dueLabel(one.dueOn, 'bill', now)}`
+          : `${overdueBills.length} bills overdue`,
+      detail:
+        overdueBills.length === 1
+          ? 'Pay it, or mark it paid if it already went.'
+          : overdueBills.map((x) => x.name).join(', ') + '.',
+      action: { label: 'Bills', href: '/bills' },
+      weight: 86,
+    })
+  }
+  if (soonBills.length > 0) {
+    const one = soonBills[0]!
+    const total = soonBills.reduce((s, x) => s + (x.amountPaise ?? 0), 0)
+    insights.push({
+      id: `bills-soon-${soonBills.map((x) => `${x.id}-${x.dueOn}`).join('-')}`,
+      tone: 'warning',
+      headline:
+        soonBills.length === 1
+          ? `${one.name}${amount(one.amountPaise)} ${dueLabel(one.dueOn, 'bill', now)}`
+          : `${soonBills.length} bills due soon${total ? ` · ${formatRupees(total)}` : ''}`,
+      detail:
+        soonBills.length === 1
+          ? one.autopay
+            ? 'It pays itself; keep the balance in.'
+            : 'Mark it paid once it is done.'
+          : soonBills.map((x) => `${x.name} ${dueLabel(x.dueOn, 'bill', now)}`).join(' · '),
+      action: { label: 'Bills', href: '/bills' },
+      weight: 62,
+    })
+  }
+  for (const x of expiring.slice(0, 2)) {
+    insights.push({
+      id: `renewal-${x.id}-${x.dueOn}`,
+      tone: daysToDue(x.dueOn, now) < 0 ? 'urgent' : 'warning',
+      headline: `${x.name} ${dueLabel(x.dueOn, 'renewal', now)}`,
+      detail: 'Renewals can take weeks. Start now, and mark it renewed with the new date.',
+      action: { label: 'Renewals', href: '/bills' },
+      weight: 55,
     })
   }
 

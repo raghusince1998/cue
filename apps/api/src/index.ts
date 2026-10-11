@@ -21,6 +21,8 @@ import { occasionRoutes } from './routes/occasions.ts'
 import { expenseRoutes } from './routes/expenses.ts'
 import { owedRoutes } from './routes/owed.ts'
 import { trackerRoutes } from './routes/trackers.ts'
+import { billRoutes } from './routes/bills.ts'
+import { startBillWorker } from './services/bills.ts'
 import { contactRoutes } from './routes/contacts.ts'
 import { visitRoutes } from './routes/visits.ts'
 import { commitmentRoutes } from './routes/commitments.ts'
@@ -87,6 +89,7 @@ await app.register(occasionRoutes, { prefix: '/api' })
 await app.register(expenseRoutes, { prefix: '/api' })
 await app.register(owedRoutes, { prefix: '/api' })
 await app.register(trackerRoutes, { prefix: '/api' })
+await app.register(billRoutes, { prefix: '/api' })
 await app.register(visitRoutes, { prefix: '/api' })
 await app.register(commitmentRoutes, { prefix: '/api' })
 await app.register(pushRoutes, { prefix: '/api' })
@@ -161,6 +164,7 @@ const stopPrep = startPrepWorker()
 const stopReviews = startWeeklyReviewWorker()
 const stopFocus = startFocusWorker()
 const stopReports = startReportWorker()
+const stopBills = startBillWorker()
 
 // Keeps the rolling window of generated occurrences topped up. Hourly is ample
 // for a 120-day horizon, and it runs once at boot so a series created while the
@@ -204,6 +208,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   stopReviews()
   stopFocus()
   stopReports()
+  stopBills()
     clearInterval(recurrenceTimer)
     clearInterval(feedTimer)
     clearInterval(purgeTimer)

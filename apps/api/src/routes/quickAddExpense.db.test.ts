@@ -85,3 +85,17 @@ test('tracked: a new application, then an interview that is part of it', async (
   assert.equal(interview.trackerItem!.moveTo, 'interview')
   assert.ok(interview.assumptions.some((a) => a.includes('Zoho application')))
 })
+
+test('bills and renewals from one line', async () => {
+  const rent = await quick.interpret(me.userId, me.orgId, 'rent ₹15,000 on the 1st every month')
+  assert.equal(rent.kind, 'bill')
+  assert.equal(rent.bill!.name, 'Rent')
+  assert.equal(rent.bill!.amountPaise, 1500000)
+  assert.equal(rent.bill!.repeat, 'monthly')
+  const passport = await quick.interpret(me.userId, me.orgId, 'passport expires 12 march 2030')
+  assert.equal(passport.kind, 'bill')
+  assert.equal(passport.bill!.kind, 'renewal')
+  assert.equal(passport.bill!.dueOn, '2030-03-12')
+  const todo = await quick.interpret(me.userId, me.orgId, 'send the bill to Anita tomorrow 10am')
+  assert.equal(todo.kind, 'commitment', 'a to-do about a bill is still a to-do')
+})

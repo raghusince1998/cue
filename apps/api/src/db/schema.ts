@@ -271,6 +271,54 @@ export const expenses = pgTable(
   (t) => [index('expenses_user_day_idx').on(t.userId, t.spentOn)],
 )
 
+/** Something due again and again, or something that expires. */
+export const bills = pgTable(
+  'bills',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => orgs.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** 'bill' to pay, or 'renewal' of something that expires. */
+    kind: text('kind').notNull().default('bill'),
+    category: text('category').notNull().default('other'),
+    amountPaise: bigint('amount_paise', { mode: 'number' }),
+    dueOn: date('due_on').notNull(),
+    /** The day of the month it is due on, kept through short months. */
+    anchorDay: integer('anchor_day'),
+    repeat: text('repeat').notNull().default('monthly'),
+    remindDays: integer('remind_days').notNull().default(3),
+    autopay: boolean('autopay').notNull().default(false),
+    notes: text('notes'),
+    active: boolean('active').notNull().default(true),
+    lastPaidOn: date('last_paid_on'),
+    lastRemindedOn: date('last_reminded_on'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('bills_user_due_idx').on(t.userId, t.active, t.dueOn)],
+)
+
+/** Each time a bill was paid, or a renewal renewed. */
+export const billPayments = pgTable(
+  'bill_payments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    billId: uuid('bill_id')
+      .notNull()
+      .references(() => bills.id, { onDelete: 'cascade' }),
+    /** The due date this payment was for. */
+    dueOn: date('due_on').notNull(),
+    paidOn: date('paid_on').notNull(),
+    amountPaise: bigint('amount_paise', { mode: 'number' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('bill_payments_bill_idx').on(t.billId, t.paidOn)],
+)
+
 /** Something moving through stages: a job application, a candidate, a deal. */
 export const trackerItems = pgTable(
   'tracker_items',

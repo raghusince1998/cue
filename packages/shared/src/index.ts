@@ -35,6 +35,21 @@ export {
 import { CLAIM_STATUSES as CLAIMS, EXPENSE_CATEGORY_KEYS as EXPENSE_KEYS } from './expenses.ts'
 export { owedMessage, parseOwed, splitEqually, type OwedLine, type ParsedOwed } from './owed.ts'
 export {
+  BILL_CATEGORIES,
+  BILL_CATEGORY_KEYS,
+  REPEATS,
+  REPEAT_KEYS,
+  categoryOfBill,
+  daysToDue,
+  dueLabel,
+  nextDue,
+  parseBill,
+  type BillCategory,
+  type ParsedBill,
+  type Repeat,
+} from './bills.ts'
+import { BILL_CATEGORY_KEYS as BILL_KEYS, REPEAT_KEYS as REPEATS_ } from './bills.ts'
+export {
   BOARDS,
   BOARD_KEYS,
   isLaterStage,
@@ -699,6 +714,43 @@ const trackerFields = {
     .nullable()
     .optional(),
   notes: z.string().max(4000).nullable().optional(),
+}
+
+const ymdString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+
+export const createBillInput = z.object({
+  name: z.string().trim().min(1).max(120),
+  kind: z.enum(['bill', 'renewal']).default('bill'),
+  category: z.enum(BILL_KEYS).optional(),
+  amountPaise: z.number().int().min(1).max(10_000_000_000_000).nullable().optional(),
+  dueOn: ymdString,
+  repeat: z.enum(REPEATS_).default('monthly'),
+  remindDays: z.number().int().min(0).max(90).optional(),
+  autopay: z.boolean().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+})
+export const updateBillInput = createBillInput.partial()
+
+/** Paid, or renewed: when, how much this time, and — for a renewal — until when. */
+export const payBillInput = z.object({
+  paidOn: ymdString.optional(),
+  amountPaise: z.number().int().min(1).max(10_000_000_000_000).nullable().optional(),
+  nextDueOn: ymdString.optional(),
+})
+
+export interface BillDTO {
+  id: string
+  name: string
+  kind: 'bill' | 'renewal'
+  category: (typeof BILL_KEYS)[number]
+  amountPaise: number | null
+  dueOn: string
+  repeat: (typeof REPEATS_)[number]
+  remindDays: number
+  autopay: boolean
+  notes: string | null
+  active: boolean
+  lastPaidOn: string | null
 }
 
 /** Something new to track; the stage defaults to where the board starts. */

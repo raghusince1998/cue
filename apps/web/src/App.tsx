@@ -21,6 +21,7 @@ import History from './pages/History.tsx'
 import People from './pages/People.tsx'
 import Expenses from './pages/Expenses.tsx'
 import Tracker from './pages/Tracker.tsx'
+import Bills from './pages/Bills.tsx'
 import { tabsFor, type Section } from '@cue/shared'
 import { UsesPicker } from './components/UsesPicker.tsx'
 
@@ -34,6 +35,7 @@ const SECTION_LINKS: Partial<Record<Section, { to: string; label: string }>> = {
   jobs: { to: '/jobs', label: 'Jobs' },
   hiring: { to: '/hiring', label: 'Hiring' },
   deals: { to: '/deals', label: 'Deals' },
+  bills: { to: '/bills', label: 'Bills' },
 }
 const AVAILABLE = Object.keys(SECTION_LINKS) as Section[]
 
@@ -298,6 +300,7 @@ export default function App() {
           <Route path="/jobs" element={<Tracker key="jobs" board="jobs" />} />
           <Route path="/hiring" element={<Tracker key="hiring" board="hiring" />} />
           <Route path="/deals" element={<Tracker key="deals" board="deals" />} />
+          <Route path="/bills" element={<Bills />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

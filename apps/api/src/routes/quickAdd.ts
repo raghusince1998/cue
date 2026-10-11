@@ -24,6 +24,10 @@ import {
   parseExpense,
   parseOwed,
   parseTrackerLine,
+  parseBill,
+  dueLabel,
+  REPEATS,
+  type ParsedBill,
   isLaterStage,
   stageOf,
   BOARDS,
@@ -52,6 +56,7 @@ import { planWishes } from '../services/wishes.ts'
 import { createExpense, tripOn } from '../services/expenses.ts'
 import { addOwed } from '../services/owed.ts'
 import { createItem, itemMentionedIn, updateItem } from '../services/trackers.ts'
+import { createBill } from '../services/bills.ts'
 import {
   findLinks,
   knownPlaces,
@@ -107,6 +112,8 @@ export type QuickKind =
   | 'owed'
   /** Something to track: "applied to Infosys for data analyst". */
   | 'tracker'
+  /** A bill or a renewal: "rent ₹15,000 on the 1st every month". */
+  | 'bill'
   /** Understood, but it needs a time before it can be saved. */
   | 'needsTime'
   /** Understood, but more than one person could be meant. */
@@ -181,6 +188,11 @@ export async function quickAddRoutes(app: FastifyInstance) {
     // puts the plan against a stranger and offers their phone number.
     if (plan.kind === 'needsPerson') {
       return reply.code(300).send({ error: 'needs_person', plan })
+    }
+
+    if (plan.kind === 'bill' && plan.bill) {
+      const saved = await createBill(orgId, userId, plan.bill)
+      return reply.code(201).send({ ...plan, id: saved.id })
     }
 
     if (plan.kind === 'tracker' && plan.tracker) {
@@ -407,7 +419,7 @@ export async function quickAddRoutes(app: FastifyInstance) {
     const { sub: userId } = scope(req)
     const { kind, id } = z
       .object({
-        kind: z.enum(['commitment', 'intention', 'trip', 'recurrence', 'expense', 'owed', 'tracker']),
+        kind: z.enum(['commitment', 'intention', 'trip', 'recurrence', 'expense', 'owed', 'tracker', 'bill']),
         id: z.string().uuid(),
       })
       .parse(req.params)
@@ -425,7 +437,9 @@ export async function quickAddRoutes(app: FastifyInstance) {
                 ? schema.moneyOwed
                 : kind === 'tracker'
                   ? schema.trackerItems
-                  : schema.recurrences
+                  : kind === 'bill'
+                    ? schema.bills
+                    : schema.recurrences
 
     // Scoped to the owner in the same statement as the delete. Checking after
     // the fact, or not at all, would let any signed-in account remove another's
@@ -490,6 +504,8 @@ export interface QuickPlan {
   expense: { amountPaise: number; category: string; note: string | null; spentOn: string } | null
   /** Money owed to you, read from the line. */
   owed: { amountPaise: number; name: string; note: string | null } | null
+  /** A bill or a renewal, read from the line. */
+  bill: ParsedBill | null
   /** A new job application, candidate or deal, read from the line. */
   tracker: { board: BoardKey; stage: string; title: string; detail: string | null } | null
   /** The tracked item a plan is the next step of, and the stage it moves it to. */
@@ -635,6 +651,7 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
     owed: null,
     tracker: null,
     trackerItem: null,
+    bill: null,
     assumptions,
     problem: null,
     summary: '',
@@ -662,6 +679,31 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
       summary: place
         ? `${n} things saved for ${place}: ${wishList.titles.join(', ')}`
         : `${n} things on your wishlist: ${wishList.titles.join(', ')}`,
+    }
+  }
+
+  // A bill or a renewal: "rent ₹15,000 on the 1st every month", "passport
+  // expires 12 march 2028". Before repeats, which would make rent a plan.
+  const bill = parseBill(text, now)
+  if (bill) {
+    const repeat = REPEATS.find((r) => r.key === bill.repeat)!
+    return {
+      ...base,
+      kind: 'bill',
+      title: bill.name,
+      bill,
+      summary: [
+        bill.name,
+        bill.amountPaise ? formatRupees(bill.amountPaise) : null,
+        dueLabel(bill.dueOn, bill.kind, now),
+        bill.repeat === 'none' ? null : repeat.label.toLowerCase(),
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      assumptions:
+        bill.kind === 'renewal'
+          ? ['A reminder a month before it expires.']
+          : [`A reminder 3 days before${bill.repeat === 'none' ? '' : ', each time'}.`],
     }
   }
 

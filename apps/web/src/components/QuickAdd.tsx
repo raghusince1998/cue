@@ -46,6 +46,7 @@ interface Plan {
     | 'expense'
     | 'owed'
     | 'tracker'
+    | 'bill'
     | 'needsTime'
     | 'needsPerson'
     | 'unclear'
@@ -92,6 +93,7 @@ const KIND_WORD: Record<Plan['kind'], string> = {
   expense: 'Expense',
   owed: 'Owed to you',
   tracker: 'Tracking',
+  bill: 'Bill',
   needsTime: 'Understood',
   needsPerson: 'Which one?',
   unclear: '',
