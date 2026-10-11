@@ -37,7 +37,7 @@ interface Person {
 }
 
 interface Plan {
-  kind: 'commitment' | 'intention' | 'trip' | 'recurrence' | 'expense' | 'needsTime' | 'needsPerson' | 'unclear'
+  kind: 'commitment' | 'intention' | 'trip' | 'recurrence' | 'expense' | 'owed' | 'needsTime' | 'needsPerson' | 'unclear'
   title: string
   summary: string
   assumptions: string[]
@@ -53,6 +53,8 @@ interface Plan {
   upcomingTrip?: UpcomingTrip | null
   /** Money spent, when that is what the line was. */
   expense?: { amountPaise: number; note: string | null } | null
+  /** Money owed to you, when that is what the line was. */
+  owed?: { amountPaise: number; name: string; note: string | null } | null
 }
 
 interface Saved extends Plan {
@@ -75,6 +77,7 @@ const KIND_WORD: Record<Plan['kind'], string> = {
   trip: 'Trip planned',
   recurrence: 'Repeating',
   expense: 'Expense',
+  owed: 'Owed to you',
   needsTime: 'Understood',
   needsPerson: 'Which one?',
   unclear: '',
@@ -212,7 +215,9 @@ export function QuickAdd({
       setText(
         saved.kind === 'expense' && saved.expense
           ? `${formatRupees(saved.expense.amountPaise)} ${saved.expense.note ?? ''}`.trim()
-          : saved.title,
+          : saved.kind === 'owed' && saved.owed
+            ? `${saved.owed.name} owes me ${formatRupees(saved.owed.amountPaise)}${saved.owed.note ? ` for ${saved.owed.note}` : ''}`
+            : saved.title,
       )
       setSaved(null)
       onSaved()

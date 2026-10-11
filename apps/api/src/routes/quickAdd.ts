@@ -22,6 +22,7 @@ import {
   diagnose,
   parseWishList,
   parseExpense,
+  parseOwed,
   spentWhen,
   formatRupees,
   EXPENSE_CATEGORIES,
@@ -44,6 +45,7 @@ import {
 } from '../services/memory.ts'
 import { planWishes } from '../services/wishes.ts'
 import { createExpense, tripOn } from '../services/expenses.ts'
+import { addOwed } from '../services/owed.ts'
 import {
   findLinks,
   knownPlaces,
@@ -95,6 +97,8 @@ export type QuickKind =
   | 'recurrence'
   /** Money spent: "₹450 cab to Mehta Physio". */
   | 'expense'
+  /** Money owed to you: "Ravi owes me ₹500". */
+  | 'owed'
   /** Understood, but it needs a time before it can be saved. */
   | 'needsTime'
   /** Understood, but more than one person could be meant. */
@@ -169,6 +173,16 @@ export async function quickAddRoutes(app: FastifyInstance) {
     // puts the plan against a stranger and offers their phone number.
     if (plan.kind === 'needsPerson') {
       return reply.code(300).send({ error: 'needs_person', plan })
+    }
+
+    if (plan.kind === 'owed' && plan.owed) {
+      const id = await addOwed(orgId, userId, {
+        contactId: plan.contactId,
+        personName: plan.owed.name,
+        amountPaise: plan.owed.amountPaise,
+        note: plan.owed.note,
+      })
+      return reply.code(201).send({ ...plan, id })
     }
 
     if (plan.kind === 'expense' && plan.expense) {
@@ -369,7 +383,7 @@ export async function quickAddRoutes(app: FastifyInstance) {
     const { sub: userId } = scope(req)
     const { kind, id } = z
       .object({
-        kind: z.enum(['commitment', 'intention', 'trip', 'recurrence', 'expense']),
+        kind: z.enum(['commitment', 'intention', 'trip', 'recurrence', 'expense', 'owed']),
         id: z.string().uuid(),
       })
       .parse(req.params)
@@ -383,7 +397,9 @@ export async function quickAddRoutes(app: FastifyInstance) {
             ? schema.trips
             : kind === 'expense'
               ? schema.expenses
-              : schema.recurrences
+              : kind === 'owed'
+                ? schema.moneyOwed
+                : schema.recurrences
 
     // Scoped to the owner in the same statement as the delete. Checking after
     // the fact, or not at all, would let any signed-in account remove another's
@@ -446,6 +462,8 @@ export interface QuickPlan {
   wishes: string[] | null
   /** Money spent, read from the line. */
   expense: { amountPaise: number; category: string; note: string | null; spentOn: string } | null
+  /** Money owed to you, read from the line. */
+  owed: { amountPaise: number; name: string; note: string | null } | null
   /** Plain-words account of every assumption made, shown before and after saving. */
   assumptions: string[]
   /** Why the app could not tell, when it could not. */
@@ -465,7 +483,9 @@ async function enrich(userId: string, orgId: string, raw: string, plan: QuickPla
   if (plan.kind === 'intention' && plan.placeLabel) {
     return { ...plan, upcomingTrip: await upcomingTripTo(userId, plan.placeLabel) }
   }
-  if (plan.kind !== 'commitment' && plan.kind !== 'needsTime' && plan.kind !== 'expense') return plan
+  if (plan.kind !== 'commitment' && plan.kind !== 'needsTime' && plan.kind !== 'expense' && plan.kind !== 'owed') {
+    return plan
+  }
 
   const links = await findLinks(orgId, raw, { contactId: plan.contactId })
   const certain = links.people.filter((p) => p.certain)
@@ -477,6 +497,16 @@ async function enrich(userId: string, orgId: string, raw: string, plan: QuickPla
 
   // An expense is linked to whom it was for, not turned into a trip.
   if (plan.kind === 'expense') return { ...next, links: { ...links, places: [] } }
+  // Owed by a person: the people are the only question worth asking.
+  if (plan.kind === 'owed' && plan.owed) {
+    const who = next.contactId && next.personName ? next.personName : plan.owed.name
+    return {
+      ...next,
+      title: `${who} owes you ${formatRupees(plan.owed.amountPaise)}`,
+      summary: `${formatRupees(plan.owed.amountPaise)} from ${who}${plan.owed.note ? ` · ${plan.owed.note}` : ''}`,
+      links: { ...links, places: [], accounts: [] },
+    }
+  }
 
   if (plan.kind === 'commitment' && plan.dueAt) {
     const trip = await tripLinkFor(userId, raw, plan.placeLabel, new Date(plan.dueAt))
@@ -550,6 +580,7 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
     upcomingTrip: null,
     wishes: null,
     expense: null,
+    owed: null,
     assumptions,
     problem: null,
     summary: '',
@@ -577,6 +608,20 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
       summary: place
         ? `${n} things saved for ${place}: ${wishList.titles.join(', ')}`
         : `${n} things on your wishlist: ${wishList.titles.join(', ')}`,
+    }
+  }
+
+  // Money owed to you: "Ravi owes me ₹500 for tickets", "lent ₹2,000 to Priya".
+  // Before spending, which would read "lent ₹2,000" as money gone.
+  const lent = parseOwed(text)
+  if (lent) {
+    return {
+      ...base,
+      kind: 'owed',
+      title: `${lent.name} owes you ${formatRupees(lent.amountPaise)}`,
+      personName: lent.name,
+      owed: lent,
+      summary: `${formatRupees(lent.amountPaise)} from ${lent.name}${lent.note ? ` · ${lent.note}` : ''}`,
     }
   }
 

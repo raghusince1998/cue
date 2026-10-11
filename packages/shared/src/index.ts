@@ -33,6 +33,7 @@ export {
   type ParsedExpense,
 } from './expenses.ts'
 import { CLAIM_STATUSES as CLAIMS, EXPENSE_CATEGORY_KEYS as EXPENSE_KEYS } from './expenses.ts'
+export { owedMessage, parseOwed, splitEqually, type OwedLine, type ParsedOwed } from './owed.ts'
 export {
   GREETING_OCCASIONS,
   MONTH_DAY,
@@ -619,7 +620,45 @@ export interface ExpenseDTO {
   hasReceipt: boolean
   claimStatus: (typeof CLAIMS)[number]
   claimedAt: string | null
+  /** Who is paying their part back to you. */
+  shares: OwedShare[]
+  /** What is left to claim from the company: the amount less those shares. */
+  claimablePaise: number
 }
+
+/** Someone's part of an expense, owed to you. */
+export interface OwedShare {
+  id: string
+  contactId: string | null
+  name: string
+  amountPaise: number
+  status: 'owed' | 'paid'
+}
+
+const owedAmount = z.number().int().min(1).max(1_000_000_000)
+/** Who: a saved contact, or just a name for someone who is not. */
+const owedBy = {
+  contactId: z.string().uuid().nullable().optional(),
+  personName: z.string().trim().min(1).max(120).nullable().optional(),
+}
+const named = (v: { contactId?: string | null; personName?: string | null }) => Boolean(v.contactId || v.personName)
+
+/** Money lent, or owed for anything else: "Ravi owes me ₹500". */
+export const createOwedInput = z
+  .object({ ...owedBy, amountPaise: owedAmount, note: z.string().trim().max(300).nullable().optional() })
+  .refine(named, { message: 'Who owes it?' })
+
+/** The people paying back their part of an expense; replaces what was there. */
+export const setSharesInput = z.object({
+  shares: z.array(z.object({ ...owedBy, amountPaise: owedAmount }).refine(named, { message: 'Who owes it?' })).max(20),
+})
+
+export const setOwedStatusInput = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(200),
+  status: z.enum(['owed', 'paid']),
+})
+
+export const owedIdsInput = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) })
 
 export const startGreetingsInput = z.object({
   occasion: z.string().trim().min(1).max(80),

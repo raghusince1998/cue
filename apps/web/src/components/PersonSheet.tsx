@@ -20,6 +20,7 @@ import type { PendingCall } from '../lib/calls.ts'
 import { Nudge, waitingWhat } from './Nudge.tsx'
 import { WaitingForm } from './WaitingForm.tsx'
 import { dueChoices } from './WrapUp.tsx'
+import { OwedRow, useUpiId, type OwedPerson } from './Owed.tsx'
 
 interface Contact {
   id: string
@@ -52,6 +53,8 @@ interface Overview {
   } | null
   colleagues: { id: string; name: string; role: string | null }[]
   calls: { at: string; outcome: string | null; notes: string | null; connected: boolean }[]
+  /** Money they owe you, if any. */
+  owesYou: OwedPerson | null
 }
 
 /** "Physiotherapist at Mehta Physio Clinic", or whichever half is known. */
@@ -109,6 +112,7 @@ export function PersonSheet({
   const [due, setDue] = useState('tomorrow')
   const [busy, setBusy] = useState(false)
   const choices = useMemo(() => dueChoices(), [])
+  const [upiId] = useUpiId()
 
   /** True when the person loaded but what is open with them could not. */
   const [partial, setPartial] = useState(false)
@@ -138,6 +142,7 @@ export function PersonSheet({
         keepInTouch: null,
         colleagues: [],
         calls: [],
+        owesYou: null,
       })
       setPartial(true)
     }
@@ -431,6 +436,13 @@ export function PersonSheet({
                 </div>
               )
             })}
+        </section>
+      )}
+
+      {o.owesYou && (
+        <section className="person-part">
+          <span className="label-text">Money {first} owes you</span>
+          <OwedRow person={o.owesYou} upiId={upiId} onChanged={() => void load()} compact />
         </section>
       )}
 

@@ -93,6 +93,8 @@ export const users = pgTable(
     lastBriefOn: date('last_brief_on'),
     /** Where they live: a plan in this city is not a trip. */
     homeCity: text('home_city'),
+    /** Put in a reminder to pay back, so paying is one tap. */
+    upiId: text('upi_id'),
     /** Weekly goals by metric: { calls: 40, visits: 10 }. Absent means not tracked. */
     weeklyTargets: jsonb('weekly_targets').$type<Record<string, number>>().notNull().default({}),
     /** An evening reminder to send the daily report. */
@@ -262,6 +264,32 @@ export const expenses = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('expenses_user_day_idx').on(t.userId, t.spentOn)],
+)
+
+/** Money someone owes you: their share of an expense, or money lent. */
+export const moneyOwed = pgTable(
+  'money_owed',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => orgs.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+    /** Kept as well as the link: someone not saved can owe you too. */
+    personName: text('person_name').notNull(),
+    expenseId: uuid('expense_id').references(() => expenses.id, { onDelete: 'cascade' }),
+    amountPaise: integer('amount_paise').notNull(),
+    note: text('note'),
+    status: text('status').notNull().default('owed'),
+    askedAt: timestamp('asked_at', { withTimezone: true }),
+    askCount: integer('ask_count').notNull().default(0),
+    paidAt: timestamp('paid_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('money_owed_user_idx').on(t.userId, t.status)],
 )
 
 /** One round of greetings across a contact list: Diwali, New Year. */

@@ -37,6 +37,10 @@ const preferencesInput = z.object({
   reportToPhone: optionalText(40),
   /** Where they live: plans in this city are not trips. */
   homeCity: optionalText(120),
+  /** "name@okaxis": put in reminders to pay you back. */
+  upiId: optionalText(120).refine((v) => !v || /^[\w.\-]{2,256}@[a-zA-Z][a-zA-Z0-9]{1,63}$/.test(v), {
+    message: 'A UPI ID looks like name@okaxis.',
+  }),
 })
 
 const selection = {
@@ -56,6 +60,7 @@ const selection = {
   reportToEmail: schema.users.reportToEmail,
   reportToPhone: schema.users.reportToPhone,
   homeCity: schema.users.homeCity,
+  upiId: schema.users.upiId,
 }
 
 export async function meRoutes(app: FastifyInstance) {
@@ -105,6 +110,7 @@ export async function meRoutes(app: FastifyInstance) {
         ...(body.reportToEmail !== undefined ? { reportToEmail: body.reportToEmail } : {}),
         ...(body.reportToPhone !== undefined ? { reportToPhone: body.reportToPhone } : {}),
         ...(body.homeCity !== undefined ? { homeCity: body.homeCity } : {}),
+        ...(body.upiId !== undefined ? { upiId: body.upiId } : {}),
       })
       .where(eq(schema.users.id, sub))
 

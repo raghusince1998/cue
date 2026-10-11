@@ -1,5 +1,6 @@
 import { and, asc, eq, gte, isNull, lt, lte, ne, or, sql, isNotNull } from 'drizzle-orm'
 import { formatRupees } from '@cue/shared'
+import { owedPeople } from './owed.ts'
 import { occasionLabel, upcomingOccasions } from './occasions.ts'
 import { orgOf } from './keepInTouch.ts'
 import { db, schema } from '../db/index.ts'
@@ -392,8 +393,14 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
   // Last month's spend, still unclaimed once the month has turned: the claim
   // that slips is the one whose receipts are already lost.
   const monthStart = dayKey(new Date(now.getFullYear(), now.getMonth(), 1))
+  // What is the company's to pay: the amount less what others pay back.
+  const claimable = sql`(${schema.expenses.amountPaise} - coalesce((select sum(m.amount_paise) from money_owed m where m.expense_id = ${schema.expenses.id}), 0))`
+  const claimableSums = {
+    n: sql<number>`(count(*) filter (where ${claimable} > 0))::int`,
+    paise: sql<number>`coalesce(sum(greatest(${claimable}, 0)), 0)::int`,
+  }
   const [owed] = await db
-    .select({ n: sql<number>`count(*)::int`, paise: sql<number>`coalesce(sum(${schema.expenses.amountPaise}), 0)::int` })
+    .select(claimableSums)
     .from(schema.expenses)
     .where(
       and(
@@ -415,7 +422,7 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
 
   // Claimed a month ago and still not paid back: worth a word with accounts.
   const [unpaid] = await db
-    .select({ n: sql<number>`count(*)::int`, paise: sql<number>`coalesce(sum(${schema.expenses.amountPaise}), 0)::int` })
+    .select(claimableSums)
     .from(schema.expenses)
     .where(
       and(
@@ -432,6 +439,35 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
       detail: 'Mark it once it arrives, or chase it.',
       action: { label: 'See claims', href: '/expenses?paid=1' },
       weight: 34,
+    })
+  }
+
+  // Owed by people for a fortnight, and not reminded this week.
+  const fortnightAgo = dayKey(new Date(now.getTime() - 14 * DAY_MS))
+  const weekAgo = new Date(now.getTime() - 7 * DAY_MS).toISOString()
+  const overdueDebts = (await owedPeople(userId, now)).people.filter(
+    (p) => p.since <= fortnightAgo && (!p.lastAskedAt || p.lastAskedAt < weekAgo),
+  )
+  if (overdueDebts.length === 1) {
+    const p = overdueDebts[0]!
+    const weeks = Math.max(2, Math.floor((now.getTime() - new Date(`${p.since}T00:00:00`).getTime()) / (7 * DAY_MS)))
+    insights.push({
+      id: `owed-${p.key}`,
+      tone: 'warning',
+      headline: `${p.name} has owed you ${formatRupees(p.totalPaise)} for ${weeks} weeks`,
+      detail: p.lastAskedAt ? 'Last reminded over a week ago.' : 'A friendly reminder usually does it.',
+      action: { label: 'Remind them', href: '/expenses?owed=1' },
+      weight: 46,
+    })
+  } else if (overdueDebts.length > 1) {
+    const total = overdueDebts.reduce((s, p) => s + p.totalPaise, 0)
+    insights.push({
+      id: 'owed-several',
+      tone: 'warning',
+      headline: `${formatRupees(total)} owed to you by ${overdueDebts.length} people for over two weeks`,
+      detail: overdueDebts.map((p) => p.name).slice(0, 3).join(', ') + (overdueDebts.length > 3 ? ' and others.' : '.'),
+      action: { label: 'Remind them', href: '/expenses?owed=1' },
+      weight: 46,
     })
   }
 

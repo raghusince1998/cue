@@ -72,6 +72,7 @@ test('a month, with what is still to be claimed', async () => {
     unclaimed: 30000,
     claimed: 170000,
     reimbursed: 0,
+    people: 0,
     byCategory: { travel: 75000, food: 125000 },
   })
   assert.ok(october.expenses.find((x) => x.id === a.id)!.claimedAt)

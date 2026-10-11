@@ -4949,3 +4949,180 @@ a.link-btn:hover {
   justify-content: space-between;
   gap: 10px;
 }
+
+/* ---- Money owed to you --------------------------------------------- */
+
+.expense-side-col {
+  gap: 14px;
+}
+
+.owed-head {
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.owed-head strong {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.owed-card.is-highlit {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.owed-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Name and how long on the left, the amount, then the two things to do. */
+.owed-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'main amount'
+    'main actions'
+    'items items';
+  column-gap: 10px;
+  row-gap: 6px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.owed-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.person-part .owed-row {
+  grid-template-areas:
+    'main actions'
+    'items items';
+  padding: 0;
+  border: none;
+}
+
+.owed-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.owed-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.owed-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.owed-amount {
+  grid-area: amount;
+  justify-self: end;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.owed-actions {
+  grid-area: actions;
+  display: flex;
+  justify-content: flex-end;
+  align-items: start;
+  gap: 6px;
+}
+
+.owed-items {
+  grid-area: items;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px;
+  list-style: none;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.owed-items li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.owed-item-side {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.owed-add-row {
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.amount-field.small-amount {
+  width: 104px;
+  font-size: 15px;
+}
+
+.amount-field.small-amount input {
+  font-size: 15px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.share-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
+.share-head {
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.share-row {
+  gap: 8px;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.share-row input {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.expense-shares {
+  color: var(--accent);
+}
+
+.expense-status.is-people {
+  background: color-mix(in srgb, var(--accent-2) 16%, transparent);
+  color: var(--accent-2);
+}
+
+@media (min-width: 900px) {
+  /* A text link sized to its label needs no button padding to line up. */
+  .link.fit-btn {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}

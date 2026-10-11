@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lt, lte, sql } from 'drizzle-orm'
 import type { ExpenseDTO } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { sharesOf } from './owed.ts'
 
 /**
  * Expenses: logged as they happen, claimed back at the end of the month.
@@ -51,14 +52,21 @@ function select() {
 
 type Row = Awaited<ReturnType<ReturnType<typeof select>['where']>>[number]
 
-function toDTO(r: Row): ExpenseDTO {
-  return {
-    ...r,
-    category: r.category as ExpenseDTO['category'],
-    claimStatus: r.claimStatus as ExpenseDTO['claimStatus'],
-    hasReceipt: Boolean(r.hasReceipt),
-    claimedAt: r.claimedAt?.toISOString() ?? null,
-  }
+/** Rows as sent, each with who is paying their part back. */
+async function toDTOs(rows: Row[]): Promise<ExpenseDTO[]> {
+  const shares = await sharesOf(rows.map((r) => r.id))
+  return rows.map((r) => {
+    const mine = shares.get(r.id) ?? []
+    return {
+      ...r,
+      category: r.category as ExpenseDTO['category'],
+      claimStatus: r.claimStatus as ExpenseDTO['claimStatus'],
+      hasReceipt: Boolean(r.hasReceipt),
+      claimedAt: r.claimedAt?.toISOString() ?? null,
+      shares: mine,
+      claimablePaise: Math.max(0, r.amountPaise - mine.reduce((s, x) => s + x.amountPaise, 0)),
+    }
+  })
 }
 
 export interface ExpenseMonth {
@@ -69,6 +77,8 @@ export interface ExpenseMonth {
     unclaimed: number
     claimed: number
     reimbursed: number
+    /** Other people's parts, owed or paid back. */
+    people: number
     byCategory: Record<string, number>
   }
 }
@@ -81,12 +91,14 @@ export async function expenseMonth(userId: string, month: string): Promise<Expen
   const rows = await select()
     .where(and(eq(e.userId, userId), gte(e.spentOn, from), lt(e.spentOn, to)))
     .orderBy(desc(e.spentOn), desc(e.createdAt))
-  const expenses = rows.map(toDTO)
+  const expenses = await toDTOs(rows)
 
-  const totals = { all: 0, unclaimed: 0, claimed: 0, reimbursed: 0, byCategory: {} as Record<string, number> }
+  // Spent is what you paid; to claim is what is left once others pay their part.
+  const totals = { all: 0, unclaimed: 0, claimed: 0, reimbursed: 0, people: 0, byCategory: {} as Record<string, number> }
   for (const x of expenses) {
     totals.all += x.amountPaise
-    totals[x.claimStatus] += x.amountPaise
+    totals[x.claimStatus] += x.claimablePaise
+    totals.people += x.amountPaise - x.claimablePaise
     totals.byCategory[x.category] = (totals.byCategory[x.category] ?? 0) + x.amountPaise
   }
   return { month, expenses, totals }
@@ -97,7 +109,8 @@ export async function unclaimed(userId: string): Promise<ExpenseDTO[]> {
   const rows = await select()
     .where(and(eq(e.userId, userId), eq(e.claimStatus, 'unclaimed')))
     .orderBy(asc(e.spentOn), asc(e.createdAt))
-  return rows.map(toDTO)
+  // Paid back in full by someone else: nothing left for the company.
+  return (await toDTOs(rows)).filter((x) => x.claimablePaise > 0)
 }
 
 /** Claimed and not yet paid back, oldest claim first: what to chase. */
@@ -105,12 +118,12 @@ export async function awaitingPayment(userId: string): Promise<ExpenseDTO[]> {
   const rows = await select()
     .where(and(eq(e.userId, userId), eq(e.claimStatus, 'claimed')))
     .orderBy(asc(e.claimedAt), asc(e.spentOn))
-  return rows.map(toDTO)
+  return (await toDTOs(rows)).filter((x) => x.claimablePaise > 0)
 }
 
 export async function expenseById(userId: string, id: string): Promise<ExpenseDTO | null> {
   const [row] = await select().where(and(eq(e.id, id), eq(e.userId, userId)))
-  return row ? toDTO(row) : null
+  return row ? (await toDTOs([row]))[0]! : null
 }
 
 export async function createExpense(

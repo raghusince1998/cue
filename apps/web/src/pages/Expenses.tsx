@@ -1,16 +1,33 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { EXPENSE_CATEGORIES, categoryOf, formatRupees, type ExpenseCategory, type ExpenseDTO } from '@cue/shared'
+import {
+  EXPENSE_CATEGORIES,
+  categoryOf,
+  formatRupees,
+  shortName,
+  splitEqually,
+  type ExpenseCategory,
+  type ExpenseDTO,
+} from '@cue/shared'
 import { api, apiFetchBlobUrl, BASE, getToken } from '../lib/api.ts'
 import { useOnChange } from '../lib/changes.ts'
 import { dayLabel, spanLabel } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { waNumber } from '../components/PersonSheet.tsx'
+import { OwedCard, rupeesToPaise } from '../components/Owed.tsx'
 
 interface Month {
   month: string
   expenses: ExpenseDTO[]
-  totals: { all: number; unclaimed: number; claimed: number; reimbursed: number; byCategory: Record<string, number> }
+  totals: {
+    all: number
+    unclaimed: number
+    claimed: number
+    reimbursed: number
+    /** Other people's parts, owed or paid back. */
+    people: number
+    byCategory: Record<string, number>
+  }
 }
 
 interface Recipient {
@@ -45,14 +62,6 @@ function monthName(month: string): string {
 }
 
 const categoryInfo = (key: string) => EXPENSE_CATEGORIES.find((c) => c.key === key) ?? EXPENSE_CATEGORIES.at(-1)!
-
-/** "450", "1,250.50", "₹ 300" → paise; null for anything else. */
-function toPaise(text: string): number | null {
-  const s = text.replace(/[₹,\s]/g, '').replace(/^rs\.?/i, '')
-  if (!/^\d+(\.\d{1,2})?$/.test(s)) return null
-  const paise = Math.round(Number(s) * 100)
-  return paise > 0 && paise <= 1_000_000_000 ? paise : null
-}
 
 /** Who or what it was for, in one phrase. */
 function forWhom(x: ExpenseDTO): string | null {
@@ -111,6 +120,9 @@ export default function Expenses() {
   const [toClaim, setToClaim] = useState<ExpenseDTO[]>([])
   const [awaiting, setAwaiting] = useState<ExpenseDTO[]>([])
   const [accounts, setAccounts] = useState<string[]>([])
+  const [people, setPeople] = useState<{ id: string; name: string }[]>([])
+  const [owedKey, setOwedKey] = useState(0)
+  const [owedFocus, setOwedFocus] = useState(false)
   const [filter, setFilter] = useState<ExpenseCategory | null>(null)
   const [editing, setEditing] = useState<ExpenseDTO | null>(null)
   const [viewing, setViewing] = useState<ExpenseDTO | null>(null)
@@ -128,6 +140,7 @@ export default function Expenses() {
       setData(m)
       setToClaim(u)
       setAwaiting(c)
+      setOwedKey((k) => k + 1)
     } catch (err) {
       setError((err as Error).message)
     }
@@ -143,16 +156,24 @@ export default function Expenses() {
     void api<{ accounts: { name: string }[] }>('/accounts')
       .then((r) => setAccounts(r.accounts.map((a) => a.name)))
       .catch(() => undefined)
+    void api<{ id: string; name: string }[]>('/contacts')
+      .then((r) => setPeople(r.map((c) => ({ id: c.id, name: c.name }))))
+      .catch(() => undefined)
   }, [])
 
-  // Arriving from an insight: "Make a claim", "See claims".
+  // Arriving from an insight: "Make a claim", "See claims", "Remind them".
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     if (params.has('claim')) setSheet('claim')
     else if (params.has('paid')) setSheet('paid')
+    else if (params.has('owed')) setOwedFocus(true)
     else return
     navigate('/expenses', { replace: true })
   }, [location.search, navigate])
+
+  useEffect(() => {
+    if (owedFocus) document.getElementById('owed')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [owedFocus])
 
   const shown = useMemo(
     () => (data?.expenses ?? []).filter((x) => !filter || x.category === filter),
@@ -170,8 +191,8 @@ export default function Expenses() {
     return out
   }, [shown])
 
-  const claimTotal = toClaim.reduce((s, x) => s + x.amountPaise, 0)
-  const awaitingTotal = awaiting.reduce((s, x) => s + x.amountPaise, 0)
+  const claimTotal = toClaim.reduce((s, x) => s + x.claimablePaise, 0)
+  const awaitingTotal = awaiting.reduce((s, x) => s + x.claimablePaise, 0)
   const thisMonth = monthOf(new Date())
   const older = toClaim.filter((x) => x.spentOn < `${thisMonth}-01`).length
   const olderNote =
@@ -199,6 +220,7 @@ export default function Expenses() {
       <div className="expense-top">
         <ExpenseForm
           accounts={accounts}
+          people={people}
           onSaved={(x) => {
             setNote(
               `Saved ${formatRupees(x.amountPaise)}${x.tripLabel ? ` on your ${x.tripLabel} trip` : ''}${x.spentOn.startsWith(month) ? '' : `, in ${monthName(x.spentOn.slice(0, 7))}`}.`,
@@ -207,6 +229,7 @@ export default function Expenses() {
           }}
         />
 
+        <div className="stack expense-side-col">
         <section className="card expense-claims">
           <h2 className="section-title">Claims</h2>
           {toClaim.length === 0 && awaiting.length === 0 ? (
@@ -229,6 +252,9 @@ export default function Expenses() {
             </>
           )}
         </section>
+
+        <OwedCard people={people} highlight={owedFocus} reloadKey={owedKey} onChanged={() => void load()} />
+        </div>
       </div>
 
       {note && <p className="muted small">{note}</p>}
@@ -251,6 +277,7 @@ export default function Expenses() {
             {[
               data.totals.unclaimed && `${formatRupees(data.totals.unclaimed)} to claim`,
               data.totals.claimed && `${formatRupees(data.totals.claimed)} claimed`,
+              data.totals.people && `${formatRupees(data.totals.people)} from people`,
               data.totals.reimbursed && `${formatRupees(data.totals.reimbursed)} paid back`,
             ]
               .filter(Boolean)
@@ -323,6 +350,7 @@ export default function Expenses() {
           <ExpenseForm
             initial={editing}
             accounts={accounts}
+            people={people}
             onCancel={() => setEditing(null)}
             onSaved={() => {
               setEditing(null)
@@ -381,10 +409,23 @@ function ExpenseRow({ x, onEdit, onReceipt }: { x: ExpenseDTO; onEdit: () => voi
         <span className="expense-sub">
           {[x.note ? c.label : null, x.tripLabel && `${x.tripLabel} trip`, who && `for ${who}`].filter(Boolean).join(' · ')}
         </span>
+        {x.shares.length > 0 && (
+          <span className="expense-sub expense-shares">
+            {x.shares
+              .map((s) => `${shortName(s.name)} ${s.status === 'paid' ? 'paid back' : 'owes'} ${formatRupees(s.amountPaise)}`)
+              .join(' · ')}
+          </span>
+        )}
       </button>
       <div className="expense-side">
         <strong>{formatRupees(x.amountPaise)}</strong>
-        <span className={`expense-status is-${x.claimStatus}`}>{STATUS_WORD[x.claimStatus]}</span>
+        {x.claimablePaise > 0 ? (
+          <span className={`expense-status is-${x.claimStatus}`}>{STATUS_WORD[x.claimStatus]}</span>
+        ) : x.shares.every((s) => s.status === 'paid') ? (
+          <span className="expense-status is-reimbursed">Paid back</span>
+        ) : (
+          <span className="expense-status is-people">Owed to you</span>
+        )}
       </div>
       <button className="link small expense-receipt" onClick={onReceipt}>
         {x.hasReceipt ? 'Receipt' : '+ Receipt'}
@@ -393,16 +434,27 @@ function ExpenseRow({ x, onEdit, onReceipt }: { x: ExpenseDTO; onEdit: () => voi
   )
 }
 
+interface ShareDraft {
+  name: string
+  amount: string
+  contactId: string | null
+}
+
+const BLANK_SHARE: ShareDraft = { name: '', amount: '', contactId: null }
+const sharedTotal = (list: { amountPaise: number }[]) => list.reduce((sum, x) => sum + x.amountPaise, 0)
+
 /** Adding one, or changing one: the same few fields. */
 function ExpenseForm({
   initial,
   accounts,
+  people,
   onSaved,
   onCancel,
   onDeleted,
 }: {
   initial?: ExpenseDTO
   accounts: string[]
+  people: { id: string; name: string }[]
   onSaved: (x: ExpenseDTO) => void
   onCancel?: () => void
   onDeleted?: () => void
@@ -415,18 +467,36 @@ function ExpenseForm({
   const [spentOn, setSpentOn] = useState(initial?.spentOn ?? today)
   const [account, setAccount] = useState(initial?.account ?? '')
   const [file, setFile] = useState<File | null>(null)
+  // Who pays their part back. Shares already paid back are shown, not edited.
+  const paidShares = (initial?.shares ?? []).filter((x) => x.status === 'paid')
+  const [shares, setShares] = useState<ShareDraft[]>(() =>
+    (initial?.shares ?? [])
+      .filter((x) => x.status === 'owed')
+      .map((x) => ({ name: x.name, amount: String(x.amountPaise / 100), contactId: x.contactId })),
+  )
+  const [sharing, setSharing] = useState(shares.length > 0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const amountRef = useRef<HTMLInputElement>(null)
 
   const guessed = note.trim() ? categoryOf(note) : null
   const category = picked ?? (guessed && guessed !== 'other' ? guessed : null)
-  const paise = toPaise(amount)
+  const paise = rupeesToPaise(amount)
 
   async function save(e: FormEvent) {
     e.preventDefault()
     if (!paise) {
       setError('How much? Just the number, e.g. 450.')
+      return
+    }
+    const shareList = shares
+      .filter((x) => x.name.trim() && rupeesToPaise(x.amount))
+      .map((x) => {
+        const match = people.find((p) => p.name.toLowerCase() === x.name.trim().toLowerCase())
+        return { contactId: match?.id ?? x.contactId, personName: x.name.trim(), amountPaise: rupeesToPaise(x.amount)! }
+      })
+    if (sharedTotal(shareList) + sharedTotal(paidShares) > paise) {
+      setError(`Their parts come to more than the ${formatRupees(paise)} spent.`)
       return
     }
     setBusy(true)
@@ -439,9 +509,12 @@ function ExpenseForm({
         spentOn,
         account: account.trim() || null,
       }
-      const saved = initial
+      let saved = initial
         ? await api<ExpenseDTO>(`/expenses/${initial.id}`, { method: 'PATCH', body })
         : await api<ExpenseDTO>('/expenses', { method: 'POST', body })
+      if (sharing || initial?.shares.some((x) => x.status === 'owed')) {
+        saved = await api<ExpenseDTO>(`/expenses/${saved.id}/shares`, { method: 'PUT', body: { shares: shareList } })
+      }
       if (file) {
         try {
           await uploadReceipt(saved.id, file)
@@ -456,6 +529,8 @@ function ExpenseForm({
         setPicked(null)
         setAccount('')
         setFile(null)
+        setShares([])
+        setSharing(false)
         amountRef.current?.focus()
       }
       onSaved(saved)
@@ -539,6 +614,108 @@ function ExpenseForm({
           ))}
         </datalist>
       </div>
+
+      {sharing ? (
+        <div className="share-box">
+          <div className="row share-head">
+            <span className="label-text">Who pays you back?</span>
+            {paise && shares.length > 0 && (
+              <span className="row">
+                <button
+                  type="button"
+                  className="link small"
+                  onClick={() => {
+                    const parts = splitEqually(paise - sharedTotal(paidShares), shares.length + paidShares.length)
+                    setShares((list) => list.map((x, i) => ({ ...x, amount: String(parts[i]! / 100) })))
+                  }}
+                >
+                  Split equally
+                </button>
+                {shares.length === 1 && paidShares.length === 0 && (
+                  <button
+                    type="button"
+                    className="link small"
+                    onClick={() => setShares((list) => [{ ...list[0]!, amount: String(paise / 100) }])}
+                  >
+                    They pay it all
+                  </button>
+                )}
+              </span>
+            )}
+          </div>
+          {shares.map((x, i) => (
+            <div className="row share-row" key={i}>
+              <input
+                className="grow"
+                value={x.name}
+                onChange={(e) => {
+                  const name = e.target.value
+                  setShares((list) => list.map((y, j) => (j === i ? { ...y, name, contactId: null } : y)))
+                }}
+                placeholder="Who? e.g. Ravi"
+                aria-label="Who pays back"
+                list="share-people"
+                autoFocus={i === shares.length - 1 && !x.name}
+              />
+              <label className="amount-field small-amount">
+                <span aria-hidden>₹</span>
+                <input
+                  value={x.amount}
+                  onChange={(e) => {
+                    const amount = e.target.value
+                    setShares((list) => list.map((y, j) => (j === i ? { ...y, amount } : y)))
+                  }}
+                  inputMode="decimal"
+                  placeholder="0"
+                  aria-label="Their part"
+                />
+              </label>
+              <button
+                type="button"
+                className="link small danger-text"
+                onClick={() => setShares((list) => list.filter((_, j) => j !== i))}
+                aria-label="Remove"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          {paidShares.map((x) => (
+            <p key={x.id} className="muted small">
+              {x.name} paid back {formatRupees(x.amountPaise)}.
+            </p>
+          ))}
+          <button type="button" className="link small fit-btn" onClick={() => setShares((list) => [...list, BLANK_SHARE])}>
+            + Add a person
+          </button>
+          {paise && (
+            <p className="muted small">
+              {(() => {
+                const theirs = sharedTotal(shares.map((x) => ({ amountPaise: rupeesToPaise(x.amount) ?? 0 }))) + sharedTotal(paidShares)
+                if (theirs > paise) return `Their parts come to more than the ${formatRupees(paise)} spent.`
+                if (theirs === paise) return 'Nothing left to claim from the company.'
+                return `You claim ${formatRupees(paise - theirs)} from the company.`
+              })()}
+            </p>
+          )}
+          <datalist id="share-people">
+            {people.map((p) => (
+              <option key={p.id} value={p.name} />
+            ))}
+          </datalist>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="link small fit-btn"
+          onClick={() => {
+            setSharing(true)
+            setShares([BLANK_SHARE])
+          }}
+        >
+          + Split it, or someone pays you back
+        </button>
+      )}
 
       <div className="row expense-actions">
         <label className="ghost small-btn file-btn">
@@ -676,7 +853,7 @@ const shortDate = (day: string) =>
   new Date(`${day}T00:00:00`).toLocaleDateString([], { day: 'numeric', month: 'short' })
 
 function composeClaim(items: ExpenseDTO[], toName: string | null): string {
-  const total = items.reduce((s, x) => s + x.amountPaise, 0)
+  const total = items.reduce((s, x) => s + x.claimablePaise, 0)
   const days = items.map((x) => x.spentOn).sort()
   const lines: string[] = []
   if (toName?.trim()) lines.push(`Hi ${toName.trim().split(/\s+/)[0]},`, '')
@@ -685,17 +862,22 @@ function composeClaim(items: ExpenseDTO[], toName: string | null): string {
     '',
   )
   const byCat = new Map<string, number>()
-  for (const x of items) byCat.set(x.category, (byCat.get(x.category) ?? 0) + x.amountPaise)
+  for (const x of items) byCat.set(x.category, (byCat.get(x.category) ?? 0) + x.claimablePaise)
   for (const [key, paise] of [...byCat].sort((a, b) => b[1] - a[1])) {
     lines.push(`• ${categoryInfo(key).label}: ${formatRupees(paise)}`)
   }
   lines.push('', 'Details:')
   for (const x of [...items].sort((a, b) => a.spentOn.localeCompare(b.spentOn))) {
     const who = forWhom(x)
-    const what = [x.note ?? categoryInfo(x.category).label, x.tripLabel && `${x.tripLabel} trip`, who && `for ${who}`]
+    const what = [
+      x.note ?? categoryInfo(x.category).label,
+      x.tripLabel && `${x.tripLabel} trip`,
+      who && `for ${who}`,
+      x.shares.length > 0 && `my part of ${formatRupees(x.amountPaise)}`,
+    ]
       .filter(Boolean)
       .join(', ')
-    lines.push(`${shortDate(x.spentOn)} · ${what} · ${formatRupees(x.amountPaise)}`)
+    lines.push(`${shortDate(x.spentOn)} · ${what} · ${formatRupees(x.claimablePaise)}`)
   }
   const receipts = items.filter((x) => x.hasReceipt).length
   if (receipts) lines.push('', `I have receipts for ${receipts === items.length ? 'all of these' : `${receipts} of these`}.`)
@@ -709,7 +891,7 @@ function cell(value: string): string {
 }
 
 function toCsv(items: ExpenseDTO[]): string {
-  const rows = [['Date', 'Category', 'What for', 'Trip', 'For', 'Amount (INR)', 'Receipt']]
+  const rows = [['Date', 'Category', 'What for', 'Trip', 'For', 'Paid (INR)', 'Shared with', 'Amount (INR)', 'Receipt']]
   for (const x of [...items].sort((a, b) => a.spentOn.localeCompare(b.spentOn))) {
     rows.push([
       x.spentOn,
@@ -718,11 +900,13 @@ function toCsv(items: ExpenseDTO[]): string {
       x.tripLabel ?? '',
       forWhom(x) ?? '',
       (x.amountPaise / 100).toFixed(2),
+      x.shares.map((y) => y.name).join('; '),
+      (x.claimablePaise / 100).toFixed(2),
       x.hasReceipt ? 'Yes' : 'No',
     ])
   }
-  const total = items.reduce((s, x) => s + x.amountPaise, 0)
-  rows.push(['', '', '', '', 'Total', (total / 100).toFixed(2), ''])
+  const total = items.reduce((s, x) => s + x.claimablePaise, 0)
+  rows.push(['', '', '', '', '', '', 'Total', (total / 100).toFixed(2), ''])
   return rows.map((r) => r.map(cell).join(',')).join('\r\n')
 }
 
@@ -746,7 +930,7 @@ function ClaimSheet({ items, onClaimed, onClose }: { items: ExpenseDTO[]; onClai
   }, [])
 
   const chosen = useMemo(() => items.filter((x) => selected.has(x.id)), [items, selected])
-  const total = chosen.reduce((s, x) => s + x.amountPaise, 0)
+  const total = chosen.reduce((s, x) => s + x.claimablePaise, 0)
 
   // The message follows the selection until it is edited by hand.
   useEffect(() => {
@@ -833,7 +1017,7 @@ function ClaimSheet({ items, onClaimed, onClose }: { items: ExpenseDTO[]; onClai
               <span aria-hidden>{categoryInfo(x.category).mark}</span> {x.note ?? categoryInfo(x.category).label}
               {x.hasReceipt && <span className="muted"> · 📎</span>}
             </span>
-            <strong>{formatRupees(x.amountPaise)}</strong>
+            <strong>{formatRupees(x.claimablePaise)}</strong>
           </label>
         ))}
       </div>
@@ -929,8 +1113,8 @@ function PaidSheet({ items, onChanged }: { items: ExpenseDTO[]; onChanged: () =>
       const g = out.find((o) => o.day === day)
       if (g) {
         g.items.push(x)
-        g.total += x.amountPaise
-      } else out.push({ day, items: [x], total: x.amountPaise })
+        g.total += x.claimablePaise
+      } else out.push({ day, items: [x], total: x.claimablePaise })
     }
     return out
   }, [left])
@@ -966,7 +1150,7 @@ function PaidSheet({ items, onChanged }: { items: ExpenseDTO[]; onChanged: () =>
                 <span>
                   {shortDate(x.spentOn)} · {x.note ?? categoryInfo(x.category).label}
                 </span>
-                <span>{formatRupees(x.amountPaise)}</span>
+                <span>{formatRupees(x.claimablePaise)}</span>
               </li>
             ))}
           </ul>

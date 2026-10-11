@@ -52,6 +52,17 @@ test('money spent is an expense, dated and on the trip', async () => {
   assert.ok(parking.assumptions.includes('On your Pune trip.'))
 })
 
+test('owed to you: by a saved person when it is certainly them, by name when not', async () => {
+  await h.sql`insert into contacts (org_id, name, organization) values (${me.orgId}, 'Ravi Kumar', 'Infosys')`
+  const ravi = await quick.interpret(me.userId, me.orgId, 'Ravi owes me ₹500 for the tickets')
+  assert.equal(ravi.kind, 'owed')
+  assert.deepEqual(ravi.owed, { amountPaise: 50000, name: 'Ravi', note: 'the tickets' })
+
+  const lent = await quick.interpret(me.userId, me.orgId, 'lent ₹2,000 to Priya')
+  assert.equal(lent.kind, 'owed', 'lent is not spent')
+  assert.equal(lent.owed!.name, 'Priya')
+})
+
 test('not an expense: a payment still to make, or a number that is not money', async () => {
   const rent = await quick.interpret(me.userId, me.orgId, 'pay ₹5,000 rent tomorrow')
   assert.notEqual(rent.kind, 'expense')
