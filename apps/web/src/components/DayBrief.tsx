@@ -3,6 +3,8 @@ import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
 import { TargetBar, type WeekTargets } from './Targets.tsx'
+import { hasWork } from '@cue/shared'
+import { useAuth } from '../lib/auth.tsx'
 
 /**
  * What the app noticed, above what the app was told.
@@ -69,6 +71,9 @@ export function DayBrief({
   /** How many insights show before "N more". A phone has room for one. */
   preview?: number
 }) {
+  const { me } = useAuth()
+  /** Reports and targets are for a job; a household has no standup. */
+  const work = hasWork(me?.uses ?? [])
   const [data, setData] = useState<{
     insights: Insight[]
     summary: Summary
@@ -177,7 +182,7 @@ export function DayBrief({
           Review your week →
         </button>
         {/* Mornings are for the standup; the rest of the day, for the report. */}
-        {new Date().getHours() < 12 ? (
+        {!work ? null : new Date().getHours() < 12 ? (
           <button className="brief-day-link" onClick={() => onNavigate('/?report=standup')}>
             Write your standup →
           </button>
@@ -192,7 +197,7 @@ export function DayBrief({
         <button className="brief-day-link" onClick={() => openAdd({ share: true })}>
           Share when you&rsquo;re free →
         </button>
-        {targets && !targets.tracking && (
+        {work && targets && !targets.tracking && (
           <button className="brief-day-link" onClick={() => onNavigate('/?targets=1')}>
             Set weekly targets →
           </button>

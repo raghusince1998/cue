@@ -236,7 +236,7 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
         <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={5} />
       </label>
       <p className="muted small">
-        {'{first}'} becomes each person&rsquo;s name (Dr. Mehta, Ravi), and {'{me}'} yours.
+        {'{first}'} becomes each person&rsquo;s name (Ravi, Dr. Rao), and {'{me}'} yours.
       </p>
 
       <span className="label-text">Who to?</span>
@@ -246,7 +246,7 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
         </button>
         {orgCounts.length > 0 && (
           <button className={`chip${audience === 'orgs' ? ' selected' : ''}`} onClick={() => setAudience('orgs')}>
-            By clinic or company
+            By company
           </button>
         )}
         <button className={`chip${audience === 'pick' ? ' selected' : ''}`} onClick={() => setAudience('pick')}>

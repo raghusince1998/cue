@@ -20,6 +20,71 @@ import Repeating from './pages/Repeating.tsx'
 import History from './pages/History.tsx'
 import People from './pages/People.tsx'
 import Expenses from './pages/Expenses.tsx'
+import { tabsFor, type Section } from '@cue/shared'
+import { UsesPicker } from './components/UsesPicker.tsx'
+
+/** Every section that has a page, and where it lives. */
+const SECTION_LINKS: Partial<Record<Section, { to: string; label: string }>> = {
+  people: { to: '/people', label: 'People' },
+  history: { to: '/history', label: 'History' },
+  trips: { to: '/trips', label: 'Trips' },
+  repeating: { to: '/repeating', label: 'Repeating' },
+  expenses: { to: '/expenses', label: 'Expenses' },
+}
+const AVAILABLE = Object.keys(SECTION_LINKS) as Section[]
+
+/**
+ * The rest of the sections, a tap away: what this person uses Cue for decides
+ * what is on the bar, and nothing is ever out of reach.
+ */
+function MoreMenu({ sections, onChangeUses }: { sections: Section[]; onChangeUses: () => void }) {
+  const [open, setOpen] = useState(false)
+  const location = useLocation()
+  const ref = useRef<HTMLDivElement>(null)
+  const here = sections.some((s) => location.pathname.startsWith(SECTION_LINKS[s]!.to))
+
+  useEffect(() => setOpen(false), [location.pathname])
+  useEffect(() => {
+    if (!open) return
+    const away = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', away)
+    return () => window.removeEventListener('mousedown', away)
+  }, [open])
+
+  return (
+    <div className="tabs-more" ref={ref}>
+      <button
+        className={`tabs-more-btn${here ? ' active' : ''}`}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        More
+      </button>
+      {open && (
+        <div className="tabs-menu" role="menu">
+          {sections.map((s) => (
+            <NavLink key={s} to={SECTION_LINKS[s]!.to} role="menuitem">
+              {SECTION_LINKS[s]!.label}
+            </NavLink>
+          ))}
+          <button
+            className="tabs-menu-uses"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false)
+              onChangeUses()
+            }}
+          >
+            What I use Cue for…
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function Nav({
   onOpenSettings,
@@ -30,7 +95,9 @@ function Nav({
   onOpenSearch: () => void
   onOpenAdd: () => void
 }) {
-  const { logout } = useAuth()
+  const { logout, me } = useAuth()
+  const [choosingUses, setChoosingUses] = useState(false)
+  const { main, more } = tabsFor(me?.uses ?? [], AVAILABLE)
 
   return (
     <>
@@ -77,12 +144,19 @@ function Nav({
         <NavLink to="/" end>
           Today
         </NavLink>
-        <NavLink to="/history">History</NavLink>
-        <NavLink to="/trips">Trips</NavLink>
-        <NavLink to="/repeating">Repeating</NavLink>
-        <NavLink to="/people">People</NavLink>
-        <NavLink to="/expenses">Expenses</NavLink>
+        {main.map((s) => (
+          <NavLink key={s} to={SECTION_LINKS[s]!.to}>
+            {SECTION_LINKS[s]!.label}
+          </NavLink>
+        ))}
+        <MoreMenu sections={more} onChangeUses={() => setChoosingUses(true)} />
       </nav>
+
+      {choosingUses && (
+        <Modal title="What do you use Cue for?" onClose={() => setChoosingUses(false)}>
+          <UsesPicker onDone={() => setChoosingUses(false)} />
+        </Modal>
+      )}
     </>
   )
 }

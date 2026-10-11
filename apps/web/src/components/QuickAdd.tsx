@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
 import { DictateButton } from './DictateButton.tsx'
 import { announceChange } from '../lib/changes.ts'
-import { formatRupees } from '@cue/shared'
+import { examplesFor, formatRupees } from '@cue/shared'
+import { useAuth } from '../lib/auth.tsx'
 import {
   NO_CHOICES,
   QuickLinks,
@@ -109,6 +110,8 @@ export function QuickAdd({
   /** On Today rather than in the Add sheet: examples only once it is in use. */
   inline?: boolean
 }) {
+  const { me } = useAuth()
+  const examples = examplesFor(me?.uses ?? [])
   const [text, setText] = useState(initialText)
   const [focused, setFocused] = useState(false)
   const [plan, setPlan] = useState<Plan | null>(null)
@@ -258,7 +261,7 @@ export function QuickAdd({
           }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder={inline ? 'Plan something: call Dr. Mehta tomorrow 4pm' : 'call Dr. Mehta tomorrow 4pm'}
+          placeholder={inline ? `Plan something: ${examples[0]}` : examples[0]}
           aria-label="What do you want to plan?"
           autoFocus={autoFocus}
         />
@@ -282,11 +285,18 @@ export function QuickAdd({
 
       {!text && !saved && frequent.length === 0 && (!inline || focused) && (
         <p className="muted small quick-hint">
-          One line is enough. &ldquo;call Dr. Mehta tomorrow 4pm&rdquo; ·
-          &ldquo;team review every mon wed fri at 10&rdquo; ·
-          &ldquo;prepare for the demo tomorrow 5pm: deck, pricing, samples&rdquo; ·
-          &ldquo;when I go to Pune remind me to visit Apollo Clinic&rdquo; ·
-          &ldquo;going to Pune 12 to 14 October&rdquo;.
+          One line is enough.{' '}
+          {[
+            ...examples,
+            'gym every mon wed fri at 7am',
+            'pack for the trip tomorrow 8pm: charger, tickets, ID',
+            'going to Pune 12 to 14 October',
+          ].map((x, i) => (
+            <span key={x}>
+              {i > 0 && ' · '}&ldquo;{x}&rdquo;
+            </span>
+          ))}
+          .
         </p>
       )}
 

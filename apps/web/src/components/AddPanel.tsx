@@ -94,7 +94,7 @@ export function AddPanel({
   const [placeId, setPlaceId] = useState<string | null>(null)
   const [creatingPlace, setCreatingPlace] = useState(false)
   const [newPlaceName, setNewPlaceName] = useState('')
-  const [newPlaceKind, setNewPlaceKind] = useState('clinic')
+  const [newPlaceKind, setNewPlaceKind] = useState('')
 
   const [nearby, setNearby] = useState<PlaceCandidateDTO[] | null>(null)
   const [lookupProvider, setLookupProvider] = useState<string | null>(null)
@@ -309,7 +309,7 @@ export function AddPanel({
     setCreatingPlace(true)
     setPlaceId(null)
     setNewPlaceName(candidate.name)
-    setNewPlaceKind(candidate.category ?? 'clinic')
+    setNewPlaceKind(candidate.category ?? '')
     setNewPlaceAddress(candidate.address ?? '')
     setNewPlacePhone(candidate.phone ?? '')
     setNewPlaceSource(candidate.source)
@@ -709,7 +709,7 @@ export function AddPanel({
               <input
                 value={newPlaceName}
                 onChange={(e) => setNewPlaceName(e.target.value)}
-                placeholder="e.g. Sunrise Skin Clinic"
+                placeholder="e.g. City Centre Mall"
               />
             </label>
             <label>
@@ -717,7 +717,7 @@ export function AddPanel({
               <input
                 value={newPlaceKind}
                 onChange={(e) => setNewPlaceKind(e.target.value)}
-                placeholder="clinic, office, site…"
+                placeholder="office, shop, gym, home…"
               />
             </label>
             <label>

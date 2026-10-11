@@ -32,7 +32,7 @@ export function ContactEditor({
   const [name, setName] = useState(initialName)
   const [role, setRole] = useState('')
   const [organization, setOrganization] = useState(initialOrganization)
-  /** Workplaces typed before, offered while typing so one clinic stays one clinic. */
+  /** Workplaces typed before, offered while typing so one company stays one company. */
   const [workplaces, setWorkplaces] = useState<string[]>([])
   const [keepDays, setKeepDays] = useState<number | null>(null)
   const [birthday, setBirthday] = useState<string | null>(null)
@@ -142,7 +142,7 @@ export function ContactEditor({
         <input
           value={role}
           onChange={(e) => setRole(e.target.value)}
-          placeholder="Physiotherapist, Owner, Purchase manager…"
+          placeholder="Manager, Recruiter, Landlord, Dentist…"
         />
       </label>
 
@@ -151,7 +151,7 @@ export function ContactEditor({
         <input
           value={organization}
           onChange={(e) => setOrganization(e.target.value)}
-          placeholder="Clinic, hospital or company, e.g. Mehta Physio Clinic"
+          placeholder="Company or organisation, e.g. Infosys"
           list="workplace-options"
         />
         <datalist id="workplace-options">

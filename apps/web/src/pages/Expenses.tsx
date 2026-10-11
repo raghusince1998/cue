@@ -109,7 +109,7 @@ async function uploadReceipt(id: string, file: File): Promise<void> {
  * Money spent on the road, logged as it happens and claimed back in one go.
  *
  * Each expense lands on the trip it was spent on by its date, and on the
- * person or clinic it was for when the capture box recognised them, so the
+ * person or company it was for when the capture box recognised them, so the
  * claim at the end of the month writes itself.
  */
 export default function Expenses() {
@@ -298,7 +298,7 @@ export default function Expenses() {
           <h3>Nothing spent in {monthName(month)}</h3>
           <p>
             Log a cab, a meal or a hotel as you spend it, and claim the month back in one go. Quickest from the
-            box on Today: type <strong>₹450 cab to Mehta Physio</strong>.
+            box on Today: type <strong>₹450 cab to the airport</strong>.
           </p>
         </div>
       ) : (
@@ -573,7 +573,7 @@ function ExpenseForm({
           className="grow"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="What for? e.g. cab to Mehta Physio"
+          placeholder="What for? e.g. cab to the airport"
           aria-label="What it was for"
           maxLength={300}
         />
@@ -603,7 +603,7 @@ function ExpenseForm({
           <input
             value={account}
             onChange={(e) => setAccount(e.target.value)}
-            placeholder="Clinic or company"
+            placeholder="Client or company"
             list="expense-accounts"
             maxLength={200}
           />

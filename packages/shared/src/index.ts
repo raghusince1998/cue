@@ -35,6 +35,17 @@ export {
 import { CLAIM_STATUSES as CLAIMS, EXPENSE_CATEGORY_KEYS as EXPENSE_KEYS } from './expenses.ts'
 export { owedMessage, parseOwed, splitEqually, type OwedLine, type ParsedOwed } from './owed.ts'
 export {
+  MAIN_TABS,
+  USES,
+  USE_KEYS,
+  examplesFor,
+  hasClients,
+  hasWork,
+  tabsFor,
+  type Section,
+  type Use,
+} from './uses.ts'
+export {
   GREETING_OCCASIONS,
   MONTH_DAY,
   OCCASION_MESSAGES,

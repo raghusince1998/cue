@@ -419,8 +419,8 @@ export default function Trips() {
           </span>
           <h3>No journeys planned</h3>
           <p>
-            Plan one and everything you want to do there surfaces on its own: the clinic you
-            meant to visit, the client you meant to meet. Say &ldquo;going to Pune 12 to 14
+            Plan one and everything you want to do there surfaces on its own: the place you
+            meant to see, the friend or client you meant to meet. Say &ldquo;going to Pune 12 to 14
             Oct&rdquo; in the box on Today, or use Plan a trip.
           </p>
         </div>

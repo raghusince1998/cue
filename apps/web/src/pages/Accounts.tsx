@@ -20,14 +20,17 @@ interface AccountRow {
 }
 
 /**
- * The clinics and companies people work at, each with what is open there and
+ * The companies and organisations people work at, each with what is open there and
  * how far along things are. Made from "Works at": nothing to set up.
  */
 export function AccountsView({
   onOpen,
   onAddPerson,
   reloadKey,
+  showStages = true,
 }: {
+  /** Prospect to customer: for sales and clients, not a job hunt or a team. */
+  showStages?: boolean
   onOpen: (name: string) => void
   onAddPerson: () => void
   /** Bumped by the page when something changed in a sheet. */
@@ -88,17 +91,17 @@ export function AccountsView({
         <span className="blank-mark" aria-hidden>
           &#127970;
         </span>
-        <h3>No accounts yet</h3>
+        <h3>{showStages ? 'No accounts yet' : 'No companies yet'}</h3>
         <p>
-          Every clinic or company you put in someone&rsquo;s <strong>Works at</strong> gets a page
-          here, with everyone you know there and everything open with them. Or add one you are
-          only starting to approach.
+          Every company or organisation you put in someone&rsquo;s <strong>Works at</strong> gets a
+          page here, with everyone you know there and everything open with them.
+          {showStages ? ' Or add one you are only starting to approach.' : ''}
         </p>
         <div className="row inline-field-row">
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="e.g. Sunrise Hospital"
+            placeholder="e.g. Tata Motors"
             aria-label="New account"
           />
           <button className="primary small-btn" onClick={() => void create()} disabled={busy || !newName.trim()}>
@@ -119,11 +122,12 @@ export function AccountsView({
           className="grow"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search clinics, companies or people there"
+          placeholder="Search companies, or the people there"
         />
       </div>
 
       {/* The pipeline at a glance, and a filter. */}
+      {showStages && (
       <div className="chips">
         <button className={`chip${filter === 'all' ? ' selected' : ''}`} onClick={() => setFilter('all')}>
           All · {rows.length}
@@ -138,6 +142,7 @@ export function AccountsView({
           </button>
         ))}
       </div>
+      )}
 
       {shown.length === 0 ? (
         <p className="muted small">Nothing here{query.trim() ? ` matches “${query.trim()}”` : ' at this stage'}.</p>
@@ -156,7 +161,7 @@ export function AccountsView({
                     : `${a.peopleNames.join(', ')}${a.people > a.peopleNames.length ? ` +${a.people - a.peopleNames.length}` : ''}`}
                 </p>
                 <div className="tile-tags">
-                  {a.stage && (
+                  {showStages && a.stage && (
                     <span className={`tag${a.stage === 'customer' ? ' is-live' : ''}`}>
                       {ACCOUNT_STAGE_LABELS[a.stage]}
                     </span>
@@ -185,7 +190,7 @@ export function AccountsView({
         <input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder="Add an account you are approaching, e.g. Sunrise Hospital"
+          placeholder={showStages ? 'Add an account you are approaching, e.g. Tata Motors' : 'Add a company, e.g. Tata Motors'}
           aria-label="New account"
         />
         <button className="ghost small-btn" onClick={() => void create()} disabled={busy || !newName.trim()}>

@@ -298,8 +298,8 @@ export function TemplateManager({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <p className="muted small">
-          Filled in when you send it: &ldquo;{'{first}'}&rdquo; becomes Ravi, or Dr. Mehta for a
-          doctor.
+          Filled in when you send it: &ldquo;{'{first}'}&rdquo; becomes Ravi, or Dr. Rao for
+          someone with a title.
         </p>
         {error && <p className="error small">{error}</p>}
         <div className="row">

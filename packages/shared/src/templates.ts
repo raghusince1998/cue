@@ -10,7 +10,7 @@ import { shortName } from './names.ts'
 export const TEMPLATE_FIELDS = [
   { token: '{first}', label: 'Their name' },
   { token: '{name}', label: 'Their full name' },
-  { token: '{company}', label: 'Their clinic or company' },
+  { token: '{company}', label: 'Where they work' },
   { token: '{me}', label: 'Your name' },
 ] as const
 

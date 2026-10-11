@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { CalendarFeeds } from './CalendarFeeds.tsx'
 import { ProfilePhoto } from './ProfilePhoto.tsx'
 import { InfoTip } from './InfoTip.tsx'
+import { UsesPicker } from './UsesPicker.tsx'
 import { Modal } from './Modal.tsx'
 import { TemplateManager } from './QuickMessage.tsx'
 import { api } from '../lib/api.ts'
@@ -247,6 +248,10 @@ export function Settings({ onClose }: { onClose: () => void }) {
       {nameSaved && <p className="muted small">Saved.</p>}
 
       <hr className="rule" />
+      <span className="label-text">What you use Cue for</span>
+      <UsesPicker compact />
+
+      <hr className="rule" />
 
       <span className="label-text">Change password</span>
       <input
@@ -322,7 +327,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <InfoTip label="What are quick messages?">
           The things you send over and over (thanks for meeting, missed your call, a gentle
           reminder) written once. On anyone&rsquo;s page, tap Message and pick one: their name,
-          their clinic and yours are filled in, ready for WhatsApp, a text or email.
+          where they work and yours are filled in, ready for WhatsApp, a text or email.
         </InfoTip>
       </div>
       <button className="ghost small-btn" onClick={() => setEditingMessages(true)}>
@@ -431,7 +436,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
           <span>Ask me each evening if I logged everything</span>
         </label>
         <InfoTip label="Why ask each evening?">
-          Nothing can tell that you visited a clinic and never logged it — a browser cannot watch
+          Nothing can tell that you went somewhere and never logged it — a browser cannot watch
           your location in the background. This is the app asking instead.
         </InfoTip>
       </div>

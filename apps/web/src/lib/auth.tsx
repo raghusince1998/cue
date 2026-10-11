@@ -8,6 +8,8 @@ export interface Me {
   email: string
   orgId: string
   orgName: string
+  /** What they use Cue for; empty until they say. */
+  uses: string[]
 }
 
 interface AuthValue {
@@ -20,6 +22,8 @@ interface AuthValue {
     password: string
   }) => Promise<void>
   logout: () => void
+  /** What they use Cue for, saved and reflected everywhere at once. */
+  saveUses: (uses: string[]) => Promise<void>
 }
 
 const AuthContext = createContext<AuthValue | null>(null)
@@ -77,9 +81,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMe(null)
   }, [])
 
+  const saveUses = useCallback(async (uses: string[]) => {
+    const saved = await api<{ uses: string[] }>('/me/preferences', { method: 'PATCH', body: { uses } })
+    setMe((m) => (m ? { ...m, uses: saved.uses } : m))
+  }, [])
+
   const value = useMemo(
-    () => ({ me, loading, login, register, logout }),
-    [me, loading, login, register, logout],
+    () => ({ me, loading, login, register, logout, saveUses }),
+    [me, loading, login, register, logout, saveUses],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

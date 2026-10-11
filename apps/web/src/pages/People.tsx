@@ -10,7 +10,8 @@ import { AccountSheet } from '../components/AccountSheet.tsx'
 import { AccountsView } from './Accounts.tsx'
 import { QuickMessage } from '../components/QuickMessage.tsx'
 import { Greetings } from '../components/Greetings.tsx'
-import { OCCASION_MESSAGES, type OccasionKind } from '@cue/shared'
+import { OCCASION_MESSAGES, hasClients, type OccasionKind } from '@cue/shared'
+import { useAuth } from '../lib/auth.tsx'
 import { useOnChange } from '../lib/changes.ts'
 import {
   deviceContactsAvailable,
@@ -52,10 +53,13 @@ interface Touch {
 }
 
 export default function People() {
-  // People, or the clinics and companies they work at. In the URL, so the
-  // weekly review can link straight to accounts.
+  // People, or the companies they work at. In the URL, so the weekly review
+  // can link straight to accounts.
   const [params, setParams] = useSearchParams()
   const view = params.get('view') === 'accounts' ? 'accounts' : 'people'
+  const { me } = useAuth()
+  /** Prospects and customers: a pipeline for sales and clients only. */
+  const clients = hasClients(me?.uses ?? [])
 
   // ?wish=<id>&for=birthday: "Send wishes" on Today's card.
   useEffect(() => {
@@ -206,12 +210,13 @@ export default function People() {
           className={view === 'accounts' ? 'selected' : ''}
           onClick={() => setParams({ view: 'accounts' }, { replace: true })}
         >
-          Accounts
+          {clients ? 'Accounts' : 'Companies'}
         </button>
       </div>
 
       {view === 'accounts' && (
         <AccountsView
+          showStages={clients}
           onOpen={setViewingAccount}
           onAddPerson={() => setEditing(null)}
           reloadKey={accountsReload}

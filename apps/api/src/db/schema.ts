@@ -14,6 +14,7 @@ import {
   jsonb,
   primaryKey,
 } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 
 /** Drizzle has no first-class bytea, so map it to a Node Buffer explicitly. */
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -95,6 +96,8 @@ export const users = pgTable(
     homeCity: text('home_city'),
     /** Put in a reminder to pay back, so paying is one tap. */
     upiId: text('upi_id'),
+    /** What they use Cue for: decides what the screens lead with. */
+    uses: text('uses').array().notNull().default(sql`'{}'::text[]`),
     /** Weekly goals by metric: { calls: 40, visits: 10 }. Absent means not tracked. */
     weeklyTargets: jsonb('weekly_targets').$type<Record<string, number>>().notNull().default({}),
     /** An evening reminder to send the daily report. */

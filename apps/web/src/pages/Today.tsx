@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { WINDOW_LABELS, type CommitmentDTO } from '@cue/shared'
+import { useAuth } from '../lib/auth.tsx'
+import { UsesPicker } from '../components/UsesPicker.tsx'
 import { api } from '../lib/api.ts'
 import { dayBounds, dayLabel, formatSpan, overdueBy } from '../lib/time.ts'
 import { enablePush, pushState, sendTestPush } from '../lib/push.ts'
@@ -304,6 +306,15 @@ function useWide(): boolean {
 }
 
 export default function Today() {
+  const { me } = useAuth()
+  // Asked once: "Not now" is an answer too.
+  const [usesAsked, setUsesAsked] = useState(() => {
+    try {
+      return localStorage.getItem('cue.usesAsked') === '1'
+    } catch {
+      return false
+    }
+  })
   const [agenda, setAgenda] = useState<Agenda>(EMPTY)
   const [loading, setLoading] = useState(true)
   /** The meeting being wrapped up: "what came out of it?". */
@@ -724,6 +735,21 @@ export default function Today() {
           onDone={() => undefined}
           onFillIn={(text) => openAdd({ full: true, text })}
         />
+        {me && me.uses.length === 0 && !usesAsked && (
+          <section className="card uses-card">
+            <h2 className="section-title">What will you use Cue for?</h2>
+            <UsesPicker
+              onDone={() => {
+                try {
+                  localStorage.setItem('cue.usesAsked', '1')
+                } catch {
+                  // Private mode: it asks again next time, which is harmless.
+                }
+                setUsesAsked(true)
+              }}
+            />
+          </section>
+        )}
         {shared?.original && (
           <details className="shared-original">
             <summary className="muted small">The whole message</summary>
