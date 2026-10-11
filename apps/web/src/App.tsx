@@ -19,6 +19,7 @@ import Trips from './pages/Trips.tsx'
 import Repeating from './pages/Repeating.tsx'
 import History from './pages/History.tsx'
 import People from './pages/People.tsx'
+import Expenses from './pages/Expenses.tsx'
 
 function Nav({
   onOpenSettings,
@@ -80,6 +81,7 @@ function Nav({
         <NavLink to="/trips">Trips</NavLink>
         <NavLink to="/repeating">Repeating</NavLink>
         <NavLink to="/people">People</NavLink>
+        <NavLink to="/expenses">Expenses</NavLink>
       </nav>
     </>
   )
@@ -214,6 +216,7 @@ export default function App() {
           <Route path="/repeating" element={<Repeating />} />
           <Route path="/people" element={<People />} />
           <Route path="/places" element={<Places />} />
+          <Route path="/expenses" element={<Expenses />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

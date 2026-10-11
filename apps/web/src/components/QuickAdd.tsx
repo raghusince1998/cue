@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
 import { DictateButton } from './DictateButton.tsx'
 import { announceChange } from '../lib/changes.ts'
+import { formatRupees } from '@cue/shared'
 import {
   NO_CHOICES,
   QuickLinks,
@@ -36,7 +37,7 @@ interface Person {
 }
 
 interface Plan {
-  kind: 'commitment' | 'intention' | 'trip' | 'recurrence' | 'needsTime' | 'needsPerson' | 'unclear'
+  kind: 'commitment' | 'intention' | 'trip' | 'recurrence' | 'expense' | 'needsTime' | 'needsPerson' | 'unclear'
   title: string
   summary: string
   assumptions: string[]
@@ -50,6 +51,8 @@ interface Plan {
   links?: Links
   trip?: TripLink | null
   upcomingTrip?: UpcomingTrip | null
+  /** Money spent, when that is what the line was. */
+  expense?: { amountPaise: number; note: string | null } | null
 }
 
 interface Saved extends Plan {
@@ -71,6 +74,7 @@ const KIND_WORD: Record<Plan['kind'], string> = {
   intention: 'Saved for later',
   trip: 'Trip planned',
   recurrence: 'Repeating',
+  expense: 'Expense',
   needsTime: 'Understood',
   needsPerson: 'Which one?',
   unclear: '',
@@ -204,7 +208,12 @@ export function QuickAdd({
       for (const id of saved.ids ?? [saved.id]) {
         await api(`/quick/${saved.kind}/${id}${alsoTrip}`, { method: 'DELETE' })
       }
-      setText(saved.title)
+      // An expense's title has lost its amount; put the whole line back.
+      setText(
+        saved.kind === 'expense' && saved.expense
+          ? `${formatRupees(saved.expense.amountPaise)} ${saved.expense.note ?? ''}`.trim()
+          : saved.title,
+      )
       setSaved(null)
       onSaved()
       announceChange()

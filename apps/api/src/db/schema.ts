@@ -235,6 +235,35 @@ export const messageTemplates = pgTable(
   (t) => [index('message_templates_user_idx').on(t.userId)],
 )
 
+/** Something spent on the road, until it is claimed back. */
+export const expenses = pgTable(
+  'expenses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => orgs.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Whole paise. */
+    amountPaise: integer('amount_paise').notNull(),
+    category: text('category').notNull().default('other'),
+    note: text('note'),
+    spentOn: date('spent_on').notNull(),
+    tripId: uuid('trip_id').references(() => trips.id, { onDelete: 'set null' }),
+    contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+    /** The clinic or company it was for. */
+    account: text('account'),
+    receipt: bytea('receipt'),
+    receiptMime: text('receipt_mime'),
+    claimStatus: text('claim_status').notNull().default('unclaimed'),
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('expenses_user_day_idx').on(t.userId, t.spentOn)],
+)
+
 /** One round of greetings across a contact list: Diwali, New Year. */
 export const greetingRuns = pgTable(
   'greeting_runs',

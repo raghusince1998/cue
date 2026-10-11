@@ -21,6 +21,10 @@ import {
   findMalformedTime,
   diagnose,
   parseWishList,
+  parseExpense,
+  spentWhen,
+  formatRupees,
+  EXPENSE_CATEGORIES,
   type CommitmentKind,
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
@@ -39,6 +43,7 @@ import {
   resolveAnchor,
 } from '../services/memory.ts'
 import { planWishes } from '../services/wishes.ts'
+import { createExpense, tripOn } from '../services/expenses.ts'
 import {
   findLinks,
   knownPlaces,
@@ -88,6 +93,8 @@ export type QuickKind =
   | 'intention'
   | 'trip'
   | 'recurrence'
+  /** Money spent: "₹450 cab to Mehta Physio". */
+  | 'expense'
   /** Understood, but it needs a time before it can be saved. */
   | 'needsTime'
   /** Understood, but more than one person could be meant. */
@@ -162,6 +169,17 @@ export async function quickAddRoutes(app: FastifyInstance) {
     // puts the plan against a stranger and offers their phone number.
     if (plan.kind === 'needsPerson') {
       return reply.code(300).send({ error: 'needs_person', plan })
+    }
+
+    if (plan.kind === 'expense' && plan.expense) {
+      const account =
+        body.accountName && plan.links.accounts.some((a) => a.name === body.accountName) ? body.accountName : null
+      const saved = await createExpense(orgId, userId, {
+        ...plan.expense,
+        contactId: plan.contactId,
+        account,
+      })
+      return reply.code(201).send({ ...plan, id: saved.id })
     }
 
     if (plan.kind === 'intention') {
@@ -351,7 +369,7 @@ export async function quickAddRoutes(app: FastifyInstance) {
     const { sub: userId } = scope(req)
     const { kind, id } = z
       .object({
-        kind: z.enum(['commitment', 'intention', 'trip', 'recurrence']),
+        kind: z.enum(['commitment', 'intention', 'trip', 'recurrence', 'expense']),
         id: z.string().uuid(),
       })
       .parse(req.params)
@@ -363,7 +381,9 @@ export async function quickAddRoutes(app: FastifyInstance) {
           ? schema.intentions
           : kind === 'trip'
             ? schema.trips
-            : schema.recurrences
+            : kind === 'expense'
+              ? schema.expenses
+              : schema.recurrences
 
     // Scoped to the owner in the same statement as the delete. Checking after
     // the fact, or not at all, would let any signed-in account remove another's
@@ -424,6 +444,8 @@ export interface QuickPlan {
   upcomingTrip: { id: string; placeLabel: string; startsOn: string; endsOn: string } | null
   /** Several wishes from one line, saved together: "Jaipur: a, b". */
   wishes: string[] | null
+  /** Money spent, read from the line. */
+  expense: { amountPaise: number; category: string; note: string | null; spentOn: string } | null
   /** Plain-words account of every assumption made, shown before and after saving. */
   assumptions: string[]
   /** Why the app could not tell, when it could not. */
@@ -436,11 +458,14 @@ export interface QuickPlan {
  * to name, and — for a plan in another city — the trip it belongs to. A single
  * certain person is attached; everything else is offered, never assumed.
  */
+/** A sentence that starts by saying money is still to go out is a to-do. */
+const TO_PAY = /^\s*(?:pay|send|transfer|give|buy|book|renew|deposit|collect|get|withdraw)\b/i
+
 async function enrich(userId: string, orgId: string, raw: string, plan: QuickPlan): Promise<QuickPlan> {
   if (plan.kind === 'intention' && plan.placeLabel) {
     return { ...plan, upcomingTrip: await upcomingTripTo(userId, plan.placeLabel) }
   }
-  if (plan.kind !== 'commitment' && plan.kind !== 'needsTime') return plan
+  if (plan.kind !== 'commitment' && plan.kind !== 'needsTime' && plan.kind !== 'expense') return plan
 
   const links = await findLinks(orgId, raw, { contactId: plan.contactId })
   const certain = links.people.filter((p) => p.certain)
@@ -449,6 +474,9 @@ async function enrich(userId: string, orgId: string, raw: string, plan: QuickPla
     next.contactId = certain[0]!.id
     next.personName = certain[0]!.name
   }
+
+  // An expense is linked to whom it was for, not turned into a trip.
+  if (plan.kind === 'expense') return { ...next, links: { ...links, places: [] } }
 
   if (plan.kind === 'commitment' && plan.dueAt) {
     const trip = await tripLinkFor(userId, raw, plan.placeLabel, new Date(plan.dueAt))
@@ -483,7 +511,7 @@ function ymd(d: Date): string {
  * Shared by preview and save so the two can never disagree — a preview that
  * promises one thing and a save that writes another is worse than no preview.
  */
-async function interpret(userId: string, orgId: string, raw: string): Promise<QuickPlan> {
+export async function interpret(userId: string, orgId: string, raw: string): Promise<QuickPlan> {
   const now = new Date()
   const assumptions: string[] = []
 
@@ -521,6 +549,7 @@ async function interpret(userId: string, orgId: string, raw: string): Promise<Qu
     trip: null,
     upcomingTrip: null,
     wishes: null,
+    expense: null,
     assumptions,
     problem: null,
     summary: '',
@@ -548,6 +577,36 @@ async function interpret(userId: string, orgId: string, raw: string): Promise<Qu
       summary: place
         ? `${n} things saved for ${place}: ${wishList.titles.join(', ')}`
         : `${n} things on your wishlist: ${wishList.titles.join(', ')}`,
+    }
+  }
+
+  // Money spent: "₹450 cab to Mehta Physio", "yesterday auto 120 rs". Not a
+  // payment still to make — "pay ₹5,000 rent", or anything dated ahead — which
+  // is a plan to pay, not something already spent.
+  const spend = TO_PAY.test(text) ? null : parseExpense(text)
+  if (spend) {
+    // Read looking back first: "friday" in an expense is the one just gone.
+    const past = spentWhen(spend.note, now)
+    const when = past ? null : parseWhen(spend.note || text, now)
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+    if (past || !when || when.date < endOfToday) {
+      const day = past ? new Date(`${past.day}T12:00:00`) : now
+      const note = (past ? past.note : when && spend.note ? titleFrom(spend.note, when) : spend.note) || null
+      const category = EXPENSE_CATEGORIES.find((c) => c.key === spend.category)!
+      const spentOn = ymd(day)
+      const trip = await tripOn(userId, spentOn)
+      const isToday = ymd(day) === ymd(now)
+      return {
+        ...base,
+        kind: 'expense',
+        title: note ?? category.label,
+        expense: { amountPaise: spend.amountPaise, category: spend.category, note, spentOn },
+        assumptions: [
+          ...(trip ? [`On your ${trip.placeLabel} trip.`] : []),
+          ...(isToday ? [] : [`Spent on ${day.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}.`]),
+        ],
+        summary: `${formatRupees(spend.amountPaise)} · ${category.label}${note ? ` · ${note}` : ''}`,
+      }
     }
   }
 

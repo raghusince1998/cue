@@ -20,6 +20,20 @@ export { CITIES, findCity, samePlace } from './cities.ts'
 export { reopenTime } from './reopen.ts'
 export { parseWishList, type WishList } from './wishes.ts'
 export {
+  CLAIM_STATUSES,
+  EXPENSE_CATEGORIES,
+  EXPENSE_CATEGORY_KEYS,
+  categoryOf,
+  formatRupees,
+  parseExpense,
+  spentWhen,
+  type SpentWhen,
+  type ClaimStatus,
+  type ExpenseCategory,
+  type ParsedExpense,
+} from './expenses.ts'
+import { CLAIM_STATUSES as CLAIMS, EXPENSE_CATEGORY_KEYS as EXPENSE_KEYS } from './expenses.ts'
+export {
   GREETING_OCCASIONS,
   MONTH_DAY,
   OCCASION_MESSAGES,
@@ -572,6 +586,39 @@ export interface TargetProgress {
   /** Where you would be by now at an even pace over the working week. */
   expected: number
   status: 'done' | 'on' | 'behind' | 'untracked'
+}
+
+export const createExpenseInput = z.object({
+  amountPaise: z.number().int().min(1).max(1_000_000_000),
+  category: z.enum(EXPENSE_KEYS).default('other'),
+  note: z.string().max(300).nullable().optional(),
+  spentOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  tripId: z.string().uuid().nullable().optional(),
+  contactId: z.string().uuid().nullable().optional(),
+  account: z.string().max(200).nullable().optional(),
+})
+export const updateExpenseInput = createExpenseInput.partial()
+
+/** Claimed, reimbursed, or back to unclaimed — for several at once. */
+export const setClaimInput = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(500),
+  status: z.enum(CLAIMS),
+})
+
+export interface ExpenseDTO {
+  id: string
+  amountPaise: number
+  category: (typeof EXPENSE_KEYS)[number]
+  note: string | null
+  spentOn: string
+  tripId: string | null
+  tripLabel: string | null
+  contactId: string | null
+  contactName: string | null
+  account: string | null
+  hasReceipt: boolean
+  claimStatus: (typeof CLAIMS)[number]
+  claimedAt: string | null
 }
 
 export const startGreetingsInput = z.object({

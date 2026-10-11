@@ -121,7 +121,7 @@ body {
   flex: 1;
   max-width: 140px;
   text-align: center;
-  /* Five tabs have to fit a 360px phone, so the padding is tight on purpose. */
+  /* Six tabs have to fit a 320px phone, so the padding is tight on purpose. */
   padding: 10px 6px;
   border-radius: 10px;
   color: var(--muted);
@@ -4576,4 +4576,376 @@ a.link-btn:hover {
 
 .greetings textarea {
   font-family: inherit;
+}
+
+/* A label posing as a button needs the button's frame too. */
+.file-btn {
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 10px;
+}
+
+.primary.file-btn {
+  border-color: transparent;
+}
+
+/* ---- Expenses ------------------------------------------------------ */
+
+.expense-top {
+  display: grid;
+  gap: 14px;
+}
+
+@media (min-width: 900px) {
+  .expense-top {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.expense-amount-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* The amount is what matters most, so it is the biggest thing in the form. */
+.amount-field {
+  flex: none;
+  width: 124px;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  padding-left: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.amount-field:focus-within {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.amount-field input {
+  border: none;
+  background: transparent;
+  padding-left: 6px;
+  font-size: 18px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.amount-field input:focus {
+  outline: none;
+}
+
+.expense-chips .chip {
+  padding: 6px 10px;
+  font-size: 12.5px;
+}
+
+.expense-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.expense-meta .field {
+  flex: 0 0 auto;
+}
+
+.expense-meta .field.grow {
+  flex: 1 1 180px;
+}
+
+.expense-meta input[type='date'] {
+  min-width: 150px;
+}
+
+.expense-actions {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.expense-claims .claim-btn {
+  width: 100%;
+}
+
+.month-switch {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.month-switch > button {
+  min-width: 36px;
+  padding: 3px 10px 5px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.month-switch strong {
+  min-width: 84px;
+  text-align: center;
+  font-size: 15px;
+}
+
+.month-split {
+  margin-left: auto;
+}
+
+.expense-cats {
+  display: grid;
+  gap: 2px;
+}
+
+@media (min-width: 700px) {
+  .expense-cats {
+    grid-template-columns: 1fr 1fr;
+    column-gap: 18px;
+  }
+}
+
+.expense-cat {
+  display: grid;
+  grid-template-columns: minmax(0, 150px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+}
+
+.expense-cat:hover {
+  background: var(--surface-2);
+}
+
+.expense-cat.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.expense-cat-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.expense-cat-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.expense-cat-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.expense-cat strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.expense-day {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.expense-day-head {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 9px 14px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+/* What and why on the left, how much and where the claim is on the right,
+   the receipt under what it was for. */
+.expense-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'mark main side'
+    'mark receipt side';
+  column-gap: 10px;
+  row-gap: 4px;
+  align-items: start;
+  padding: 11px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.expense-day-head + .expense-row {
+  border-top: none;
+}
+
+.expense-mark {
+  grid-area: mark;
+  font-size: 20px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.expense-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.expense-title {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.expense-sub {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.expense-side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.expense-side strong {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.expense-status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.expense-status.is-claimed {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.expense-status.is-reimbursed {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.expense-receipt {
+  grid-area: receipt;
+  justify-self: start;
+  font-size: 12.5px;
+}
+
+.receipt-image {
+  width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.claim-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.claim-item {
+  display: grid;
+  grid-template-columns: auto 50px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 450;
+  cursor: pointer;
+}
+
+.claim-item:first-child {
+  border-top: none;
+}
+
+.claim-item input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+}
+
+.claim-date {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.claim-what {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claim-total {
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.claim-sheet .report-text {
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.paid-head {
+  justify-content: space-between;
+}
+
+.paid-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.paid-items li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
 }

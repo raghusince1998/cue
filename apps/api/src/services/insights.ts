@@ -1,4 +1,5 @@
 import { and, asc, eq, gte, isNull, lt, lte, ne, or, sql, isNotNull } from 'drizzle-orm'
+import { formatRupees } from '@cue/shared'
 import { occasionLabel, upcomingOccasions } from './occasions.ts'
 import { orgOf } from './keepInTouch.ts'
 import { db, schema } from '../db/index.ts'
@@ -384,6 +385,53 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
         : 'A message on the day is remembered.',
       action: { label: 'Send wishes', href: `/people?wish=${o.contactId}&for=${o.kind}` },
       weight: o.daysAway === 0 ? 88 : 60,
+    })
+  }
+
+  // ------------------------------------------------------------- expenses
+  // Last month's spend, still unclaimed once the month has turned: the claim
+  // that slips is the one whose receipts are already lost.
+  const monthStart = dayKey(new Date(now.getFullYear(), now.getMonth(), 1))
+  const [owed] = await db
+    .select({ n: sql<number>`count(*)::int`, paise: sql<number>`coalesce(sum(${schema.expenses.amountPaise}), 0)::int` })
+    .from(schema.expenses)
+    .where(
+      and(
+        eq(schema.expenses.userId, userId),
+        eq(schema.expenses.claimStatus, 'unclaimed'),
+        lt(schema.expenses.spentOn, monthStart),
+      ),
+    )
+  if ((owed?.n ?? 0) > 0) {
+    insights.push({
+      id: `expenses-unclaimed-${monthStart}`,
+      tone: 'warning',
+      headline: `${formatRupees(owed!.paise)} from before this month not claimed yet`,
+      detail: `${owed!.n} expense${owed!.n === 1 ? '' : 's'}. Easier to claim while the receipts are still to hand.`,
+      action: { label: 'Make a claim', href: '/expenses?claim=1' },
+      weight: 52,
+    })
+  }
+
+  // Claimed a month ago and still not paid back: worth a word with accounts.
+  const [unpaid] = await db
+    .select({ n: sql<number>`count(*)::int`, paise: sql<number>`coalesce(sum(${schema.expenses.amountPaise}), 0)::int` })
+    .from(schema.expenses)
+    .where(
+      and(
+        eq(schema.expenses.userId, userId),
+        eq(schema.expenses.claimStatus, 'claimed'),
+        lt(schema.expenses.claimedAt, new Date(now.getTime() - 30 * DAY_MS)),
+      ),
+    )
+  if ((unpaid?.n ?? 0) > 0) {
+    insights.push({
+      id: 'expenses-unpaid',
+      tone: 'neutral',
+      headline: `${formatRupees(unpaid!.paise)} claimed over a month ago, not paid back`,
+      detail: 'Mark it once it arrives, or chase it.',
+      action: { label: 'See claims', href: '/expenses?paid=1' },
+      weight: 34,
     })
   }
 
