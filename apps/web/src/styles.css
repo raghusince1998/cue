@@ -5257,3 +5257,188 @@ a.link-btn:hover {
     font-size: 12px;
   }
 }
+
+/* ---- Trackers: applications, candidates, deals ----------------------- */
+
+.tracker-add {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+@media (min-width: 760px) {
+  .tracker-add {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 0.8fr) auto;
+    align-items: center;
+  }
+}
+
+.tracker-quiet {
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border));
+  border-radius: 12px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 14px;
+}
+
+/* A column per open stage on a wide screen; on a phone, one after another,
+   leaving out the stages with nothing in them. */
+.tracker-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.tracker-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tracker-column.is-empty {
+  display: none;
+}
+
+.tracker-column-head {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+@media (min-width: 900px) {
+  .tracker-columns {
+    grid-template-columns: repeat(var(--cols), minmax(200px, 1fr));
+    overflow-x: auto;
+    padding-bottom: 6px;
+    align-items: start;
+  }
+
+  .tracker-column {
+    padding: 10px;
+    border-radius: 14px;
+    background: var(--surface-2);
+    min-height: 120px;
+  }
+
+  .tracker-column.is-empty {
+    display: flex;
+  }
+}
+
+.tracker-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.tracker-card.is-quiet {
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--border));
+}
+
+.tracker-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.tracker-card-title {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.tracker-card-detail {
+  font-size: 13.5px;
+}
+
+.tracker-card-meta {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.tracker-card-next {
+  font-size: 12.5px;
+  color: var(--accent);
+}
+
+.tracker-card-quiet {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--warn);
+}
+
+.tracker-forward {
+  align-self: flex-start;
+  font-size: 12.5px;
+}
+
+.tracker-closed summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.tracker-sheet-title {
+  font-size: 18px;
+}
+
+.tracker-stages .chip.is-won.selected {
+  border-color: var(--good);
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.tracker-stages .chip.is-lost.selected {
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.tracker-plans,
+.tracker-history {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13.5px;
+}
+
+.tracker-next .row {
+  align-items: center;
+}
+
+.tracker-next-at {
+  width: auto;
+  flex: 1 1 180px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.tracker-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .tracker-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tracker-fields .tracker-wide {
+    grid-column: 1 / -1;
+  }
+}

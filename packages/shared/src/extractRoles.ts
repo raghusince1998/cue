@@ -303,15 +303,21 @@ export function extractRoles(input: string): ExtractedRoles | null {
   // A call is an action on someone: "call raghu monday about stock" is "Call
   // raghu about stock", not "Stock". Meetings and appointments keep the
   // subject as their name, as they always have.
-  const named = person ?? (leftover.split(/\s+/).filter((w) => w && !DATE_WORD.test(w)).join(' ') || null)
+  // Without its day and time: "interview at Zoho friday 11am" leaves nothing
+  // to name it by, so it is "Interview at Zoho", not "Friday 11am".
+  const words = leftover
+    .split(/\s+/)
+    .filter((w) => w && !DATE_WORD.test(w) && !/^(?:am|pm)$/i.test(w))
+    .join(' ')
+  const named = person ?? (words || null)
   const title = subject
     ? kind === 'call' && named
       ? `Call ${named} about ${subject}`
       : titleCase(subject)
     : person
       ? `${kind ? titleCase(kind) : 'Meeting'} with ${person}`
-      : leftover.length >= 3
-        ? titleCase(leftover)
+      : words.length >= 3
+        ? titleCase(words)
         : kind && place
           ? `${titleCase(kind)} at ${place}`
           : ''

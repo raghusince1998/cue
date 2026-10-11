@@ -13,6 +13,8 @@ import {
   customType,
   jsonb,
   primaryKey,
+  bigint,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
@@ -269,6 +271,50 @@ export const expenses = pgTable(
   (t) => [index('expenses_user_day_idx').on(t.userId, t.spentOn)],
 )
 
+/** Something moving through stages: a job application, a candidate, a deal. */
+export const trackerItems = pgTable(
+  'tracker_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => orgs.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 'jobs', 'hiring' or 'deals'. */
+    board: text('board').notNull(),
+    /** Who it is about: the company, the candidate, the client. */
+    title: text('title').notNull(),
+    /** What: the role, the deal. */
+    detail: text('detail'),
+    stage: text('stage').notNull(),
+    contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+    valuePaise: bigint('value_paise', { mode: 'number' }),
+    link: text('link'),
+    notes: text('notes'),
+    stageChangedAt: timestamp('stage_changed_at', { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('tracker_items_user_board_idx').on(t.userId, t.board)],
+)
+
+/** Each move between stages, so an item can show how it got where it is. */
+export const trackerEvents = pgTable(
+  'tracker_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    itemId: uuid('item_id')
+      .notNull()
+      .references(() => trackerItems.id, { onDelete: 'cascade' }),
+    fromStage: text('from_stage'),
+    toStage: text('to_stage').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('tracker_events_item_idx').on(t.itemId, t.at)],
+)
+
 /** Money someone owes you: their share of an expense, or money lent. */
 export const moneyOwed = pgTable(
   'money_owed',
@@ -421,6 +467,8 @@ export const commitments = pgTable(
     placeLabel: text('place_label'),
     lat: doublePrecision('lat'),
     lng: doublePrecision('lng'),
+    /** The tracked item this is the next step of: an interview, a follow-up. */
+    trackerItemId: uuid('tracker_item_id').references((): AnyPgColumn => trackerItems.id, { onDelete: 'set null' }),
     /** 'fixed' occupies a slot and can clash; 'flexible' only wants a window. */
     flexibility: text('flexibility').notNull().default('fixed'),
     /** morning | afternoon | evening | night — when no exact time was given. */

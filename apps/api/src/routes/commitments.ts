@@ -28,6 +28,7 @@ import { keepInTouch } from '../services/keepInTouch.ts'
 import { accountKey, listAccounts } from '../services/accounts.ts'
 import { recentCalls } from '../services/calls.ts'
 import { owedPeople } from '../services/owed.ts'
+import { ownsItem } from '../services/trackers.ts'
 import { activeFocus, heldCount } from '../services/focus.ts'
 import { peopleSummary, personLinks } from '../services/people.ts'
 
@@ -57,6 +58,8 @@ const createCommitmentInput = z.object({
   allowConflict: z.boolean().optional(),
   /** Someone else's to do: a check-in date, which claims no time. */
   waitingOn: z.string().trim().min(1).max(100).nullable().optional(),
+  /** The tracked item this is the next step of. */
+  trackerItemId: z.string().uuid().nullable().optional(),
 })
 
 const selection = {
@@ -396,6 +399,9 @@ export async function commitmentRoutes(app: FastifyInstance) {
     if (endsAt && endsAt <= dueAt) {
       return reply.code(400).send({ error: 'ends_before_it_starts' })
     }
+    if (body.trackerItemId && !(await ownsItem(userId, body.trackerItemId))) {
+      return reply.code(404).send({ error: 'tracker_item_not_found' })
+    }
 
     // Neither an all-day item nor a flexible one claims a slot, so there is
     // nothing for them to clash with.
@@ -430,6 +436,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
             preferredWindow: body.preferredWindow ?? null,
             deadline: body.deadline ? new Date(body.deadline) : null,
             priority: body.priority,
+            trackerItemId: body.trackerItemId ?? null,
           })
           .returning(),
         'commitment',

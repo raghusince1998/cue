@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, isNull, lt, lte, ne, or, sql, isNotNull } from 'drizzle-orm'
-import { formatRupees } from '@cue/shared'
+import { BOARDS, formatRupees } from '@cue/shared'
 import { owedPeople } from './owed.ts'
+import { quietItems } from './trackers.ts'
 import { occasionLabel, upcomingOccasions } from './occasions.ts'
 import { orgOf } from './keepInTouch.ts'
 import { db, schema } from '../db/index.ts'
@@ -468,6 +469,37 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
       detail: overdueDebts.map((p) => p.name).slice(0, 3).join(', ') + (overdueDebts.length > 3 ? ' and others.' : '.'),
       action: { label: 'Remind them', href: '/expenses?owed=1' },
       weight: 46,
+    })
+  }
+
+  // ------------------------------------------- applications, candidates, deals
+  // Gone quiet: open, nothing booked, longer than its stage should take.
+  const quiet = await quietItems(userId, now)
+  for (const board of Object.values(BOARDS)) {
+    const mine = quiet.filter((q) => q.board === board.key)
+    if (mine.length === 0) continue
+    const first = mine[0]!
+    insights.push({
+      id: mine.length === 1 ? `tracker-quiet-${first.id}-${first.stage}` : `tracker-quiet-${board.key}`,
+      tone: 'warning',
+      headline:
+        mine.length === 1
+          ? board.quietLine(first.title, first.stage, first.quietDays!)
+          : `${mine.length} ${board.noun}s have gone quiet`,
+      detail:
+        mine.length === 1
+          ? board.key === 'jobs'
+            ? 'A short follow-up often gets a reply. Or book the next step.'
+            : 'Book the next step, or close it.'
+          : mine
+              .slice(0, 3)
+              .map((q) => q.title)
+              .join(', ') + (mine.length > 3 ? ' and more.' : '.'),
+      action: {
+        label: mine.length === 1 ? 'Open it' : 'See them',
+        href: mine.length === 1 ? `/${board.key}?item=${first.id}` : `/${board.key}`,
+      },
+      weight: 48,
     })
   }
 

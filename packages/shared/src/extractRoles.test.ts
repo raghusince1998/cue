@@ -131,3 +131,8 @@ test('a kind word inside a subject is not torn out of it', () => {
   assert.ok(r)
   assert.match(r.subject!, /demo/)
 })
+
+test('a day and a time are not a name: "interview at Zoho friday 11am"', () => {
+  assert.equal(extractRoles('interview at Zoho friday 11am')!.title, 'Interview at Zoho')
+  assert.equal(extractRoles('meeting at Tata Motors on monday 3 pm')!.title, 'Meeting at Tata Motors')
+})

@@ -35,6 +35,21 @@ export {
 import { CLAIM_STATUSES as CLAIMS, EXPENSE_CATEGORY_KEYS as EXPENSE_KEYS } from './expenses.ts'
 export { owedMessage, parseOwed, splitEqually, type OwedLine, type ParsedOwed } from './owed.ts'
 export {
+  BOARDS,
+  BOARD_KEYS,
+  isLaterStage,
+  isOpenStage,
+  mentions,
+  parseTrackerLine,
+  quietFor,
+  stageOf,
+  type Board,
+  type BoardKey,
+  type Stage,
+  type TrackerLine,
+} from './trackers.ts'
+import { BOARD_KEYS as TRACKER_BOARDS } from './trackers.ts'
+export {
   MAIN_TABS,
   USES,
   USE_KEYS,
@@ -670,6 +685,52 @@ export const setOwedStatusInput = z.object({
 })
 
 export const owedIdsInput = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) })
+
+const trackerFields = {
+  title: z.string().trim().min(1).max(160),
+  detail: z.string().trim().max(200).nullable().optional(),
+  contactId: z.string().uuid().nullable().optional(),
+  valuePaise: z.number().int().min(0).max(100_000_000_000_000).nullable().optional(),
+  link: z
+    .string()
+    .trim()
+    .max(1000)
+    .refine((v) => !v || /^https?:\/\//i.test(v), { message: 'A link starts with http:// or https://' })
+    .nullable()
+    .optional(),
+  notes: z.string().max(4000).nullable().optional(),
+}
+
+/** Something new to track; the stage defaults to where the board starts. */
+export const createTrackerItemInput = z.object({ ...trackerFields, stage: z.string().max(40).optional() })
+export const updateTrackerItemInput = z.object({ ...trackerFields, stage: z.string().max(40) }).partial()
+export const trackerBoardParam = z.object({ board: z.enum(TRACKER_BOARDS) })
+
+export interface TrackerNextStep {
+  id: string
+  title: string
+  dueAt: string
+}
+
+export interface TrackerItemDTO {
+  id: string
+  board: (typeof TRACKER_BOARDS)[number]
+  title: string
+  detail: string | null
+  stage: string
+  contactId: string | null
+  contactName: string | null
+  valuePaise: number | null
+  link: string | null
+  notes: string | null
+  stageChangedAt: string
+  closedAt: string | null
+  createdAt: string
+  /** The soonest open plan linked to it. */
+  next: TrackerNextStep | null
+  /** Days it has sat with nothing booked, past its stage's patience. */
+  quietDays: number | null
+}
 
 export const startGreetingsInput = z.object({
   occasion: z.string().trim().min(1).max(80),

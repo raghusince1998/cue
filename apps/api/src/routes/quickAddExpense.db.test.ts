@@ -71,3 +71,17 @@ test('not an expense: a payment still to make, or a number that is not money', a
   const room = await quick.interpret(me.userId, me.orgId, 'meeting in room 204 tomorrow 3pm')
   assert.notEqual(room.kind, 'expense')
 })
+
+test('tracked: a new application, then an interview that is part of it', async () => {
+  const applied = await quick.interpret(me.userId, me.orgId, 'applied to Zoho for the frontend developer role')
+  assert.equal(applied.kind, 'tracker')
+  assert.deepEqual(applied.tracker, { board: 'jobs', stage: 'applied', title: 'Zoho', detail: 'Frontend developer' })
+
+  await h.sql`insert into tracker_items (org_id, user_id, board, title, stage) values (${me.orgId}, ${me.userId}, 'jobs', 'Zoho', 'applied')`
+  const raw = 'interview at Zoho friday 11am'
+  const interview = await quick.enrichForTest(me.userId, me.orgId, raw)
+  assert.equal(interview.kind, 'commitment')
+  assert.equal(interview.trackerItem!.title, 'Zoho')
+  assert.equal(interview.trackerItem!.moveTo, 'interview')
+  assert.ok(interview.assumptions.some((a) => a.includes('Zoho application')))
+})

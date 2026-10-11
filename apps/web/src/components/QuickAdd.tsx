@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
 import { DictateButton } from './DictateButton.tsx'
 import { announceChange } from '../lib/changes.ts'
-import { examplesFor, formatRupees } from '@cue/shared'
+import { examplesFor } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
 import {
   NO_CHOICES,
@@ -38,7 +38,17 @@ interface Person {
 }
 
 interface Plan {
-  kind: 'commitment' | 'intention' | 'trip' | 'recurrence' | 'expense' | 'owed' | 'needsTime' | 'needsPerson' | 'unclear'
+  kind:
+    | 'commitment'
+    | 'intention'
+    | 'trip'
+    | 'recurrence'
+    | 'expense'
+    | 'owed'
+    | 'tracker'
+    | 'needsTime'
+    | 'needsPerson'
+    | 'unclear'
   title: string
   summary: string
   assumptions: string[]
@@ -60,6 +70,8 @@ interface Plan {
 
 interface Saved extends Plan {
   id: string
+  /** The line as it was typed: what Undo puts back. */
+  typed?: string
   /** Several wishes saved from one line: undo takes all of them. */
   ids?: string[]
   savedTrip?: { id: string; placeLabel: string; startsOn: string; endsOn: string; created?: boolean } | null
@@ -79,6 +91,7 @@ const KIND_WORD: Record<Plan['kind'], string> = {
   recurrence: 'Repeating',
   expense: 'Expense',
   owed: 'Owed to you',
+  tracker: 'Tracking',
   needsTime: 'Understood',
   needsPerson: 'Which one?',
   unclear: '',
@@ -175,7 +188,7 @@ export function QuickAdd({
         if (plan?.trip && !plan.trip.existing) body.trip = choices.trip
         if (plan?.upcomingTrip) body.onTrip = choices.onTrip
         const result = await api<Saved>('/quick', { method: 'POST', body })
-        setSaved(result)
+        setSaved({ ...result, typed: text })
         setText('')
         setPlan(null)
         setChoices(NO_CHOICES)
@@ -214,14 +227,8 @@ export function QuickAdd({
       for (const id of saved.ids ?? [saved.id]) {
         await api(`/quick/${saved.kind}/${id}${alsoTrip}`, { method: 'DELETE' })
       }
-      // An expense's title has lost its amount; put the whole line back.
-      setText(
-        saved.kind === 'expense' && saved.expense
-          ? `${formatRupees(saved.expense.amountPaise)} ${saved.expense.note ?? ''}`.trim()
-          : saved.kind === 'owed' && saved.owed
-            ? `${saved.owed.name} owes me ${formatRupees(saved.owed.amountPaise)}${saved.owed.note ? ` for ${saved.owed.note}` : ''}`
-            : saved.title,
-      )
+      // The line as it was typed, time and amount included, to fix and save again.
+      setText(saved.typed ?? saved.title)
       setSaved(null)
       onSaved()
       announceChange()

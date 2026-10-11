@@ -20,6 +20,7 @@ import Repeating from './pages/Repeating.tsx'
 import History from './pages/History.tsx'
 import People from './pages/People.tsx'
 import Expenses from './pages/Expenses.tsx'
+import Tracker from './pages/Tracker.tsx'
 import { tabsFor, type Section } from '@cue/shared'
 import { UsesPicker } from './components/UsesPicker.tsx'
 
@@ -30,6 +31,9 @@ const SECTION_LINKS: Partial<Record<Section, { to: string; label: string }>> = {
   trips: { to: '/trips', label: 'Trips' },
   repeating: { to: '/repeating', label: 'Repeating' },
   expenses: { to: '/expenses', label: 'Expenses' },
+  jobs: { to: '/jobs', label: 'Jobs' },
+  hiring: { to: '/hiring', label: 'Hiring' },
+  deals: { to: '/deals', label: 'Deals' },
 }
 const AVAILABLE = Object.keys(SECTION_LINKS) as Section[]
 
@@ -291,6 +295,9 @@ export default function App() {
           <Route path="/people" element={<People />} />
           <Route path="/places" element={<Places />} />
           <Route path="/expenses" element={<Expenses />} />
+          <Route path="/jobs" element={<Tracker key="jobs" board="jobs" />} />
+          <Route path="/hiring" element={<Tracker key="hiring" board="hiring" />} />
+          <Route path="/deals" element={<Tracker key="deals" board="deals" />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

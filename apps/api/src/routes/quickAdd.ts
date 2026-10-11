@@ -23,6 +23,11 @@ import {
   parseWishList,
   parseExpense,
   parseOwed,
+  parseTrackerLine,
+  isLaterStage,
+  stageOf,
+  BOARDS,
+  type BoardKey,
   spentWhen,
   formatRupees,
   EXPENSE_CATEGORIES,
@@ -46,6 +51,7 @@ import {
 import { planWishes } from '../services/wishes.ts'
 import { createExpense, tripOn } from '../services/expenses.ts'
 import { addOwed } from '../services/owed.ts'
+import { createItem, itemMentionedIn, updateItem } from '../services/trackers.ts'
 import {
   findLinks,
   knownPlaces,
@@ -99,6 +105,8 @@ export type QuickKind =
   | 'expense'
   /** Money owed to you: "Ravi owes me ₹500". */
   | 'owed'
+  /** Something to track: "applied to Infosys for data analyst". */
+  | 'tracker'
   /** Understood, but it needs a time before it can be saved. */
   | 'needsTime'
   /** Understood, but more than one person could be meant. */
@@ -173,6 +181,16 @@ export async function quickAddRoutes(app: FastifyInstance) {
     // puts the plan against a stranger and offers their phone number.
     if (plan.kind === 'needsPerson') {
       return reply.code(300).send({ error: 'needs_person', plan })
+    }
+
+    if (plan.kind === 'tracker' && plan.tracker) {
+      const item = await createItem(orgId, userId, plan.tracker.board, {
+        title: plan.tracker.title,
+        detail: plan.tracker.detail,
+        stage: plan.tracker.stage,
+      })
+      if (item === 'unknown_stage') return reply.code(400).send({ error: 'unknown_stage' })
+      return reply.code(201).send({ ...plan, id: item.id })
     }
 
     if (plan.kind === 'owed' && plan.owed) {
@@ -342,6 +360,7 @@ export async function quickAddRoutes(app: FastifyInstance) {
             tripId,
             flexibility: plan.flexibility,
             preferredWindow: plan.preferredWindow ?? null,
+            trackerItemId: plan.trackerItem?.id ?? null,
           })
           .returning(),
         'commitment',
@@ -349,6 +368,11 @@ export async function quickAddRoutes(app: FastifyInstance) {
       await scheduleFirstReminder({ orgId, commitmentId: created.id, fireAt: dueAt }, tx)
       return created
     })
+
+    // "interview at Infosys friday": the application is at interview now.
+    if (plan.trackerItem?.moveTo) {
+      await updateItem(orgId, userId, plan.trackerItem.id, { stage: plan.trackerItem.moveTo })
+    }
 
     if (plan.checklist.length > 0) {
       await db.insert(schema.checklistItems).values(
@@ -383,7 +407,7 @@ export async function quickAddRoutes(app: FastifyInstance) {
     const { sub: userId } = scope(req)
     const { kind, id } = z
       .object({
-        kind: z.enum(['commitment', 'intention', 'trip', 'recurrence', 'expense', 'owed']),
+        kind: z.enum(['commitment', 'intention', 'trip', 'recurrence', 'expense', 'owed', 'tracker']),
         id: z.string().uuid(),
       })
       .parse(req.params)
@@ -399,7 +423,9 @@ export async function quickAddRoutes(app: FastifyInstance) {
               ? schema.expenses
               : kind === 'owed'
                 ? schema.moneyOwed
-                : schema.recurrences
+                : kind === 'tracker'
+                  ? schema.trackerItems
+                  : schema.recurrences
 
     // Scoped to the owner in the same statement as the delete. Checking after
     // the fact, or not at all, would let any signed-in account remove another's
@@ -464,6 +490,10 @@ export interface QuickPlan {
   expense: { amountPaise: number; category: string; note: string | null; spentOn: string } | null
   /** Money owed to you, read from the line. */
   owed: { amountPaise: number; name: string; note: string | null } | null
+  /** A new job application, candidate or deal, read from the line. */
+  tracker: { board: BoardKey; stage: string; title: string; detail: string | null } | null
+  /** The tracked item a plan is the next step of, and the stage it moves it to. */
+  trackerItem: { id: string; board: BoardKey; title: string; stage: string; moveTo: string | null } | null
   /** Plain-words account of every assumption made, shown before and after saving. */
   assumptions: string[]
   /** Why the app could not tell, when it could not. */
@@ -476,6 +506,11 @@ export interface QuickPlan {
  * to name, and — for a plan in another city — the trip it belongs to. A single
  * certain person is attached; everything else is offered, never assumed.
  */
+/** What the preview shows for a line: read, then linked to what it mentions. */
+export async function enrichForTest(userId: string, orgId: string, raw: string): Promise<QuickPlan> {
+  return enrich(userId, orgId, raw, await interpret(userId, orgId, raw))
+}
+
 /** A sentence that starts by saying money is still to go out is a to-do. */
 const TO_PAY = /^\s*(?:pay|send|transfer|give|buy|book|renew|deposit|collect|get|withdraw)\b/i
 
@@ -505,6 +540,23 @@ async function enrich(userId: string, orgId: string, raw: string, plan: QuickPla
       title: `${who} owes you ${formatRupees(plan.owed.amountPaise)}`,
       summary: `${formatRupees(plan.owed.amountPaise)} from ${who}${plan.owed.note ? ` · ${plan.owed.note}` : ''}`,
       links: { ...links, places: [], accounts: [] },
+    }
+  }
+
+  // The next step of something being tracked: "interview at Infosys friday".
+  if (plan.kind === 'commitment') {
+    const item = await itemMentionedIn(userId, raw)
+    if (item) {
+      const interview = /\binterview/i.test(raw) && (item.board === 'jobs' || item.board === 'hiring')
+      const moveTo = interview && isLaterStage(item.board, item.stage, 'interview') ? 'interview' : null
+      const label = item.board === 'jobs' ? 'application' : item.board === 'hiring' ? 'candidate' : 'deal'
+      next.trackerItem = { id: item.id, board: item.board, title: item.title, stage: item.stage, moveTo }
+      next.assumptions = [
+        ...next.assumptions,
+        moveTo
+          ? `Part of your ${item.title} ${label}; it moves to Interviewing.`
+          : `Part of your ${item.title} ${label}.`,
+      ]
     }
   }
 
@@ -581,6 +633,8 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
     wishes: null,
     expense: null,
     owed: null,
+    tracker: null,
+    trackerItem: null,
     assumptions,
     problem: null,
     summary: '',
@@ -608,6 +662,20 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
       summary: place
         ? `${n} things saved for ${place}: ${wishList.titles.join(', ')}`
         : `${n} things on your wishlist: ${wishList.titles.join(', ')}`,
+    }
+  }
+
+  // Something to track: "applied to Infosys for data analyst", "candidate
+  // Priya for designer". "apply for … by friday" has a date, so it is a plan.
+  const tracked = parseTrackerLine(text)
+  if (tracked && (tracked.stage !== 'saved' || !parseWhen(text, now))) {
+    const board = BOARDS[tracked.board]
+    return {
+      ...base,
+      kind: 'tracker',
+      title: tracked.detail ? `${tracked.title} · ${tracked.detail}` : tracked.title,
+      tracker: tracked,
+      summary: `${board.label}: ${tracked.title}${tracked.detail ? `, ${tracked.detail}` : ''} · ${stageOf(tracked.board, tracked.stage)!.label}`,
     }
   }
 
