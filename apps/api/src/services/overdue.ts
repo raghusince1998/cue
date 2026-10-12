@@ -93,5 +93,6 @@ export function canBeOverdue(now: Date) {
   // Nor a focus block: when it is over, it is over — it was time set aside,
   // not something promised.
   const c = schema.commitments
-  return sql`(${managedByCue()} and not ${isAwaitingWrapUp(now)} and ${c.waitingOn} is null and ${c.kind} <> 'focus')`
+  // Nor a booking: once the train has left, it has left.
+  return sql`(${managedByCue()} and not ${isAwaitingWrapUp(now)} and ${c.waitingOn} is null and ${c.kind} <> 'focus' and ${c.booking} is null)`
 }

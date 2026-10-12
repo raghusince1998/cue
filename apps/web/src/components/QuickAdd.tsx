@@ -68,6 +68,8 @@ interface Plan {
   expense?: { amountPaise: number; note: string | null } | null
   /** Money owed to you, when that is what the line was. */
   owed?: { amountPaise: number; name: string; note: string | null } | null
+  /** A booking confirmation: a train, a flight, a hotel, a show. */
+  booking?: { type: string; ref: string | null } | null
 }
 
 interface Saved extends Plan {
@@ -307,8 +309,8 @@ export function QuickAdd({
               {i > 0 && ' · '}&ldquo;{x}&rdquo;
             </span>
           ))}
-          . Or paste a shop&rsquo;s delivery message, from Amazon, Flipkart or any other, to track the
-          parcel.
+          . Or paste a shop&rsquo;s delivery message, or a train, flight, hotel or movie booking
+          confirmation, and Cue keeps track of it.
         </p>
       )}
 
@@ -385,7 +387,7 @@ export function QuickAdd({
           ) : (
             <>
               <div>
-                <span className="quick-kind">{KIND_WORD[plan.kind]}</span>
+                <span className="quick-kind">{plan.booking ? 'Booking' : KIND_WORD[plan.kind]}</span>
                 <strong>{plan.summary}</strong>
                 {plan.assumptions.length > 0 && (
                   <ul className="quick-assumptions">
@@ -441,7 +443,7 @@ export function QuickAdd({
         <div className="quick-saved">
           <div>
             <strong>
-              {KIND_WORD[saved.kind]} · {saved.summary}
+              {saved.booking ? 'Booked' : KIND_WORD[saved.kind]} · {saved.summary}
             </strong>
             {saved.assumptions.length > 0 && (
               <p className="muted small">{saved.assumptions.join(' ')}</p>

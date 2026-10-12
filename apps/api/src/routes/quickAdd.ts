@@ -26,6 +26,9 @@ import {
   parseTrackerLine,
   parseBill,
   parseDelivery,
+  parseBooking,
+  leadLabel,
+  findCity,
   DELIVERY_STATUS_LABEL,
   type ParsedDelivery,
   dueLabel,
@@ -359,7 +362,8 @@ export async function quickAddRoutes(app: FastifyInstance) {
               userId,
               placeLabel: tripLink.placeLabel,
               startsOn: tripLink.day,
-              endsOn: tripLink.day,
+              // A hotel stay is a trip to its check-out day.
+              endsOn: plan.booking?.endsOn && plan.booking.endsOn > tripLink.day ? plan.booking.endsOn : tripLink.day,
             })
             .returning(),
           'trip',
@@ -384,13 +388,65 @@ export async function quickAddRoutes(app: FastifyInstance) {
             flexibility: plan.flexibility,
             preferredWindow: plan.preferredWindow ?? null,
             trackerItemId: plan.trackerItem?.id ?? null,
+            booking: plan.booking
+              ? {
+                  type: plan.booking.type,
+                  ref: plan.booking.ref,
+                  from: plan.booking.from,
+                  city: plan.booking.city,
+                  provider: plan.booking.provider,
+                  remindBeforeMinutes: plan.booking.remindBeforeMinutes,
+                }
+              : null,
           })
           .returning(),
         'commitment',
       )
-      await scheduleFirstReminder({ orgId, commitmentId: created.id, fireAt: dueAt }, tx)
+      if (plan.booking) {
+        // Ahead of time: the first of these still to come.
+        const now = Date.now()
+        const lead = dueAt.getTime() - plan.booking.remindBeforeMinutes * 60_000
+        const fireAt = [lead, dueAt.getTime() - 30 * 60_000, dueAt.getTime()].find((t) => t > now) ?? dueAt.getTime()
+        await scheduleFirstReminder({ orgId, commitmentId: created.id, fireAt: new Date(fireAt) }, tx)
+        // An early start gets a word the evening before, too.
+        if (['train', 'flight', 'bus'].includes(plan.booking.type) && dueAt.getHours() < 11) {
+          const eve = new Date(dueAt.getFullYear(), dueAt.getMonth(), dueAt.getDate() - 1, 20, 0)
+          if (eve.getTime() > now && eve.getTime() < fireAt) {
+            await scheduleFirstReminder({ orgId, commitmentId: created.id, fireAt: eve }, tx)
+          }
+        }
+      } else {
+        await scheduleFirstReminder({ orgId, commitmentId: created.id, fireAt: dueAt }, tx)
+      }
       return created
     })
+
+    // A flight: web check-in opens about two days ahead, and is its own job.
+    let checkInId: string | null = null
+    if (plan.booking?.type === 'flight') {
+      const opens = new Date(dueAt.getTime() - 48 * 3_600_000)
+      if (opens.getTime() > Date.now() + 30 * 60_000) {
+        const checkIn = takeFirst(
+          await db
+            .insert(schema.commitments)
+            .values({
+              orgId,
+              userId,
+              title: `Web check-in: ${plan.title}`,
+              kind: 'task',
+              dueAt: opens,
+              durationMinutes: 15,
+              notes: plan.notes ?? null,
+              tripId: row.tripId,
+              flexibility: 'flexible',
+            })
+            .returning(),
+          'commitment',
+        )
+        await scheduleFirstReminder({ orgId, commitmentId: checkIn.id, fireAt: opens })
+        checkInId = checkIn.id
+      }
+    }
 
     // "interview at Infosys friday": the application is at interview now.
     if (plan.trackerItem?.moveTo) {
@@ -411,6 +467,8 @@ export async function quickAddRoutes(app: FastifyInstance) {
     return reply.code(201).send({
       ...plan,
       id: row.id,
+      // Undo takes the check-in with it.
+      ...(checkInId ? { ids: [row.id, checkInId] } : {}),
       savedTrip:
         tripLink && row.tripId
           ? {
@@ -521,6 +579,16 @@ export interface QuickPlan {
   bill: ParsedBill | null
   /** A parcel, read from a shop's or courier's message. */
   delivery: ParsedDelivery | null
+  /** A booking confirmation behind this plan: a train, a flight, a hotel, a show. */
+  booking: {
+    type: string
+    ref: string | null
+    from: string | null
+    city: string | null
+    provider: string | null
+    remindBeforeMinutes: number
+    endsOn: string | null
+  } | null
   /** A new job application, candidate or deal, read from the line. */
   tracker: { board: BoardKey; stage: string; title: string; detail: string | null } | null
   /** The tracked item a plan is the next step of, and the stage it moves it to. */
@@ -551,6 +619,17 @@ async function enrich(userId: string, orgId: string, raw: string, plan: QuickPla
   }
   if (plan.kind !== 'commitment' && plan.kind !== 'needsTime' && plan.kind !== 'expense' && plan.kind !== 'owed') {
     return plan
+  }
+
+  // A booking: the names in it are passengers, not people to link; the city it
+  // takes you to is the trip.
+  if (plan.booking) {
+    const next: QuickPlan = { ...plan, links: { people: [], places: [], accounts: [] } }
+    if (plan.booking.city && plan.dueAt) {
+      const trip = await tripLinkFor(userId, plan.booking.city, plan.booking.city, new Date(plan.dueAt))
+      if (trip) next.trip = trip
+    }
+    return next
   }
 
   const links = await findLinks(orgId, raw, { contactId: plan.contactId })
@@ -668,6 +747,7 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
     trackerItem: null,
     bill: null,
     delivery: null,
+    booking: null,
     assumptions,
     problem: null,
     summary: '',
@@ -703,6 +783,52 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
         .filter(Boolean)
         .join(' · '),
       assumptions: when ? ['A reminder on the morning it arrives.'] : [],
+    }
+  }
+
+  // A booking confirmation: a train, a flight, a bus, a hotel, a show, an
+  // appointment. A plan at the time it starts, reminded well ahead of it,
+  // with the PNR or booking ID in its notes. Before the list readers, for the
+  // same reason as parcels: these messages are all colons and commas.
+  const booked = parseBooking(raw, now)
+  if (booked) {
+    if (booked.startsAt.getTime() < now.getTime() - 3_600_000) {
+      return {
+        ...base,
+        kind: 'unclear',
+        title: booked.title,
+        problem: `That booking was for ${booked.startsAt.toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}, which has passed.`,
+      }
+    }
+    const city =
+      booked.city ?? (booked.type === 'hotel' || booked.type === 'bus' ? findCity(raw, await knownPlaces(userId)) : null)
+    const webCheckIn = new Date(booked.startsAt.getTime() - 48 * 3_600_000)
+    return {
+      ...base,
+      kind: 'commitment',
+      commitmentKind: 'task',
+      title: booked.title,
+      dueAt: booked.startsAt.toISOString(),
+      durationMinutes: booked.durationMinutes,
+      notes: booked.notes,
+      placeLabel: booked.from,
+      flexibility: 'fixed',
+      checklist: [],
+      booking: {
+        type: booked.type,
+        ref: booked.ref,
+        from: booked.from,
+        city,
+        provider: booked.provider,
+        remindBeforeMinutes: booked.remindBeforeMinutes,
+        endsOn: booked.endsOn,
+      },
+      assumptions: [
+        `A reminder ${leadLabel(booked.remindBeforeMinutes)}, with ${booked.ref ? 'the reference' : 'the details'} to hand.`,
+        ...(booked.type === 'flight' && webCheckIn > now ? ['A web check-in reminder 48 hours before.'] : []),
+        ...(booked.timeKnown ? [] : ['The message had no time, so 8am; change it if you know.']),
+      ],
+      summary: `${booked.title} — ${booked.startsAt.toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`,
     }
   }
 

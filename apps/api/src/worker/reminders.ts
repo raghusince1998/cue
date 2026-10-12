@@ -31,6 +31,28 @@ async function claimDue(limit: number): Promise<ClaimedReminder[]> {
   return rows as unknown as ClaimedReminder[]
 }
 
+/** "Leaves tomorrow at 5:00 pm from Mumbai Central · PNR 2345678901 · 3A · B2 45" */
+function bookingLine(
+  dueAt: Date,
+  booking: { type: string; from: string | null },
+  notes: string | null,
+): string {
+  const time = dueAt.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+  const minutes = Math.round((dueAt.getTime() - Date.now()) / 60_000)
+  const sameDay = new Date().toDateString() === dueAt.toDateString()
+  const verb = ['train', 'flight', 'bus'].includes(booking.type) ? 'Leaves' : booking.type === 'hotel' ? 'Check-in' : 'Starts'
+  const when =
+    minutes <= 0
+      ? `${verb} now`
+      : minutes < 90
+        ? `${verb} in ${minutes} min, at ${time}`
+        : sameDay
+          ? `${verb} today at ${time}`
+          : `${verb} tomorrow at ${time}`
+  const from = booking.from && booking.type !== 'hotel' ? ` from ${booking.from}` : ''
+  return `${when}${from}${notes ? ` · ${notes}` : ''}`
+}
+
 function describe(dueAt: Date, escalation: number): string {
   const overdueMin = Math.round((Date.now() - dueAt.getTime()) / 60_000)
   if (escalation === 0) return 'Due now'
@@ -88,6 +110,8 @@ async function processOne(claim: ClaimedReminder) {
   const focusing = commitment.kind === 'focus'
   // A check-in with someone else: once, and straight to the nudge.
   const waiting = commitment.waitingOn !== null
+  // A booking: ahead of time, with the reference to hand, and never chased.
+  const booked = commitment.booking !== null
 
   await sendToUser(commitment.userId, {
     title: commitment.title,
@@ -97,6 +121,8 @@ async function processOne(claim: ClaimedReminder) {
         ).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}.`
       : waiting
       ? 'Time to check in. Tap to send a nudge.'
+      : booked
+      ? bookingLine(commitment.dueAt, commitment.booking!, commitment.notes)
       : `${mirrored ? 'Starting now' : describe(commitment.dueAt, claim.attempt)}${suffix}`,
     tag: `commitment-${commitment.id}`,
     // Lets the notification offer a Call button instead of only a nag.
@@ -122,7 +148,7 @@ async function processOne(claim: ClaimedReminder) {
 
   // Keep chasing. Once the chain is exhausted the item simply stays in the
   // Overdue list until the user closes it — it is never silently dropped.
-  if (!mirrored && !waiting && !focusing && nextAttempt < env.maxEscalations) {
+  if (!mirrored && !waiting && !focusing && !booked && nextAttempt < env.maxEscalations) {
     await db.insert(schema.reminders).values({
       orgId: claim.org_id,
       commitmentId: commitment.id,

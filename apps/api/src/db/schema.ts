@@ -543,6 +543,15 @@ export const commitments = pgTable(
     placeLabel: text('place_label'),
     lat: doublePrecision('lat'),
     lng: doublePrecision('lng'),
+    /** From a booking confirmation: what it is, the reference, where to. */
+    booking: jsonb('booking').$type<{
+      type: string
+      ref: string | null
+      from: string | null
+      city: string | null
+      provider: string | null
+      remindBeforeMinutes: number
+    }>(),
     /** The tracked item this is the next step of: an interview, a follow-up. */
     trackerItemId: uuid('tracker_item_id').references((): AnyPgColumn => trackerItems.id, { onDelete: 'set null' }),
     /** 'fixed' occupies a slot and can clash; 'flexible' only wants a window. */

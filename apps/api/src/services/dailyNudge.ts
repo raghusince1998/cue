@@ -67,6 +67,7 @@ async function statsFor(userId: string, timezone: string): Promise<DayStats> {
            -- Nor something waiting on someone else.
            and c.waiting_on is null
            and c.kind <> 'focus'
+           and c.booking is null
            and not (c.kind = 'meeting' and not c.all_day
              and coalesce(c.ends_at, c.due_at + c.duration_minutes * interval '1 minute')
                  > now() - interval '7 days'))::int as overdue,
