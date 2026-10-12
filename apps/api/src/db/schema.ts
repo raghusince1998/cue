@@ -271,6 +271,34 @@ export const expenses = pgTable(
   (t) => [index('expenses_user_day_idx').on(t.userId, t.spentOn)],
 )
 
+/** A parcel on its way, from a shop's or courier's message. */
+export const deliveries = pgTable(
+  'deliveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => orgs.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    store: text('store'),
+    item: text('item'),
+    status: text('status').notNull().default('shipped'),
+    expectedOn: date('expected_on'),
+    /** Cash to have ready on delivery. */
+    codPaise: bigint('cod_paise', { mode: 'number' }),
+    /** The order or tracking number, to recognise the next message about it. */
+    orderRef: text('order_ref'),
+    trackingUrl: text('tracking_url'),
+    lastRemindedOn: date('last_reminded_on'),
+    deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('deliveries_user_status_idx').on(t.userId, t.status)],
+)
+
 /** Something due again and again, or something that expires. */
 export const bills = pgTable(
   'bills',

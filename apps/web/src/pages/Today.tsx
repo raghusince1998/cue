@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { WINDOW_LABELS, type CommitmentDTO } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
 import { UsesPicker } from '../components/UsesPicker.tsx'
+import { Deliveries } from '../components/Deliveries.tsx'
 import { api } from '../lib/api.ts'
 import { dayBounds, dayLabel, formatSpan, overdueBy } from '../lib/time.ts'
 import { enablePush, pushState, sendTestPush } from '../lib/push.ts'
@@ -765,6 +766,8 @@ export default function Today() {
       {/* What the app noticed, before what it was told. */}
       <aside className="today-aside stack">
         <NearbyIntentions />
+        {/* Above the brief: a parcel at the door today cannot wait for a scroll. */}
+        <Deliveries />
         <DayBrief
           refreshKey={calendarKey}
           onNavigate={(href) => navigate(href)}

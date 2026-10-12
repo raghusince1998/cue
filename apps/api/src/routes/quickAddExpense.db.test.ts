@@ -99,3 +99,17 @@ test('bills and renewals from one line', async () => {
   const todo = await quick.interpret(me.userId, me.orgId, 'send the bill to Anita tomorrow 10am')
   assert.equal(todo.kind, 'commitment', 'a to-do about a bill is still a to-do')
 })
+
+test('a pasted delivery message is a parcel, not a wishlist or a plan', async () => {
+  const fk = await quick.interpret(
+    me.userId,
+    me.orgId,
+    'Out for Delivery: Redmi Note 13 5G (Black, 128 GB) from Flipkart will be delivered today by Ekart Agent. Please pay Rs.17,999 at the time of delivery. Track: http://fkrt.it/abc',
+  )
+  assert.equal(fk.kind, 'delivery')
+  assert.equal(fk.delivery!.store, 'Flipkart')
+  assert.ok(fk.summary.includes('arriving today'), fk.summary)
+  assert.ok(fk.summary.includes('₹17,999 cash on delivery'), fk.summary)
+  const done = await quick.interpret(me.userId, me.orgId, 'Delivered: Your package with Prestige Kettle was delivered. https://amzn.in/d/x9')
+  assert.equal(done.kind, 'delivery')
+})

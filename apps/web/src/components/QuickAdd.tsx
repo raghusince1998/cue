@@ -47,6 +47,7 @@ interface Plan {
     | 'owed'
     | 'tracker'
     | 'bill'
+    | 'delivery'
     | 'needsTime'
     | 'needsPerson'
     | 'unclear'
@@ -94,6 +95,7 @@ const KIND_WORD: Record<Plan['kind'], string> = {
   owed: 'Owed to you',
   tracker: 'Tracking',
   bill: 'Bill',
+  delivery: 'Parcel',
   needsTime: 'Understood',
   needsPerson: 'Which one?',
   unclear: '',
@@ -305,7 +307,8 @@ export function QuickAdd({
               {i > 0 && ' · '}&ldquo;{x}&rdquo;
             </span>
           ))}
-          .
+          . Or paste a shop&rsquo;s delivery message, from Amazon, Flipkart or any other, to track the
+          parcel.
         </p>
       )}
 

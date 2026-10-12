@@ -35,6 +35,15 @@ export {
 import { CLAIM_STATUSES as CLAIMS, EXPENSE_CATEGORY_KEYS as EXPENSE_KEYS } from './expenses.ts'
 export { owedMessage, parseOwed, splitEqually, type OwedLine, type ParsedOwed } from './owed.ts'
 export {
+  DELIVERY_STATUSES,
+  STATUS_LABEL as DELIVERY_STATUS_LABEL,
+  STATUS_RANK as DELIVERY_STATUS_RANK,
+  parseDelivery,
+  type DeliveryStatus,
+  type ParsedDelivery,
+} from './deliveries.ts'
+import { DELIVERY_STATUSES as DELIVERY_KEYS } from './deliveries.ts'
+export {
   BILL_CATEGORIES,
   BILL_CATEGORY_KEYS,
   REPEATS,
@@ -752,6 +761,25 @@ export interface BillDTO {
   active: boolean
   lastPaidOn: string | null
 }
+
+export interface DeliveryDTO {
+  id: string
+  store: string | null
+  item: string | null
+  status: (typeof DELIVERY_KEYS)[number]
+  expectedOn: string | null
+  codPaise: number | null
+  orderRef: string | null
+  trackingUrl: string | null
+  deliveredAt: string | null
+  updatedAt: string
+}
+
+export const updateDeliveryInput = z.object({
+  status: z.enum(DELIVERY_KEYS).optional(),
+  expectedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  item: z.string().trim().max(120).nullable().optional(),
+})
 
 /** Something new to track; the stage defaults to where the board starts. */
 export const createTrackerItemInput = z.object({ ...trackerFields, stage: z.string().max(40).optional() })

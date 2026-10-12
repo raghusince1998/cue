@@ -25,6 +25,9 @@ import {
   parseOwed,
   parseTrackerLine,
   parseBill,
+  parseDelivery,
+  DELIVERY_STATUS_LABEL,
+  type ParsedDelivery,
   dueLabel,
   REPEATS,
   type ParsedBill,
@@ -57,6 +60,7 @@ import { createExpense, tripOn } from '../services/expenses.ts'
 import { addOwed } from '../services/owed.ts'
 import { createItem, itemMentionedIn, updateItem } from '../services/trackers.ts'
 import { createBill } from '../services/bills.ts'
+import { recordDelivery } from '../services/deliveries.ts'
 import {
   findLinks,
   knownPlaces,
@@ -114,6 +118,8 @@ export type QuickKind =
   | 'tracker'
   /** A bill or a renewal: "rent ₹15,000 on the 1st every month". */
   | 'bill'
+  /** A shop's or courier's message about a parcel. */
+  | 'delivery'
   /** Understood, but it needs a time before it can be saved. */
   | 'needsTime'
   /** Understood, but more than one person could be meant. */
@@ -188,6 +194,11 @@ export async function quickAddRoutes(app: FastifyInstance) {
     // puts the plan against a stranger and offers their phone number.
     if (plan.kind === 'needsPerson') {
       return reply.code(300).send({ error: 'needs_person', plan })
+    }
+
+    if (plan.kind === 'delivery' && plan.delivery) {
+      const { delivery, created } = await recordDelivery(orgId, userId, plan.delivery)
+      return reply.code(201).send({ ...plan, id: delivery.id, updated: !created })
     }
 
     if (plan.kind === 'bill' && plan.bill) {
@@ -419,7 +430,7 @@ export async function quickAddRoutes(app: FastifyInstance) {
     const { sub: userId } = scope(req)
     const { kind, id } = z
       .object({
-        kind: z.enum(['commitment', 'intention', 'trip', 'recurrence', 'expense', 'owed', 'tracker', 'bill']),
+        kind: z.enum(['commitment', 'intention', 'trip', 'recurrence', 'expense', 'owed', 'tracker', 'bill', 'delivery']),
         id: z.string().uuid(),
       })
       .parse(req.params)
@@ -439,7 +450,9 @@ export async function quickAddRoutes(app: FastifyInstance) {
                   ? schema.trackerItems
                   : kind === 'bill'
                     ? schema.bills
-                    : schema.recurrences
+                    : kind === 'delivery'
+                      ? schema.deliveries
+                      : schema.recurrences
 
     // Scoped to the owner in the same statement as the delete. Checking after
     // the fact, or not at all, would let any signed-in account remove another's
@@ -506,6 +519,8 @@ export interface QuickPlan {
   owed: { amountPaise: number; name: string; note: string | null } | null
   /** A bill or a renewal, read from the line. */
   bill: ParsedBill | null
+  /** A parcel, read from a shop's or courier's message. */
+  delivery: ParsedDelivery | null
   /** A new job application, candidate or deal, read from the line. */
   tracker: { board: BoardKey; stage: string; title: string; detail: string | null } | null
   /** The tracked item a plan is the next step of, and the stage it moves it to. */
@@ -652,9 +667,43 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
     tracker: null,
     trackerItem: null,
     bill: null,
+    delivery: null,
     assumptions,
     problem: null,
     summary: '',
+  }
+
+  // A shop's or courier's message about a parcel, shared or pasted whole.
+  // First, and from the line as it came: these messages are full of colons
+  // and commas that the list readers below would split apart.
+  const parcel = parseDelivery(raw, now)
+  if (parcel) {
+    const today = ymd(now)
+    const tomorrow = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))
+    const when =
+      parcel.status === 'delivered' || parcel.status === 'cancelled' || !parcel.expectedOn
+        ? null
+        : parcel.expectedOn === today
+          ? 'arriving today'
+          : parcel.expectedOn === tomorrow
+            ? 'arriving tomorrow'
+            : `expected ${new Date(`${parcel.expectedOn}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}`
+    return {
+      ...base,
+      kind: 'delivery',
+      title: [parcel.store, parcel.item].filter(Boolean).join(' · ') || 'Parcel',
+      checklist: [],
+      delivery: parcel,
+      summary: [
+        parcel.store ?? 'Parcel',
+        parcel.item,
+        when ?? DELIVERY_STATUS_LABEL[parcel.status].toLowerCase(),
+        parcel.codPaise ? `${formatRupees(parcel.codPaise)} cash on delivery` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      assumptions: when ? ['A reminder on the morning it arrives.'] : [],
+    }
   }
 
   // Several wishes in one line — "Jaipur: visit Hawa Mahal, buy lakh chudi",
