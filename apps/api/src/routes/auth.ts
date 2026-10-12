@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import bcrypt from 'bcryptjs'
 import { createHash, randomBytes } from 'node:crypto'
-import { and, eq, isNull, lt } from 'drizzle-orm'
+import { and, eq, isNull, lt, ne, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   changePasswordInput,
@@ -14,6 +14,8 @@ import {
 import { db, schema } from '../db/index.ts'
 import { takeFirst } from '../db/util.ts'
 import { scope } from '../auth.ts'
+import { createDemo, demoAllowed } from '../services/demo.ts'
+import { revokeAccount } from '../services/oauthConnect.ts'
 import { env } from '../env.ts'
 import { mailConfigured, MailError, resetEmail, sendMail } from '../services/mail.ts'
 
@@ -66,6 +68,48 @@ export async function authRoutes(app: FastifyInstance) {
     return { token, user: { id: user.id, name: user.name, email }, org: { id: org.id, name: org.name } }
   })
 
+  /**
+   * Try Cue without signing up: a fresh account with a sample week in it,
+   * signed in straight away, gone after a day. Limited per address, so the
+   * open door is not leaned on.
+   */
+  app.post('/auth/demo', async (req, reply) => {
+    // Behind Caddy, the visitor is the last address it appended; earlier ones
+    // can be anything the visitor sent.
+    const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+    const address = forwarded.at(-1) ?? req.ip
+    if (!demoAllowed(address)) return reply.code(429).send({ error: 'too_many_demos' })
+    const demo = await createDemo()
+    const token = app.jwt.sign({ sub: demo.userId, orgId: demo.orgId, email: demo.email })
+    return reply.code(201).send({ token })
+  })
+
+  /**
+   * Delete my account: every plan, person, bill and connection with it.
+   * Connected Google and Microsoft accounts are handed back first, so Cue
+   * keeps no access. Asks for the password, except on a demo.
+   */
+  app.delete('/auth/me', { onRequest: [app.authenticate] }, async (req, reply) => {
+    const { sub, orgId } = scope(req)
+    const { password } = z.object({ password: z.string().max(200).optional() }).parse(req.body ?? {})
+    const [user] = await db.select().from(schema.users).where(eq(schema.users.id, sub)).limit(1)
+    if (!user) return reply.code(404).send({ error: 'not_found' })
+    if (!user.isDemo && !(password && (await bcrypt.compare(password, user.passwordHash)))) {
+      return reply.code(403).send({ error: 'wrong_password' })
+    }
+    const accounts = await db.select().from(schema.oauthAccounts).where(eq(schema.oauthAccounts.userId, sub))
+    for (const account of accounts) await revokeAccount(account).catch(() => undefined)
+
+    const [others] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.users)
+      .where(and(eq(schema.users.orgId, orgId), ne(schema.users.id, sub)))
+    // Alone in the account: all of it goes. Otherwise only what was theirs.
+    if ((others?.n ?? 0) === 0) await db.delete(schema.orgs).where(eq(schema.orgs.id, orgId))
+    else await db.delete(schema.users).where(eq(schema.users.id, sub))
+    return { ok: true }
+  })
+
   app.post('/auth/login', async (req, reply) => {
     const body = loginInput.parse(req.body)
     const email = body.email.toLowerCase().trim()
@@ -96,6 +140,7 @@ export async function authRoutes(app: FastifyInstance) {
         orgName: schema.orgs.name,
         role: schema.users.role,
         uses: schema.users.uses,
+        isDemo: schema.users.isDemo,
         /** Null when there is none; otherwise the cache key for the image URL. */
         avatarUpdatedAt: schema.users.avatarUpdatedAt,
       })

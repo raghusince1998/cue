@@ -25,6 +25,7 @@ import { billRoutes } from './routes/bills.ts'
 import { deliveryRoutes } from './routes/deliveries.ts'
 import { mailRoutes } from './routes/mail.ts'
 import { startMailWorker } from './services/mailReader.ts'
+import { startDemoCleanup } from './services/demo.ts'
 import { startDeliveryWorker } from './services/deliveries.ts'
 import { startBillWorker } from './services/bills.ts'
 import { contactRoutes } from './routes/contacts.ts'
@@ -173,6 +174,7 @@ const stopReports = startReportWorker()
 const stopBills = startBillWorker()
 const stopDeliveries = startDeliveryWorker()
 const stopMail = startMailWorker()
+const stopDemos = startDemoCleanup()
 
 // Keeps the rolling window of generated occurrences topped up. Hourly is ample
 // for a 120-day horizon, and it runs once at boot so a series created while the
@@ -219,6 +221,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   stopBills()
   stopDeliveries()
   stopMail()
+  stopDemos()
     clearInterval(recurrenceTimer)
     clearInterval(feedTimer)
     clearInterval(purgeTimer)

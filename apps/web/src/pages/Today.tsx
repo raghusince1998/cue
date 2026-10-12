@@ -752,7 +752,7 @@ export default function Today() {
             />
           </section>
         )}
-        {me && (me.uses.length > 0 || usesAsked) && <ConnectMailCard />}
+        {me && !me.isDemo && (me.uses.length > 0 || usesAsked) && <ConnectMailCard />}
         {shared?.original && (
           <details className="shared-original">
             <summary className="muted small">The whole message</summary>

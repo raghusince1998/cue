@@ -1,10 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth.tsx'
 import { ApiError, api } from '../lib/api.ts'
 
-export default function Login() {
+export default function Login({ initialMode = 'login' }: { initialMode?: 'login' | 'register' }) {
   const { login, register } = useAuth()
-  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login')
+  const navigate = useNavigate()
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>(initialMode)
+  // /login and /register are two doors to the same form.
+  useEffect(() => setMode(initialMode), [initialMode])
   const [sent, setSent] = useState(false)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -57,8 +61,9 @@ export default function Login() {
           Cue
         </div>
         <p className="muted">
-          Your visits, your callbacks, and every follow-up you promised — chased until they are
-          actually done.
+          {mode === 'register'
+            ? 'Free to use. Plans, reminders, bills and bookings — say it once, Cue remembers the rest.'
+            : 'Welcome back. Your plans, reminders and everything Cue found for you are waiting.'}
         </p>
 
         {mode === 'register' && (
@@ -133,13 +138,24 @@ export default function Login() {
           type="button"
           className="link center"
           onClick={() => {
-            setMode(mode === 'login' ? 'register' : 'login')
+            const next = mode === 'login' ? 'register' : 'login'
+            setMode(next)
             setError(null)
             setSent(false)
+            navigate(next === 'register' ? '/register' : '/login', { replace: true })
           }}
         >
           {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}
         </button>
+        {mode === 'register' && (
+          <p className="muted small center-text">
+            By creating an account you agree to the <Link to="/terms">terms</Link> and the{' '}
+            <Link to="/privacy">privacy policy</Link>.
+          </p>
+        )}
+        <Link to="/" className="link center auth-home">
+          ← About Cue
+        </Link>
       </form>
     </div>
   )

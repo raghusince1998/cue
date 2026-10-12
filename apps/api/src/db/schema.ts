@@ -98,6 +98,8 @@ export const users = pgTable(
     homeCity: text('home_city'),
     /** Put in a reminder to pay back, so paying is one tap. */
     upiId: text('upi_id'),
+    /** A one-tap demo from the website, removed after a day. */
+    isDemo: boolean('is_demo').notNull().default(false),
     /** What they use Cue for: decides what the screens lead with. */
     uses: text('uses').array().notNull().default(sql`'{}'::text[]`),
     /** Weekly goals by metric: { calls: 40, visits: 10 }. Absent means not tracked. */

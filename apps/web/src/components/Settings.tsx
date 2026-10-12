@@ -4,6 +4,7 @@ import { ProfilePhoto } from './ProfilePhoto.tsx'
 import { InfoTip } from './InfoTip.tsx'
 import { UsesPicker } from './UsesPicker.tsx'
 import { Integrations } from './Integrations.tsx'
+import { DeleteAccount } from './DeleteAccount.tsx'
 import { Modal } from './Modal.tsx'
 import { TemplateManager } from './QuickMessage.tsx'
 import { api } from '../lib/api.ts'
@@ -524,6 +525,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
       {message && <p className="muted small">{message}</p>}
 
+      <hr className="rule" />
+      <DeleteAccount />
     </div>
   )
 }

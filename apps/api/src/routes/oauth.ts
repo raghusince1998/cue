@@ -114,6 +114,11 @@ export async function oauthRoutes(app: FastifyInstance) {
         message: `This server has no ${config.label} credentials set.`,
       })
     }
+    // A demo has sample data only: no real calendar or inbox is joined to it.
+    const [who] = await db.select({ isDemo: schema.users.isDemo }).from(schema.users).where(eq(schema.users.id, userId))
+    if (who?.isDemo) {
+      return reply.code(403).send({ error: 'demo_account', message: 'Create your own account to connect Google or Microsoft.' })
+    }
     // Reading email is its own request, so the consent screen says exactly that.
     const { purpose } = z
       .object({ purpose: z.enum(['calendar', 'mail', 'all']).default('calendar') })

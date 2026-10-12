@@ -21,6 +21,8 @@ import History from './pages/History.tsx'
 import People from './pages/People.tsx'
 import Expenses from './pages/Expenses.tsx'
 import Tracker from './pages/Tracker.tsx'
+import Home from './pages/Home.tsx'
+import { PrivacyPage, TermsPage } from './pages/Legal.tsx'
 import Bills from './pages/Bills.tsx'
 import { tabsFor, type Section } from '@cue/shared'
 import { UsesPicker } from './components/UsesPicker.tsx'
@@ -168,7 +170,7 @@ function Nav({
 }
 
 export default function App() {
-  const { me, loading } = useAuth()
+  const { me, loading, logout } = useAuth()
 
   // Returning from Google's consent screen lands on the root carrying the
   // outcome. Opening Settings straight away is the difference between "it
@@ -276,18 +278,41 @@ export default function App() {
   }
 
   if (!me) {
-    // Signed out the app is just the sign-in screen — except for a reset link,
+    // Signed out: the website, its doors in, its policies — and a reset link,
     // which by definition is clicked by somebody who cannot sign in.
     return (
       <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login initialMode="login" />} />
+        <Route path="/register" element={<Login initialMode="register" />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
         <Route path="/reset" element={<ResetPassword />} />
-        <Route path="*" element={<Login />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     )
   }
 
+  // The policies are pages of the website, signed in or not: full width, their own header.
+  if (location.pathname === '/privacy') return <PrivacyPage />
+  if (location.pathname === '/terms') return <TermsPage />
+
   return (
     <div className="app">
+      {me.isDemo && (
+        <div className="demo-banner">
+          <span>You’re trying Cue with a sample week. It’s deleted after a day.</span>
+          <button
+            className="primary small-btn"
+            onClick={() => {
+              logout()
+              navigate('/register')
+            }}
+          >
+            Create your free account
+          </button>
+        </div>
+      )}
       <Nav
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}

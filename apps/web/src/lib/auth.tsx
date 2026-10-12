@@ -10,6 +10,8 @@ export interface Me {
   orgName: string
   /** What they use Cue for; empty until they say. */
   uses: string[]
+  /** A one-tap demo from the website, with sample data, gone after a day. */
+  isDemo?: boolean
 }
 
 interface AuthValue {
@@ -24,6 +26,10 @@ interface AuthValue {
   logout: () => void
   /** What they use Cue for, saved and reflected everywhere at once. */
   saveUses: (uses: string[]) => Promise<void>
+  /** Into a fresh demo account, filled with a sample week. */
+  enterDemo: () => Promise<void>
+  /** Deletes the account and everything in it, then signs out. */
+  deleteAccount: (password: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthValue | null>(null)
@@ -86,9 +92,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMe((m) => (m ? { ...m, uses: saved.uses } : m))
   }, [])
 
+  const enterDemo = useCallback(async () => {
+    const res = await api<{ token: string }>('/auth/demo', { method: 'POST', body: {} })
+    setToken(res.token)
+    await refresh()
+  }, [refresh])
+
+  const deleteAccount = useCallback(async (password: string) => {
+    await api('/auth/me', { method: 'DELETE', body: { password } })
+    setToken(null)
+    setMe(null)
+  }, [])
+
   const value = useMemo(
-    () => ({ me, loading, login, register, logout, saveUses }),
-    [me, loading, login, register, logout, saveUses],
+    () => ({ me, loading, login, register, logout, saveUses, enterDemo, deleteAccount }),
+    [me, loading, login, register, logout, saveUses, enterDemo, deleteAccount],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
