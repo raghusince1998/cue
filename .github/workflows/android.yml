@@ -63,8 +63,10 @@ jobs:
             console.log(require(path.join(path.dirname(core), 'lib/androidSdk/AndroidSdkTools.js')).BUILD_TOOLS_VERSION)
           " 2>/dev/null || echo 36.1.0)
           echo "Bubblewrap signs with build-tools $BUILD_TOOLS"
-          yes | "$SDKMANAGER" --install "build-tools;$BUILD_TOOLS" > /dev/null
-          ls "$ANDROID_HOME/build-tools"
+          # `yes` is cut off when sdkmanager finishes; under pipefail that would
+          # fail the step, so only sdkmanager's own result counts.
+          { yes 2>/dev/null || true; } | "$SDKMANAGER" --install "build-tools;$BUILD_TOOLS" > /dev/null
+          test -d "$ANDROID_HOME/build-tools/$BUILD_TOOLS"
 
       - name: The signing key
         env:
