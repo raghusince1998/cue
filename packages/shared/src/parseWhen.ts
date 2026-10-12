@@ -34,6 +34,21 @@ export interface ParsedWhen {
    */
   window?: ParsedWindow
   durationMinutes?: number
+  /**
+   * Set when a clock reading had no am or pm and nothing in the sentence said
+   * which half of the day it meant, so the usual one was picked. The caller
+   * says so, because "6:30" is as often a gym session as a dinner.
+   */
+  halfGuessed?: 'am' | 'pm'
+  /**
+   * "Monday's board meeting": the day belongs to something else in the
+   * sentence. It stays in the title, and a task for it is due before it.
+   */
+  possessive?: boolean
+  /** "before 31 July", "by Friday", "before December": a date to finish by. */
+  deadline?: boolean
+  /** "team lunch tomorrow": the meal said when, since no clock time did. */
+  meal?: string
 }
 
 export const WEEKDAYS: Record<string, number> = {
@@ -147,6 +162,11 @@ interface TimeFound {
   needsDateAnchor: boolean
   /** Set when the phrase was a part of the day rather than a clock reading. */
   window?: ParsedWindow
+  /**
+   * The number as said, when it named no half of the day: "at 9", "3:30",
+   * "friday 6". Which half it means is settled by the rest of the sentence.
+   */
+  ambiguous?: number
 }
 
 function findTime(text: string): TimeFound | null {
@@ -211,14 +231,19 @@ function findTime(text: string): TimeFound | null {
     }
   }
 
-  // 24-hour, or an explicit "at 6:30"
+  // 24-hour, or an explicit "at 6:30". "07:30" and "19:30" are 24-hour clocks;
+  // "3:30" is a person who left off the pm, and reading it as half past three
+  // in the morning sent the school pickup off before dawn.
   const clock = /\b(\d{1,2}):(\d{2})\b/.exec(text)
   if (clock) {
+    const raw = Number(clock[1])
+    const twelveHour = raw >= 1 && raw <= 12 && !clock[1]!.startsWith('0')
     return {
-      hour: Number(clock[1]),
+      hour: raw,
       minute: Number(clock[2]),
       match: { start: clock.index, end: clock.index + clock[0].length },
       needsDateAnchor: false,
+      ...(twelveHour ? { ambiguous: raw } : {}),
     }
   }
 
@@ -260,6 +285,7 @@ function findTime(text: string): TimeFound | null {
         minute: 0,
         match: { start: at.index, end: at.index + at[0].length },
         needsDateAnchor: false,
+        ...(raw >= 1 && raw <= 12 ? { ambiguous: raw } : {}),
       }
     }
   }
@@ -276,6 +302,7 @@ function findTime(text: string): TimeFound | null {
         minute: 0,
         match: { start: bare.index, end: bare.index + bare[0].length },
         needsDateAnchor: true,
+        ...(raw <= 12 ? { ambiguous: raw } : {}),
       }
     }
   }
@@ -309,6 +336,72 @@ function businessHour(raw: number): number {
   return raw
 }
 
+/** Words that put a bare number in the evening: "dinner at 8:30", "party at 10". */
+const EVENING_CUE = /\b(?:tonight|evening|night|dinner|supper|party|drinks|movie)\b/i
+/** And in the morning: "breakfast at 8", "yoga at 6:30". */
+const MORNING_CUE = /\b(?:morning|breakfast|wake|wake-?up|alarm|sunrise|dawn|jog|jogging|yoga)\b/i
+/** Travel leaves early: "flight at 6:40" is the morning one. */
+const TRAVEL_CUE = /\b(?:flight|train|bus|cab|taxi|airport|station|departs?|departure|boarding|pnr)\b/i
+
+/**
+ * Which half of the day a number with no am or pm means, from the rest of the
+ * sentence. A part of the day said with it decides; then words that only
+ * happen at one end of the day; then the plain convention. `guessed` is set
+ * only when the convention decided an hour that really could be either.
+ */
+function pickHalf(raw: number, text: string, window?: ParsedWindow): { hour: number; guessed: boolean } {
+  if (window) return { hour: hourInPart(raw, window), guessed: false }
+  if (EVENING_CUE.test(text)) return { hour: hourInPart(raw, 'evening'), guessed: false }
+  if (MORNING_CUE.test(text)) return { hour: raw, guessed: false }
+  if (TRAVEL_CUE.test(text)) {
+    // 5 to 11 is the morning departure; 1 to 4 is far likelier the afternoon.
+    const hour = raw >= 5 && raw <= 11 ? raw : businessHour(raw)
+    return { hour, guessed: raw !== 12 }
+  }
+  const hour = businessHour(raw)
+  // 1–4 is the afternoon and 8–11 the morning for nearly everyone; 5, 6 and 7
+  // are honestly either, so those are the ones worth saying out loud.
+  return { hour, guessed: raw >= 5 && raw <= 7 }
+}
+
+/** Meals say when without a clock: lunch is at one, more or less, for everyone. */
+const MEALS: { pattern: RegExp; name: string; hour: number; minute: number }[] = [
+  { pattern: /\bbreakfast\b/i, name: 'breakfast', hour: 8, minute: 30 },
+  { pattern: /\bbrunch\b/i, name: 'brunch', hour: 11, minute: 30 },
+  { pattern: /\blunch\b/i, name: 'lunch', hour: 13, minute: 0 },
+  { pattern: /\bdinner\b/i, name: 'dinner', hour: 20, minute: 0 },
+]
+
+/** The usual time of a meal named in the line, for one that gave no time. */
+export function mealTime(text: string): { name: string; hour: number; minute: number } | null {
+  const meal = MEALS.find((m) => m.pattern.test(text))
+  return meal ? { name: meal.name, hour: meal.hour, minute: meal.minute } : null
+}
+
+/**
+ * Every clock time with an am or pm in the line, in order: "medicine at 9am
+ * and 9pm" is two reminders, not one with a stray "and 9pm" in its title.
+ */
+export function allClockTimes(text: string): { hour: number; minute: number; text: string }[] {
+  const found: { hour: number; minute: number; text: string }[] = []
+  for (const m of text.matchAll(/\b(\d{1,2})(?:[:.](\d{2}))?\s*([ap])\.?m\.?(?![a-z])/gi)) {
+    let hour = Number(m[1])
+    const minute = Number(m[2] ?? 0)
+    if (hour < 1 || hour > 12 || minute > 59) continue
+    if (hour === 12) hour = 0
+    if (m[3]!.toLowerCase() === 'p') hour += 12
+    found.push({ hour, minute, text: m[0] })
+  }
+  return found
+}
+
+/** "3:30 pm", "9 am": a clock reading the way it is said. */
+export function clockLabel(hour: number, minute: number): string {
+  const half = hour >= 12 ? 'pm' : 'am'
+  const h = hour % 12 === 0 ? 12 : hour % 12
+  return `${h}${minute ? `:${String(minute).padStart(2, '0')}` : ''} ${half}`
+}
+
 function findDuration(text: string): { minutes: number; match: Match } | null {
   const m = /\bfor\s+(\d{1,3})\s*(min|mins|minute|minutes|h|hr|hrs|hour|hours)\b/i.exec(text)
   if (!m) return null
@@ -335,6 +428,41 @@ interface DateFound {
   impliedWindow?: ParsedWindow
   /** A weekday name that came out as today: "friday" said on a Friday. */
   weekdayIsToday?: boolean
+  /** "Monday's", "tomorrow's": the day of something else named in the line. */
+  possessive?: boolean
+  /** "before December", "by the end of the month": already a date to finish by. */
+  deadline?: boolean
+}
+
+/** "Monday's", "tomorrow’s" — straight or curly apostrophe. */
+const POSSESSIVE = /^['’]s\b/i
+
+/**
+ * A month named on its own as a deadline: "before December", "by the end of
+ * June". Only deadlines — "offsite in November" is an event on a day nobody
+ * said, and asking which day beats pinning it to the 1st.
+ */
+function findMonthOnly(text: string, now: Date): DateFound | null {
+  const monthNames = Object.keys(MONTHS).join('|')
+  const m = new RegExp(
+    `\\b(before|by|till|until|(?:by\\s+)?(?:the\\s+)?end\\s+of)\\s+(?:the\\s+)?(?:month\\s+of\\s+)?(${monthNames})\\b(?:\\s+(\\d{4}))?`,
+    'i',
+  ).exec(text)
+  if (!m) return null
+  const lead = m[1]!.toLowerCase().replace(/\s+/g, ' ')
+  const month = MONTHS[m[2]!.toLowerCase()]!
+  // "may" is a month only when it reads as one: "in May", not "I may".
+  if (month === 4 && m[2] !== 'May' && m[2] !== 'MAY') return null
+  let year = m[3] ? Number(m[3]) : now.getFullYear()
+  if (!m[3] && new Date(year, month + 1, 0) < startOfDay(now)) year += 1
+
+  // "before December" is done before the month starts: its eve. "end of
+  // June" is its last day.
+  const date = lead.endsWith('end of') ? new Date(year, month + 1, 0) : new Date(year, month, 0)
+  // "before November" said in November: the deadline has gone, and next
+  // year's is what they mean.
+  if (date < startOfDay(now)) date.setFullYear(date.getFullYear() + 1)
+  return { date, match: { start: m.index, end: m.index + m[0].length }, deadline: true }
 }
 
 function findDate(text: string, now: Date): DateFound | null {
@@ -406,6 +534,18 @@ function findDate(text: string, now: Date): DateFound | null {
     return { date, match: { start: named.m.index, end: named.m.index + named.m[0].length } }
   }
 
+  // "before December", "in March", "end of June": a month with no day. Before
+  // the bare ordinal, which would otherwise take nothing from it at all.
+  const monthOnly = findMonthOnly(text, now)
+  if (monthOnly) return monthOnly
+
+  // "by month end", "end of the month": the last day of this one.
+  const monthEnd = /\b(?:by\s+)?(?:the\s+)?(?:end\s+of\s+(?:the\s+|this\s+)?month|(?:this\s+)?month[- ]end)\b/i.exec(text)
+  if (monthEnd) {
+    const date = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    return { date, match: { start: monthEnd.index, end: monthEnd.index + monthEnd[0].length }, deadline: true }
+  }
+
   /**
    * "on the 18th" — a day with no month.
    *
@@ -444,7 +584,12 @@ function findDate(text: string, now: Date): DateFound | null {
   if (tomorrow) {
     const date = startOfDay(now)
     date.setDate(date.getDate() + 1)
-    return { date, match: { start: tomorrow.index, end: tomorrow.index + tomorrow[0].length } }
+    const end = tomorrow.index + tomorrow[0].length
+    return {
+      date,
+      match: { start: tomorrow.index, end },
+      ...(POSSESSIVE.test(text.slice(end)) ? { possessive: true } : {}),
+    }
   }
 
   const today = /\b(today|tonight|this\s+(morning|afternoon|evening))\b/i.exec(text)
@@ -508,11 +653,17 @@ function findDate(text: string, now: Date): DateFound | null {
   const weekday = new RegExp(`\\b(next|this|coming)?\\s*(${weekdayNames})\\b`, 'i').exec(text)
   if (weekday) {
     const forceNext = weekday[1]?.toLowerCase() === 'next'
+    const end = weekday.index + weekday[0].length
+    const possessive = POSSESSIVE.test(text.slice(end))
     const date = resolveWeekday(now, WEEKDAYS[weekday[2]!.toLowerCase()]!, forceNext)
+    // "Monday's board meeting" said on a Monday is next week's: today's would
+    // have been "today's".
+    if (possessive && date.getTime() === startOfDay(now).getTime()) date.setDate(date.getDate() + 7)
     return {
       date,
-      match: { start: weekday.index, end: weekday.index + weekday[0].length },
+      match: { start: weekday.index, end },
       weekdayIsToday: date.getTime() === startOfDay(now).getTime(),
+      ...(possessive ? { possessive } : {}),
     }
   }
 
@@ -533,6 +684,22 @@ export function parseWhen(input: string, now: Date = new Date()): ParsedWhen | n
 
   const dateFound = findDate(withoutDuration, now)
 
+  // "before 31 July", "by Friday": a date to be done by. "before" a day is the
+  // day before it, so the reminder comes while there is still time; the word
+  // goes with the date, so the title is not left saying "submit ITR before".
+  if (dateFound && !dateFound.possessive) {
+    const lead = /\b(before|by|till|until|no\s+later\s+than)\s+(?:the\s+)?$/i.exec(
+      withoutDuration.slice(0, dateFound.match.start),
+    )
+    if (lead) {
+      dateFound.match = { start: lead.index, end: dateFound.match.end }
+      if (!dateFound.deadline && !dateFound.exactTime) {
+        dateFound.deadline = true
+        if (/^before$/i.test(lead[1]!)) dateFound.date.setDate(dateFound.date.getDate() - 1)
+      }
+    }
+  }
+
   // Hide the date phrase before hunting for a time, so "in 3 days" cannot have
   // its 3 read back as 3pm.
   const withoutDate = dateFound
@@ -548,6 +715,16 @@ export function parseWhen(input: string, now: Date = new Date()): ParsedWhen | n
 
   let date: Date
   let timeAssumed = false
+  let halfGuessed: 'am' | 'pm' | undefined
+  let meal: string | undefined
+
+  // A number with no am or pm takes its half of the day from the sentence:
+  // "tonight at 9" is nine at night, "dinner at 8:30" is the evening one.
+  if (usableTime && timeFound && timeFound.ambiguous !== undefined) {
+    const half = pickHalf(timeFound.ambiguous, withoutDuration, dateFound?.impliedWindow)
+    timeFound.hour = half.hour
+    if (half.guessed) halfGuessed = half.hour >= 12 ? 'pm' : 'am'
+  }
 
   if (dateFound && usableTime && timeFound) {
     date = new Date(dateFound.date)
@@ -557,8 +734,13 @@ export function parseWhen(input: string, now: Date = new Date()): ParsedWhen | n
     if (dateFound.weekdayIsToday && date <= now) date.setDate(date.getDate() + 7)
   } else if (dateFound) {
     date = new Date(dateFound.date)
+    const usual = mealTime(withoutDate)
     if (dateFound.impliedHour !== undefined) {
       date.setHours(dateFound.impliedHour, 0, 0, 0)
+    } else if (!dateFound.exactTime && usual) {
+      // "team lunch friday" is at lunchtime, not at the 9am default.
+      date.setHours(usual.hour, usual.minute, 0, 0)
+      meal = usual.name
     } else if (!dateFound.exactTime) {
       date.setHours(DEFAULT_HOUR, 0, 0, 0)
       timeAssumed = true
@@ -575,8 +757,10 @@ export function parseWhen(input: string, now: Date = new Date()): ParsedWhen | n
     duration?.match ?? null,
   )!
 
-  // A window beats an exact hour: it is what the user actually said.
-  const window = dateFound?.impliedWindow ?? (usableTime ? timeFound?.window : undefined)
+  // A window when that is all that was said. "tonight" is a window; "tonight
+  // at 9" is nine o'clock, and filing it as "some time tonight" loses the nine.
+  const clockSaid = usableTime && timeFound && !timeFound.window
+  const window = clockSaid ? undefined : (dateFound?.impliedWindow ?? (usableTime ? timeFound?.window : undefined))
 
   // Each fragment on its own, as well as the enclosing span.
   //
@@ -593,7 +777,9 @@ export function parseWhen(input: string, now: Date = new Date()): ParsedWhen | n
   // merged when nothing but a connector separates them, and kept apart when
   // real words do.
   const CONNECTOR = /^[\s,@-]*(?:(?:at|on|around|by)\b[\s,@-]*)?$/i
-  const ordered = [dateFound?.match, usableTime ? timeFound?.match : null, duration?.match]
+  // A possessive day stays in the title: "prepare slides for Monday's board
+  // meeting" cut down to "prepare slides for 's board meeting" said nothing.
+  const ordered = [dateFound?.possessive ? null : dateFound?.match, usableTime ? timeFound?.match : null, duration?.match]
     .filter((m): m is Match => Boolean(m))
     .sort((a, b) => a.start - b.start)
   const joined: Match[] = []
@@ -614,6 +800,10 @@ export function parseWhen(input: string, now: Date = new Date()): ParsedWhen | n
     timeAssumed,
     ...(window ? { window } : {}),
     ...(duration ? { durationMinutes: duration.minutes } : {}),
+    ...(halfGuessed ? { halfGuessed } : {}),
+    ...(dateFound?.possessive ? { possessive: true } : {}),
+    ...(dateFound?.deadline ? { deadline: true } : {}),
+    ...(meal ? { meal } : {}),
   }
 }
 
@@ -627,7 +817,9 @@ export function parseWhen(input: string, now: Date = new Date()): ParsedWhen | n
  */
 export function titleFrom(input: string, parsed: ParsedWhen): string {
   let without: string
-  if (parsed.pieces && parsed.pieces.length > 0) {
+  // An empty list is an answer too: a possessive day ("Monday's") is the
+  // only date, and it stays.
+  if (parsed.pieces && (parsed.pieces.length > 0 || parsed.possessive)) {
     // Cut each fragment on its own, so whatever sat between them — usually the
     // thing being planned — survives.
     without = input

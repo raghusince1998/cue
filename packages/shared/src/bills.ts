@@ -96,7 +96,9 @@ export interface ParsedBill {
 const MONTH = String.raw`(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*`
 const MONTH_INDEX = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
 
-const TRIGGER = /\b(?:bill|rent|emi|premium|subscription|fees?|renewal|renew|expires?|expiry|expiring|valid (?:till|until|upto)|insurance|maintenance|loan)\b/i
+// "renews" is a subscription charging again, not something expiring, so it
+// starts a bill without making it a renewal.
+const TRIGGER = /\b(?:bill|rent|emi|premium|subscription|fees?|renewal|renew|renews|renewing|auto-?renews?|expires?|expiry|expiring|valid (?:till|until|upto)|insurance|maintenance|loan|netflix|spotify|hotstar|jiohotstar|youtube premium|amazon prime|icloud|google one|zee5|sonyliv)\b/i
 const RENEWAL = /\b(?:renewal|renew|expires?|expiry|expiring|valid (?:till|until|upto))\b/i
 
 const REPEAT_WORDS: [RegExp, Repeat][] = [
@@ -203,7 +205,7 @@ export function parseBill(input: string, now = new Date()): ParsedBill | null {
   if (amount && (amount.paise <= 0 || amount.paise > 100_000_000_00)) return null
 
   const name = rest
-    .replace(/\b(?:pay|paying|payment|due|is|are|on|of|by|before|the|my|for|amount|expires?|expiry|expiring|renewal|renew|valid (?:till|until|upto)|every|each)\b/gi, ' ')
+    .replace(/\b(?:pay|paying|payment|due|is|are|on|of|by|before|the|my|for|amount|expires?|expiry|expiring|renewal|renew|renews|renewing|auto-?renews?|valid (?:till|until|upto)|every|each)\b/gi, ' ')
     .replace(/[,:;-]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim()

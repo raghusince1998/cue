@@ -1,3 +1,5 @@
+import { parseWhen } from './parseWhen.ts'
+
 /**
  * "after my last meeting", "before the gym", "30 minutes after the standup".
  *
@@ -70,7 +72,14 @@ const FIRST = /(?:my\s+)?first\s+(?:meeting|call|thing|appointment|one)/i
  * tomorrow", and leaving the date in the name would stop it ever matching.
  */
 const TRAILING =
-  /\s+(?:tomorrow|today|tonight|this\s+\w+|next\s+\w+|on\s+\w+|at\s+[\d:apm.\s]+)$/i
+  /\s+(?:tomorrow|today|tonight|this\s+\w+|next\s+\w+|on\s+\w+|at\s+[\d:apm.\s]+|\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)$/i
+
+/** Every trailing date and time, not just the last: "standup tomorrow 10am". */
+function withoutTrailing(subject: string): string {
+  let rest = subject
+  for (let cut = rest.replace(TRAILING, ''); cut !== rest; cut = rest.replace(TRAILING, '')) rest = cut
+  return rest
+}
 
 export function parseRelative(input: string): ParsedRelative | null {
   const pattern = new RegExp(
@@ -82,12 +91,16 @@ export function parseRelative(input: string): ParsedRelative | null {
   if (!m) return null
 
   const relation = /^before$/i.test(m[4]!) ? 'before' : 'after'
-  let subject = m[5]!.trim().replace(TRAILING, '').trim()
+  let subject = withoutTrailing(m[5]!.trim()).trim()
 
   // "once the standup is done" reads as an after; "once" alone does not make
   // sense as a before, so it is normalised above.
   subject = subject.replace(/^(?:my|the|our)\s+/i, '').trim()
   if (!subject || CONVENTIONS.test(subject)) return null
+  // "before 31 July", "after Diwali on 1 Nov", "before December": a date, not
+  // something in the day to sit beside. The date parser reads those as a
+  // deadline; treating "December" as a meeting to find never worked.
+  if (isDatePhrase(subject)) return null
 
   const offsetMinutes = gapToMinutes(m as RegExpExecArray) ?? DEFAULT_GAP_MINUTES
 
@@ -112,4 +125,13 @@ export function stripRelative(input: string, parsed: ParsedRelative): string {
     .replace(/^\s*(?:\b(?:and|then|to|please)\b\s*)+/i, '')
     .replace(/^[\s,.:;-]+|[\s,.:;-]+$/g, '')
     .trim()
+}
+
+/** True when nearly all of the phrase is a date: "31 July", "December", "friday". */
+function isDatePhrase(subject: string): boolean {
+  const when = parseWhen(`by ${subject}`)
+  if (!when) return false
+  const rest = subject.replace(/\b(?:by|on|the|of|this|next)\b/gi, ' ')
+  const leftover = (when.pieces ?? [when.matched]).reduce((acc, piece) => acc.replace(piece.replace(/^by\s+/i, ''), ' '), rest)
+  return leftover.replace(/[\s,.]+/g, '').length <= 2
 }

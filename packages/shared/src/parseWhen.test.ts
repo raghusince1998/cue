@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseWhen, titleFrom } from './parseWhen.ts'
+import { allClockTimes, clockLabel, mealTime, parseWhen, titleFrom } from './parseWhen.ts'
 
 /** Wednesday 19 August 2026, 14:30 local. Every case is relative to this. */
 const NOW = new Date(2026, 7, 19, 14, 30, 0, 0)
@@ -214,4 +214,70 @@ test('the representative hour still lands inside its own window', () => {
       `${phrase} -> ${r.date.getHours()}:00 is outside ${r.window} (${from}-${to})`,
     )
   }
+})
+
+// --- which half of the day, deadlines, possessive days, meals --------------
+
+test('a number with no am or pm takes its half from the sentence', () => {
+  // NOW is Wednesday 19 August, 2:30pm.
+  assert.equal(iso(parse('call mom tonight at 9').date), '2026-08-19 21:00', 'tonight says which nine')
+  assert.equal(parse('call mom tonight at 9').window, undefined, 'a clock time said is not a window')
+  assert.equal(iso(parse('call mom tonight at 9:30').date), '2026-08-19 21:30')
+  assert.equal(iso(parse('pick up kids at 3:30').date), '2026-08-19 15:30', 'not half past three at night')
+  assert.equal(iso(parse('dinner at 8:30').date), '2026-08-19 20:30')
+  assert.equal(iso(parse('yoga at 6:30').date), '2026-08-20 06:30')
+  assert.equal(iso(parse('flight at 6:40').date), '2026-08-20 06:40')
+  assert.equal(iso(parse('call at 16:45').date), '2026-08-19 16:45', '24-hour stays')
+  assert.equal(iso(parse('alarm 07:30').date), '2026-08-20 07:30', 'a leading zero is a 24-hour clock')
+})
+
+test('only the honestly ambiguous hours are flagged as guessed', () => {
+  assert.equal(parse('gym at 6:30').halfGuessed, 'pm')
+  assert.equal(parse('client meeting friday 6').halfGuessed, 'pm')
+  assert.equal(parse('call at 3:30').halfGuessed, undefined, '3:30 is the afternoon for nearly everyone')
+  assert.equal(parse('standup friday 9').halfGuessed, undefined)
+  assert.equal(parse('dinner at 7').halfGuessed, undefined, 'dinner said which half')
+  assert.equal(parse('meeting at 6pm').halfGuessed, undefined)
+})
+
+test('before and by a date are deadlines, with the word cut from the title', () => {
+  const itr = parse('submit ITR before 31 July')
+  assert.equal(iso(itr.date), '2027-07-30 09:00', 'before the 31st is the 30th')
+  assert.equal(itr.deadline, true)
+  assert.equal(titleFrom('submit ITR before 31 July', itr), 'submit ITR')
+  const passport = parse('renew passport before December')
+  assert.equal(iso(passport.date), '2026-11-30 09:00')
+  assert.equal(titleFrom('renew passport before December', passport), 'renew passport')
+  assert.equal(iso(parse('file GST by the end of September').date), '2026-09-30 09:00')
+  assert.equal(iso(parse('pay fees by month end').date), '2026-08-31 09:00')
+  assert.equal(iso(parse('send the report by friday').date), '2026-08-21 09:00', 'by a day is that day')
+  assert.equal(parseWhen('team offsite in November at Pune', NOW), null, 'a month with no day is still a question')
+  assert.equal(parseWhen('I may call later', NOW), null, '"may" the verb is not May')
+})
+
+test('a possessive day stays in the title, and today’s name means next week', () => {
+  const r = parse("prepare slides for Wednesday's board meeting")
+  assert.equal(iso(r.date), '2026-08-26 09:00', 'said on a Wednesday: next Wednesday')
+  assert.equal(r.possessive, true)
+  assert.equal(titleFrom("prepare slides for Wednesday's board meeting", r), "prepare slides for Wednesday's board meeting")
+  assert.equal(iso(parse("notes for Friday's review").date), '2026-08-21 09:00')
+  assert.equal(parse('notes for tomorrow’s review').possessive, true)
+})
+
+test('a meal says when, if nothing else did', () => {
+  const lunch = parse('team lunch tomorrow')
+  assert.equal(iso(lunch.date), '2026-08-20 13:00')
+  assert.equal(lunch.meal, 'lunch')
+  assert.equal(lunch.timeAssumed, false)
+  assert.equal(iso(parse('dinner with Ravi friday').date), '2026-08-21 20:00')
+  assert.equal(iso(parse('lunch tomorrow 12pm').date), '2026-08-20 12:00', 'a time said wins')
+})
+
+test('every am/pm time in a line, in order', () => {
+  assert.deepEqual(
+    allClockTimes('take medicine at 9am and 9pm every day').map((t) => clockLabel(t.hour, t.minute)),
+    ['9 am', '9 pm'],
+  )
+  assert.deepEqual(allClockTimes('dentist friday 6'), [])
+  assert.equal(mealTime('team lunch')?.hour, 13)
 })

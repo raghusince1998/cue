@@ -92,3 +92,31 @@ test('the same bookings as emails lay them out', () => {
   assert.equal(local(itinerary.startsAt), '2026-10-18 06:15')
   assert.equal(itinerary.ref, 'X7K2LM')
 })
+
+test('a journey typed as a plan is a booking too, with the city it goes to', () => {
+  const flight = parseBooking('flight to Bangalore on 25 Oct 6am', now)!
+  assert.equal(flight.type, 'flight')
+  assert.equal(flight.title, 'Flight to Bengaluru', 'the old name, under the one the lists use')
+  assert.equal(local(flight.startsAt), '2026-10-25 06:00')
+  assert.equal(flight.city, 'Bengaluru')
+  assert.equal(flight.remindBeforeMinutes, 180)
+
+  const train = parseBooking('train 12127 to Pune on Friday 7:10am', now)!
+  assert.equal(train.type, 'train')
+  assert.equal(train.title, 'Train 12127 to Pune')
+  assert.equal(local(train.startsAt), '2026-10-16 07:10')
+
+  const indigo = parseBooking('flight 6E 512 from Delhi to Goa tomorrow 7am', now)!
+  assert.equal(indigo.title, 'Flight 6E 512 Delhi → Goa')
+  assert.equal(indigo.provider, 'IndiGo')
+
+  assert.equal(parseBooking('bus to office at 9', now), null, 'a commute is not a trip')
+  assert.equal(parseBooking('book a train to Pune', now), null, 'a to-do about booking is not a booking')
+})
+
+test('a typed hotel check-in has a name, a city and no stray words', () => {
+  const stay = parseBooking('hotel check-in Taj Jaipur 10 Nov', now)!
+  assert.equal(stay.title, 'Check in: Taj Jaipur')
+  assert.equal(stay.city, 'Jaipur')
+  assert.equal(local(stay.startsAt), '2026-11-10 14:00')
+})

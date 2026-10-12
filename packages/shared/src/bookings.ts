@@ -4,6 +4,7 @@
  * show at the gate. None of them lets another app read a traveller's
  * bookings, but every one of them sends this message, and it says enough.
  */
+import { parseWhen } from './parseWhen.ts'
 
 export type BookingType = 'train' | 'flight' | 'bus' | 'hotel' | 'show' | 'appointment' | 'service' | 'other'
 
@@ -301,16 +302,20 @@ function hotel(text: string, now: Date): ParsedBooking | null {
   const time = timeIn(text.slice(checkInAt, outAt ?? undefined), /\bcheck[- ]?in\b/)
   const name =
     /\b(?:at|stay at|booking at|reservation at)\s+((?:hotel\s+)?[A-Z][\w&'. -]{2,50}?)(?=\s+(?:is|has|for|from|on|in)\b|[,.]|$)/.exec(text)?.[1]?.trim() ??
-    /\b(hotel\s+[A-Z][\w&'. -]{2,40}?)(?=\s+(?:is|has|for|from|on|in)\b|[,.]|$)/i.exec(text)?.[1]?.trim() ??
+    // Not "hotel check-in …", which is the thing being described, not its name.
+    /\b(hotel\s+(?!check)[A-Z][\w&'. -]{2,40}?)(?=\s+(?:is|has|for|from|on|in)\b|[,.]|$)/i.exec(text)?.[1]?.trim() ??
     null
   const ref = /\b(?:booking|confirmation|reservation)\s*(?:id|no\.?|number|code)?\s*[:#-]?\s*([A-Z0-9-]{6,})\b/i.exec(text)?.[1] ?? null
+  const label = name ?? typedName(text)
   return {
     type: 'hotel',
-    title: name ? `Check in: ${name}` : 'Hotel check-in',
+    title: label ? `Check in: ${label}` : 'Hotel check-in',
     startsAt: at(checkIn.day, time, 14),
     timeKnown: Boolean(time),
     endsOn: checkOut ? ymd(checkOut.day) : null,
-    city: null,
+    // Only from a line someone typed. A confirmation email names cities in its
+    // footer and its offers, and a wrong city is a wrong trip.
+    city: text.length <= 120 ? cityIn(text) : null,
     from: null,
     ref,
     notes: [ref ? `Booking ${ref}` : null, checkOut ? `Check out ${checkOut.day.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}` : null]
@@ -397,6 +402,87 @@ function other(text: string, now: Date): ParsedBooking | null {
   }
 }
 
+/** Every city the station and airport lists know, longest first so "New Delhi" beats "Delhi". */
+const CITIES = [...new Set([...Object.values(STATIONS), ...Object.values(AIRPORTS)].map(([, city]) => city))].sort(
+  (a, b) => b.length - a.length,
+)
+
+/** Old names people still say, to the name the lists use. */
+const CITY_ALIASES: Record<string, string> = {
+  bangalore: 'Bengaluru', bombay: 'Mumbai', madras: 'Chennai', calcutta: 'Kolkata', mysore: 'Mysuru',
+  cochin: 'Kochi', trivandrum: 'Thiruvananthapuram', gurgaon: 'Gurugram', vizag: 'Visakhapatnam', poona: 'Pune',
+  allahabad: 'Prayagraj', benaras: 'Varanasi', banaras: 'Varanasi',
+}
+
+/** A city named anywhere in a short line: "hotel check-in Taj Jaipur 10 Nov" is in Jaipur. */
+export function cityIn(text: string): string | null {
+  for (const [alias, city] of Object.entries(CITY_ALIASES)) {
+    if (new RegExp(`\\b${alias}\\b`, 'i').test(text)) return city
+  }
+  return CITIES.find((city) => new RegExp(`\\b${city.replace(/ /g, '\\s+')}\\b`, 'i').test(text)) ?? null
+}
+
+/** A place as typed, under the name the lists use when they know it. */
+function cityName(raw: string): string {
+  const said = raw.trim().replace(/\s+/g, ' ')
+  const known = CITY_ALIASES[said.toLowerCase()] ?? CITIES.find((c) => c.toLowerCase() === said.toLowerCase())
+  return known ?? said.replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+/**
+ * The name in a short typed line, once the words about checking in and the
+ * date are gone: "hotel check-in Taj Jaipur 10 Nov" is the Taj Jaipur.
+ */
+function typedName(text: string): string | null {
+  if (text.length > 70) return null
+  const name = text
+    .replace(new RegExp(String.raw`\b\d{1,2}(?:st|nd|rd|th)?[\s-]*${MONTH}\b|\b${MONTH}\s+\d{1,2}\b`, 'gi'), ' ')
+    .replace(/\b(?:hotel|check[- ]?in|check[- ]?out|stay|booking|reservation|at|on|from|in|till|until|to|the|my|tomorrow|today|\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/gi, ' ')
+    .replace(/[,.:;-]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  return name.length >= 3 ? name.replace(/\b\w/g, (c) => c.toUpperCase()) : null
+}
+
+/**
+ * A journey typed as a plan rather than pasted from a confirmation: "flight to
+ * Bangalore on 25 Oct 6am", "train 12127 to Pune friday 7:10am". No PNR, but
+ * it is still a departure to be at on time, and a city to be in.
+ */
+function typed(text: string, now: Date): ParsedBooking | null {
+  const m =
+    /^(?:my\s+)?(flight|train|bus)\b\s*(?:no\.?\s*)?([A-Z0-9]{2}\s?-?\d{2,4}\b|\d{5}\b)?\s*(?:from\s+([A-Za-z][A-Za-z .]{1,30}?)\s+)?to\s+([A-Za-z][A-Za-z .]{1,30}?)(?=\s+(?:on|at|by|this|next|coming|tomorrow|today|tonight|day|in|morning|evening|night|\d)\b|\s+\d|[,.]|$)/i.exec(
+      text,
+    )
+  if (!m) return null
+  // A city, or at least a name: "bus to office at 9" is a commute, not a trip.
+  if (!cityIn(m[4]!) && !/^[A-Z]/.test(m[4]!)) return null
+  const when = parseWhen(text, now)
+  if (!when) return null
+  const type = m[1]!.toLowerCase() as 'flight' | 'train' | 'bus'
+  const number = m[2]?.toUpperCase().replace(/\s+/g, ' ') ?? null
+  const from = m[3] ? cityName(m[3]) : null
+  const to = cityName(m[4]!)
+  const pnr = /\bpnr\s*(?:no\.?)?\s*[:#-]?\s*(\d{10})\b/i.exec(text)?.[1] ?? null
+  const word = type[0]!.toUpperCase() + type.slice(1)
+  return {
+    type,
+    title: `${word}${number ? ` ${number}` : ''} ${from ? `${from} → ${to}` : `to ${to}`}`,
+    startsAt: when.date,
+    timeKnown: !when.timeAssumed,
+    endsOn: null,
+    city: to,
+    from,
+    ref: pnr,
+    notes: [pnr ? `PNR ${pnr}` : null, type === 'flight' && number ? AIRLINES[number.slice(0, 2)] ?? null : null]
+      .filter(Boolean)
+      .join(' · ') || null,
+    provider: provider(text) ?? (type === 'flight' && number ? (AIRLINES[number.slice(0, 2)] ?? null) : null),
+    durationMinutes: type === 'flight' ? 120 : 60,
+    remindBeforeMinutes: type === 'flight' ? 180 : type === 'train' ? 120 : 90,
+  }
+}
+
 /**
  * Reads a booking confirmation, or null for anything else. Ordered from the
  * most particular — a PNR and a train number can only be a train — to the
@@ -404,12 +490,14 @@ function other(text: string, now: Date): ParsedBooking | null {
  */
 export function parseBooking(input: string, now = new Date()): ParsedBooking | null {
   const text = input.replace(/\s+/g, ' ').trim()
-  if (text.length < 20) return null
-  for (const read of [train, flight, hotel, bus, show, appointment, other]) {
-    const b = read(text, now)
-    if (b) return b
+  if (text.length >= 20) {
+    for (const read of [train, flight, hotel, bus, show, appointment, other]) {
+      const b = read(text, now)
+      if (b) return b
+    }
   }
-  return null
+  // Last, and for short lines too: a journey typed as a plan.
+  return typed(text, now)
 }
 
 /** "3 hours", "90 minutes", "the morning of" — how long before the reminder goes. */

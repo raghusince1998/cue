@@ -62,15 +62,28 @@ function tidyPlace(raw: string): string {
     .trim()
 }
 
+/**
+ * What a task usually starts with, for a line with no comma or "remind me":
+ * "when I go to Mumbai meet Rahul" is Mumbai, then the thing to do there.
+ */
+const TASK_VERB =
+  /\s+(?=(?:meet|see|visit|buy|get|pick|collect|drop|try|eat|call|check|book|pay|give|take|bring|return|shop|attend|watch|ask|tell|send|show|have|post|renew|submit|sign|order|pack)\b)/i
+
 /** Splits "Mathura, remind me to buy peda" into its two halves. */
 function splitPlaceAndTask(rest: string): { place: string; task: string } | null {
   const comma = rest.indexOf(',')
   const lead = TASK_LEAD.exec(rest)
 
   // Whichever boundary comes first is the real one.
-  const cut =
+  let cut =
     comma >= 0 && (lead === null || comma < lead.index) ? comma : (lead?.index ?? -1)
-  if (cut < 0) return null
+  if (cut < 0) {
+    // No comma and no "remind me": the place runs up to the first word that
+    // starts a task, as long as a place is all that is in front of it.
+    const verb = TASK_VERB.exec(rest)
+    if (!verb || rest.slice(0, verb.index).trim().split(/\s+/).length > 3) return null
+    cut = verb.index
+  }
 
   const place = tidyPlace(rest.slice(0, cut))
   const task = tidyTask(rest.slice(cut))
@@ -116,6 +129,18 @@ export function parseIntention(input: string): ParsedIntention | null {
     const place = tidyPlace(taskFirst[2]!)
     const task = tidyTask(taskFirst[1]!)
     if (place && task) return { placeLabel: place, title: task }
+  }
+
+  // "Pack charger and passport for the Delhi trip", "buy sunscreen for my
+  // trip to Goa": for a trip, not on any day of its own.
+  const forTrip =
+    /^(.+?)\s+for\s+(?:the|my|our|this|next|upcoming)\s+(?:(.{2,30}?)\s+trip|trip\s+to\s+(.{2,30}?))[\s.!]*$/i.exec(text)
+  if (forTrip) {
+    const place = tidyPlace((forTrip[2] ?? forTrip[3])!)
+    const task = tidyTask(forTrip[1]!)
+    if (place && task && !/^(?:work|business|office|weekend|long|short|next|road)$/i.test(place)) {
+      return { placeLabel: place, title: task }
+    }
   }
 
   // "Try the local food while I'm in Mathura"

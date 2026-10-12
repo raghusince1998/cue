@@ -178,3 +178,18 @@ test('the length never ends up in the name of the place', () => {
 test('a length with no date at all is not guessed at', () => {
   assert.equal(parseTrip('visiting agra for 3 days', NOW), null)
 })
+
+test('no comma and no "remind me": the place runs up to the first thing to do', () => {
+  assert.deepEqual(parseIntention('when I go to Mumbai meet Rahul'), { placeLabel: 'Mumbai', title: 'meet Rahul' })
+  assert.deepEqual(parseIntention('next time I visit Jaipur buy lakh bangles'), { placeLabel: 'Jaipur', title: 'buy lakh bangles' })
+  assert.equal(parseIntention('when I go to the big office building on the corner'), null, 'no task, no intention')
+})
+
+test('something for a trip waits for that trip', () => {
+  assert.deepEqual(parseIntention('pack charger and passport for the Delhi trip'), {
+    placeLabel: 'Delhi',
+    title: 'pack charger and passport',
+  })
+  assert.deepEqual(parseIntention('buy sunscreen for my trip to Goa'), { placeLabel: 'Goa', title: 'buy sunscreen' })
+  assert.equal(parseIntention('prepare the deck for the work trip'), null, 'a work trip is not a place')
+})

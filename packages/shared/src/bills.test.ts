@@ -68,3 +68,13 @@ test('how soon, in words', () => {
   assert.equal(categoryOfBill('Airtel postpaid'), 'phone')
   assert.equal(categoryOfBill('Something else'), 'other')
 })
+
+test('a subscription that renews is a monthly charge, not an expiry', () => {
+  const netflix = parseBill('Netflix renews on 18th', now)!
+  assert.equal(netflix.name, 'Netflix')
+  assert.equal(netflix.kind, 'bill')
+  assert.equal(netflix.category, 'subscription')
+  assert.equal(netflix.repeat, 'monthly')
+  assert.equal(netflix.dueOn, '2026-10-18')
+  assert.equal(parseBill('watch netflix tomorrow', now), null, 'watching it is not paying for it')
+})

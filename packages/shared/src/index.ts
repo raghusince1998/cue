@@ -1,4 +1,4 @@
-export { parseWhen, titleFrom, placeFrom, type ParsedWhen } from './parseWhen.ts'
+export { parseWhen, titleFrom, placeFrom, mealTime, allClockTimes, clockLabel, type ParsedWhen } from './parseWhen.ts'
 export {
   addToDate,
   stepDate,
@@ -34,7 +34,7 @@ export {
 } from './expenses.ts'
 import { CLAIM_STATUSES as CLAIMS, EXPENSE_CATEGORY_KEYS as EXPENSE_KEYS } from './expenses.ts'
 export { owedMessage, parseOwed, splitEqually, type OwedLine, type ParsedOwed } from './owed.ts'
-export { leadLabel, parseBooking, type BookingType, type ParsedBooking } from './bookings.ts'
+export { leadLabel, parseBooking, cityIn, type BookingType, type ParsedBooking } from './bookings.ts'
 export { parseDueNotice, type DueNotice } from './dueNotices.ts'
 export { parseInsurance, type InsuranceNotice } from './insurance.ts'
 export {

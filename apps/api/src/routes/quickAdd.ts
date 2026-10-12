@@ -4,6 +4,10 @@ import { z } from 'zod'
 import {
   DEFAULT_DURATION_MINUTES,
   parseWhen,
+  mealTime,
+  allClockTimes,
+  clockLabel,
+  type ParsedWhen,
   normalizeHinglish,
   titleFrom,
   placeFrom,
@@ -300,36 +304,42 @@ export async function quickAddRoutes(app: FastifyInstance) {
     }
 
     if (plan.kind === 'recurrence') {
+      // One series per time of day: "9am and 9pm" is two reminders a day,
+      // each kept, moved and stopped on its own.
       const created = await db.transaction(async (tx) => {
-        const row = takeFirst(
-          await tx
-            .insert(schema.recurrences)
-            .values({
-              orgId,
-              userId,
-              title: plan.title,
-              kind: plan.commitmentKind,
-              notes: plan.notes ?? null,
-              durationMinutes: plan.durationMinutes,
-              startsOn: plan.startsOn!,
-              hour: plan.hour!,
-              minute: plan.minute!,
-              freq: plan.rule!.freq,
-              interval: plan.rule!.interval,
-              byWeekday: plan.rule!.byWeekday ?? null,
-              byMonthDay: plan.rule!.byMonthDay ?? null,
-              byMonth: plan.rule!.byMonth ?? null,
-              setPos: plan.rule!.setPos ?? null,
-              untilOn: plan.rule!.until ?? null,
-              count: plan.rule!.count ?? null,
-            })
-            .returning(),
-          'recurrence',
-        )
-        await materialise(row, {}, tx)
-        return row
+        const rows = []
+        for (const at of [{ hour: plan.hour!, minute: plan.minute! }, ...plan.alsoAt]) {
+          const row = takeFirst(
+            await tx
+              .insert(schema.recurrences)
+              .values({
+                orgId,
+                userId,
+                title: plan.title,
+                kind: plan.commitmentKind,
+                notes: plan.notes ?? null,
+                durationMinutes: plan.durationMinutes,
+                startsOn: plan.startsOn!,
+                hour: at.hour,
+                minute: at.minute,
+                freq: plan.rule!.freq,
+                interval: plan.rule!.interval,
+                byWeekday: plan.rule!.byWeekday ?? null,
+                byMonthDay: plan.rule!.byMonthDay ?? null,
+                byMonth: plan.rule!.byMonth ?? null,
+                setPos: plan.rule!.setPos ?? null,
+                untilOn: plan.rule!.until ?? null,
+                count: plan.rule!.count ?? null,
+              })
+              .returning(),
+            'recurrence',
+          )
+          await materialise(row, {}, tx)
+          rows.push(row)
+        }
+        return rows
       })
-      return reply.code(201).send({ ...plan, id: created.id })
+      return reply.code(201).send({ ...plan, id: created[0]!.id, ids: created.map((r) => r.id) })
     }
 
     // ------------------------------------------------------- a single plan
@@ -561,6 +571,8 @@ export interface QuickPlan {
   rule: ReturnType<typeof parseRecurrence> extends null
     ? never
     : NonNullable<ReturnType<typeof parseRecurrence>>['rule'] | null
+  /** More times of day for the same repeat: "medicine at 9am and 9pm". */
+  alsoAt: { hour: number; minute: number }[]
   /** People, places and accounts the sentence seems to mean: attach or not. */
   links: Links
   /** In a city that is not home: the trip this belongs to, or would. */
@@ -679,6 +691,71 @@ async function enrich(userId: string, orgId: string, raw: string, plan: QuickPla
   return next
 }
 
+type Repeat = NonNullable<ReturnType<typeof parseRecurrence>> & { yearlyOccasion?: boolean }
+
+/** Birthdays and anniversaries come round every year, whether or not the line says so. */
+const OCCASION = /\b(?:birthday|bday|b'day|anniversary)\b/i
+const DAY_AND_MONTH =
+  /\b(?:on\s+)?\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|\b(?:on\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?\b/i
+
+/** "Riya's birthday on 3 Nov": a yearly repeat on that day, not a one-off. */
+function occasionRepeat(text: string, now: Date): Repeat | null {
+  if (!OCCASION.test(text)) return null
+  const said = DAY_AND_MONTH.exec(text)
+  const day = said ? parseWhen(said[0], now) : null
+  if (!said || !day) return null
+  return {
+    rule: { freq: 'yearly', interval: 1, byMonth: day.date.getMonth(), byMonthDay: day.date.getDate() },
+    matches: [said[0]],
+    yearlyOccasion: true,
+  }
+}
+
+/** What the date reader decided on its own, said plainly so it can be checked. */
+function timeNotes(when: ParsedWhen, now: Date): string[] {
+  const notes: string[] = []
+  if (when.halfGuessed) {
+    const other = clockLabel((when.date.getHours() + 12) % 24, when.date.getMinutes())
+    notes.push(`Read as ${clockLabel(when.date.getHours(), when.date.getMinutes())}. Say ${other} if you meant that.`)
+  }
+  if (when.deadline) {
+    notes.push(`Due by ${when.date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: when.date.getFullYear() === now.getFullYear() ? undefined : 'numeric' })}.`)
+  }
+  if (when.meal) notes.push(`No time given, so ${when.meal} time, ${clockLabel(when.date.getHours(), when.date.getMinutes())}.`)
+  return notes
+}
+
+/** Getting ready for something on a day: "slides for Monday's board meeting". */
+const PREP = /\b(?:prepare|prep|ready|slides|deck|presentation|notes|agenda|report|draft|finish|review|read|print|practice|rehearse|pack|iron)\b/i
+/** Work, which is ready on a working day. */
+const WORK_PREP = /\b(?:slides|deck|presentation|agenda|report|draft|review)\b/i
+
+/**
+ * When something done for an event on a day is due: the day before, at five,
+ * so it is ready in time. Null when that has already gone.
+ */
+function dayBefore(event: Date, now: Date, workingDay: boolean): Date | null {
+  const due = new Date(event.getFullYear(), event.getMonth(), event.getDate() - 1, 17, 0)
+  // Slides for Monday's meeting are ready on Friday, not on a Sunday nobody
+  // works. Packing for Sunday's trip is fine on Saturday.
+  if (workingDay) while (due.getDay() === 0 || due.getDay() === 6) due.setDate(due.getDate() - 1)
+  return due > now ? due : null
+}
+
+/**
+ * "Slides for Monday's board meeting": due before that day, not at 9am on it —
+ * by then it is too late. Only when no time was said; a time said is kept.
+ */
+function prepDue(text: string, when: ParsedWhen, now: Date): Date | null {
+  if (!when.possessive || !when.timeAssumed || !PREP.test(text)) return null
+  return dayBefore(when.date, now, WORK_PREP.test(text))
+}
+
+function prepNote(due: Date): string {
+  const day = due.toLocaleDateString('en-IN', { weekday: 'long' })
+  return `Due ${day} at 5 pm, so it is ready in time.`
+}
+
 /** "2 – 4 Nov", "30 Oct – 2 Nov", "2 Nov": dates as a person writes them. */
 function tripSpan(from: string, to: string): string {
   const day = (s: string) => new Date(`${s}T00:00:00`)
@@ -701,8 +778,7 @@ function ymd(d: Date): string {
  * Shared by preview and save so the two can never disagree — a preview that
  * promises one thing and a save that writes another is worse than no preview.
  */
-export async function interpret(userId: string, orgId: string, raw: string): Promise<QuickPlan> {
-  const now = new Date()
+export async function interpret(userId: string, orgId: string, raw: string, now = new Date()): Promise<QuickPlan> {
   const assumptions: string[] = []
 
   // The list comes off first, so every parser below sees "go shopping this
@@ -735,6 +811,7 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
     hour: null,
     minute: null,
     rule: null,
+    alsoAt: [],
     links: { people: [], places: [], accounts: [] },
     trip: null,
     upcomingTrip: null,
@@ -876,7 +953,9 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
       assumptions: [
         `A reminder ${leadLabel(booked.remindBeforeMinutes)}, with ${booked.ref ? 'the reference' : 'the details'} to hand.`,
         ...(booked.type === 'flight' && webCheckIn > now ? ['A web check-in reminder 48 hours before.'] : []),
-        ...(booked.timeKnown ? [] : ['The message had no time, so 8am; change it if you know.']),
+        ...(booked.timeKnown
+          ? []
+          : [`No time given, so ${clockLabel(booked.startsAt.getHours(), booked.startsAt.getMinutes())}; change it if you know.`]),
       ],
       summary: `${booked.title} — ${booked.startsAt.toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`,
     }
@@ -1046,12 +1125,20 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
     }
   }
 
-  const asRepeat = parseRecurrence(text, now)
+  const asRepeat: Repeat | null = parseRecurrence(text, now) ?? occasionRepeat(text, now)
   if (asRepeat) {
-    const rest = stripRecurrence(text, asRepeat)
-    const when = parseWhen(rest, now)
-    const hour = when ? when.date.getHours() : 9
-    const minute = when ? when.date.getMinutes() : 0
+    // "medicine at 9am and 9pm every day" is one habit at two times. The
+    // first is the series' own time; the others are series of their own.
+    const times = allClockTimes(text)
+    const rest = stripRecurrence(
+      times.length > 1 ? times.reduce((line, t) => line.replace(t.text, ' '), text) : text,
+      asRepeat,
+    )
+    const when = times.length > 1 ? null : parseWhen(rest, now)
+    const meal = when ? null : mealTime(rest)
+    const hour = times.length > 1 ? times[0]!.hour : when ? when.date.getHours() : (meal?.hour ?? 9)
+    const minute = times.length > 1 ? times[0]!.minute : when ? when.date.getMinutes() : (meal?.minute ?? 0)
+    const alsoAt = times.length > 1 ? times.slice(1).map(({ hour, minute }) => ({ hour, minute })) : []
     const title = when ? titleFrom(rest, when) : rest
 
     if (!title) {
@@ -1075,8 +1162,13 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
 
     const learned = await recallSimilar(userId, title, { now })
     if (learned?.because) assumptions.push(learned.because)
-    if (!when) assumptions.push('No time given, so 9am.')
+    if (asRepeat.yearlyOccasion) assumptions.push('Every year, on the day.')
+    if (when) assumptions.push(...timeNotes(when, now))
+    else if (times.length > 1) assumptions.push(`${times.length} reminders a day: ${times.map((t) => clockLabel(t.hour, t.minute)).join(' and ')}.`)
+    else if (meal) assumptions.push(`No time given, so ${meal.name} time, ${clockLabel(meal.hour, meal.minute)}.`)
+    else assumptions.push('No time given, so 9am.')
 
+    const at = [{ hour, minute }, ...alsoAt].map((t) => clockLabel(t.hour, t.minute)).join(' and ')
     return {
       ...base,
       kind: 'recurrence',
@@ -1087,9 +1179,13 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
       hour,
       minute,
       rule: asRepeat.rule,
+      alsoAt,
       notes: originalIfInformative(stripRecurrence(text, asRepeat), title),
       assumptions,
-      summary: `${title} — ${describeRecurrence(asRepeat.rule, { startsOn: firstAt, hour, minute })}, from ${firstAt.toLocaleDateString()}`,
+      summary:
+        alsoAt.length > 0
+          ? `${title} — ${describeRecurrence(asRepeat.rule, { startsOn: firstAt, hour, minute }).replace(/\s+at\s+[^,]+$/, '')} at ${at}, from ${firstAt.toLocaleDateString()}`
+          : `${title} — ${describeRecurrence(asRepeat.rule, { startsOn: firstAt, hour, minute })}, from ${firstAt.toLocaleDateString()}`,
     }
   }
 
@@ -1103,11 +1199,27 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
   }
 
   const relative = parseRelative(text)
-  if (relative) {
+  // A clock time said outright wins over an anchor: "review the PR before
+  // standup tomorrow 9am" is at nine, whatever the standup does. Not one that
+  // names the anchor itself: "after the 3pm meeting" is still after it.
+  const clockGiven = relative ? parseWhen(text, now) : null
+  const anchorName = relative?.anchor.kind === 'named' ? relative.anchor.text.toLowerCase() : ''
+  const clockSaid =
+    clockGiven !== null &&
+    !clockGiven.timeAssumed &&
+    !clockGiven.window &&
+    !(clockGiven.pieces ?? [clockGiven.matched]).some((p) => anchorName.includes(p.toLowerCase()))
+  if (relative && !clockSaid) {
     const rest = stripRelative(text, relative)
     const onDay = parseWhen(text, now)
     const day = onDay?.date ?? now
-    const resolved = await resolveAnchor(userId, relative, day)
+    let resolved = await resolveAnchor(userId, relative, day)
+    // No day said and none still to come today: the next one this week.
+    // "Before standup" typed after today's standup means tomorrow's.
+    if (!onDay && resolved && resolved.at <= now) resolved = null
+    for (let ahead = 1; !resolved && !onDay && ahead <= 7; ahead++) {
+      resolved = await resolveAnchor(userId, relative, new Date(now.getFullYear(), now.getMonth(), now.getDate() + ahead))
+    }
 
     if (resolved) {
       const title = titleFrom(rest, parseWhen(rest, now) ?? { date: now, matched: '', timeAssumed: true })
@@ -1133,19 +1245,18 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
       }
     }
 
-    // The anchor is not in that day. Say so rather than inventing a time: a
-    // reminder pinned to a meeting that does not exist looks like it worked.
-    const what =
-      relative.anchor.kind === 'named'
-        ? `"${relative.anchor.text}"`
-        : relative.anchor.kind === 'lastThing'
-          ? 'anything'
-          : 'anything'
+    // The anchor is not in the plan. Say so rather than inventing a time — a
+    // reminder pinned to a meeting that does not exist looks like it worked —
+    // and ask for the one thing missing. A time picked then wins over the
+    // anchor (above), so the answer saves rather than asking again.
+    const what = relative.anchor.kind === 'named' ? `"${relative.anchor.text}"` : 'anything'
+    const where = onDay ? 'that day' : 'in the next week'
     return {
       ...base,
-      title: stripRelative(text, relative),
-      problem: `I could not find ${what} in that day to go ${relative.relation}.`,
-      summary: '',
+      kind: 'needsTime',
+      title: rest,
+      assumptions: [`I could not find ${what} ${where} to go ${relative.relation}, so: when?`],
+      summary: rest,
     }
   }
 
@@ -1246,8 +1357,11 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
     const hour = learned?.hour ?? learned?.lastHour ?? 9
     const guess = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, 0)
     if (guess <= now) guess.setDate(guess.getDate() + 1)
-    const dueAt = whenPart?.date ?? guess
+    const prep = whenPart ? prepDue(text, whenPart, now) : null
+    const dueAt = prep ?? whenPart?.date ?? guess
     if (!whenPart && learned?.becauseHour) assumptionsFromRoles.push(learned.becauseHour)
+    if (prep) assumptionsFromRoles.push(prepNote(prep))
+    if (whenPart) assumptionsFromRoles.push(...timeNotes(whenPart, now))
 
     return {
       ...base,
@@ -1352,9 +1466,13 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
 
   const learned = await recallSimilar(userId, title, { now })
   const parsedPlace = placeFrom(text)
+  const prep = prepDue(text, when, now)
+  const dueAt = prep ?? when.date
 
   if (learned?.because) assumptions.push(learned.because)
-  if (when.timeAssumed && !when.window) assumptions.push('No time given, so 9am.')
+  if (prep) assumptions.push(prepNote(prep))
+  else if (when.timeAssumed && !when.window) assumptions.push('No time given, so 9am.')
+  assumptions.push(...timeNotes(when, now))
 
   const ignored = findMalformedTime(text)
   if (ignored) assumptions.push(`I could not read "${ignored}" as a time.`)
@@ -1374,9 +1492,9 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
     placeLabel: parsedPlace ?? learned?.placeLabel ?? null,
     placeId: parsedPlace ? null : (learned?.placeId ?? null),
     contactId: parsedPlace ? null : (learned?.contactId ?? null),
-    dueAt: when.date.toISOString(),
+    dueAt: dueAt.toISOString(),
     notes: originalIfInformative(text, title),
     assumptions,
-    summary: `${title} — ${when.date.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`,
+    summary: `${title} — ${dueAt.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`,
   }
 }
