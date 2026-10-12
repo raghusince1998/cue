@@ -27,6 +27,8 @@ import {
   parseBill,
   parseInsurance,
   parseVehicleNotice,
+  parseFastag,
+  parseChallan,
   serviceAsBooking,
   vehicleNoticeName,
   parseDelivery,
@@ -786,6 +788,43 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
   // appointment. A plan at the time it starts, reminded well ahead of it,
   // with the PNR or booking ID in its notes. Before the list readers, for the
   // same reason as parcels: these messages are all colons and commas.
+  // A traffic challan pasted in: on Bills, to pay by its date.
+  const challan = parseChallan(raw)
+  if (challan?.status === 'issued') {
+    const name = `Traffic challan${challan.vehicle ? ` · ${challan.vehicle}` : ''}${challan.offence ? ` · ${challan.offence}` : ''}`
+    const issued = challan.issuedOn ? new Date(`${challan.issuedOn}T00:00:00`) : now
+    const dueOn = challan.dueOn ?? ymd(new Date(issued.getFullYear(), issued.getMonth(), issued.getDate() + 30))
+    return {
+      ...base,
+      kind: 'bill',
+      title: name,
+      checklist: [],
+      bill: { name, kind: 'bill', category: 'vehicle', amountPaise: challan.amountPaise, dueOn, repeat: 'none' },
+      summary: [name, challan.amountPaise ? formatRupees(challan.amountPaise) : null, dueLabel(dueOn, 'bill', now)].filter(Boolean).join(' · '),
+      assumptions: challan.dueOn ? [] : ['No date to pay by in the message, so a month from when it was issued.'],
+    }
+  }
+
+  // A FASTag running low, pasted in: a to-do to recharge, soon.
+  const tag = parseFastag(raw)
+  if (tag?.status === 'low') {
+    const at = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1, 0)
+    const dueAt = at.getHours() >= 21 || at.getHours() < 8 ? new Date(now.getFullYear(), now.getMonth(), now.getDate() + (now.getHours() >= 8 ? 1 : 0), 9, 0) : at
+    const title = `Recharge FASTag${tag.vehicle ? ` · ${tag.vehicle}` : ''}`
+    return {
+      ...base,
+      kind: 'commitment',
+      commitmentKind: 'task',
+      title,
+      dueAt: dueAt.toISOString(),
+      durationMinutes: 10,
+      flexibility: 'flexible',
+      checklist: [],
+      notes: `${tag.balancePaise !== null ? `Balance ${formatRupees(tag.balancePaise)}` : 'Low balance'}. Running out can mean paying double at the toll.`,
+      summary: `${title} — ${dueAt.toLocaleString('en-IN', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`,
+    }
+  }
+
   // A vehicle's PUC or service reminder pasted in.
   const vehicle = parseVehicleNotice(raw)
   if (vehicle?.kind === 'puc') {

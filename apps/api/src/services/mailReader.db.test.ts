@@ -71,7 +71,7 @@ function fakeGmail() {
   globalThis.fetch = (async (input: string | URL) => {
     const url = String(input)
     if (url.includes('/messages?')) {
-      assert.match(decodeURIComponent(url), /newer_than:\d+d \(from:\(irctc OR/)
+      assert.match(decodeURIComponent(url), /newer_than:\d+d (?:from|subject):\(/)
       return new Response(JSON.stringify({ messages: Object.keys(GMAIL).map((id) => ({ id })) }))
     }
     const id = url.split('/messages/')[1]!.split('?')[0]!
@@ -269,7 +269,6 @@ test('a PUC certificate and a service reminder, by vehicle; an insurer’s PUC e
   globalThis.fetch = (async (input: string | URL) => {
     const url = String(input)
     if (url.includes('/messages?')) {
-      assert.match(decodeURIComponent(url), /parivahan/)
       return new Response(JSON.stringify({ messages: Object.keys(inbox).map((id) => ({ id })) }))
     }
     const id = url.split('/messages/')[1]!.split('?')[0]!
@@ -303,4 +302,73 @@ test('a PUC certificate and a service reminder, by vehicle; an insurer’s PUC e
     select round(extract(epoch from (c.due_at - r.fire_at)) / 86400)::int as days
     from reminders r join commitments c on c.id = r.commitment_id where c.booking is not null`
   assert.equal(reminder!.days, 3, 'three days ahead, to book a slot')
+})
+
+test('FASTag: one recharge to-do, closed by the recharge; a challan on Bills until it is paid', async () => {
+  const inbox: Record<string, { from: string; subject: string; plain: string }> = {
+    f1: {
+      from: 'Paytm FASTag <noreply@paytmbank.com>',
+      subject: 'Low balance in your FASTag',
+      plain: 'Your FASTag balance for MH12AB1234 is Rs 85.50, which is below the minimum threshold. Recharge now to avoid paying double toll.',
+    },
+    f2: {
+      from: 'ICICI Bank FASTag <fastag@icicibank.com>',
+      subject: 'Toll transaction',
+      plain: 'Rs 120.00 deducted at Khed Shivapur Toll Plaza for MH12AB1234 using your FASTag. Available balance: Rs 40.00',
+    },
+    c1: {
+      from: 'e-Challan <noreply@echallan.parivahan.gov.in>',
+      subject: 'e-Challan issued',
+      plain: 'An e-Challan No. MH12345678901234 has been issued for your vehicle MH12AB1234 for Over speeding. Fine amount: Rs 1,000. Pay before 09/12/2030.',
+    },
+  }
+  const serve = () => {
+    globalThis.fetch = (async (input: string | URL) => {
+      const url = String(input)
+      if (url.includes('/messages?')) return new Response(JSON.stringify({ messages: Object.keys(inbox).map((id) => ({ id })) }))
+      const id = url.split('/messages/')[1]!.split('?')[0]!
+      const m = inbox[id]!
+      return new Response(
+        JSON.stringify({
+          id,
+          payload: {
+            mimeType: 'text/plain',
+            headers: [
+              { name: 'From', value: m.from },
+              { name: 'Subject', value: m.subject },
+            ],
+            body: { data: b64(m.plain) },
+          },
+        }),
+      )
+    }) as typeof fetch
+  }
+  serve()
+  const acc = await account('google')
+  const found = await svc.readMail(acc, new Date(), async () => 'token')
+  assert.deepEqual(found.sort(), [
+    'Recharge FASTag · MH12AB1234 (₹85.50 left)',
+    'Traffic challan · MH12AB1234 · Over speeding: ₹1,000, pay by Mon, 9 Dec',
+  ])
+  const todos = await h.sql<{ title: string; status: string; notes: string }[]>`select title, status, notes from commitments`
+  assert.equal(todos.length, 1, 'the second warning updates the same to-do')
+  assert.match(todos[0]!.notes, /Balance ₹40/)
+
+  inbox.f3 = {
+    from: 'HDFC Bank FASTag <fastag@hdfcbank.net>',
+    subject: 'FASTag recharge successful',
+    plain: 'Your FASTag (MH12AB1234) has been recharged with Rs 500 successfully. Available balance Rs 540.00.',
+  }
+  inbox.c2 = {
+    from: 'e-Challan <noreply@echallan.parivahan.gov.in>',
+    subject: 'Payment successful',
+    plain: 'Your payment for e-Challan No. MH12345678901234 of Rs 1,000 is successful. Thank you.',
+  }
+  serve()
+  await svc.readMail({ ...acc, mailCheckedAt: new Date() }, new Date(), async () => 'token')
+  const [todo] = await h.sql<{ status: string }[]>`select status from commitments`
+  assert.equal(todo!.status, 'done', 'recharged: the to-do closes itself')
+  const [bill] = await h.sql<{ active: boolean; paid: number }[]>`
+    select b.active, (select count(*)::int from bill_payments p where p.bill_id = b.id) as paid from bills b`
+  assert.deepEqual(bill, { active: false, paid: 1 })
 })

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseVehicleNotice, vehicleNoticeName } from './vehicle.ts'
+import { parseChallan, parseFastag, parseVehicleNotice, vehicleNoticeName } from './vehicle.ts'
 
 test('PUC: when the certificate runs out, by vehicle', () => {
   const p = parseVehicleNotice(
@@ -39,4 +39,43 @@ test('not a reminder: a policy mentioning PUC, a booked appointment, an offer', 
   )
   assert.equal(parseVehicleNotice('Your service appointment is confirmed for 20 Oct 2026 at 10:00 AM at Kothari Hyundai.'), null)
   assert.equal(parseVehicleNotice('Flat 20% off on car service this Diwali! Offer valid till 31 Oct 2026.'), null)
+})
+
+test('FASTag: running low, low after a toll, recharged; a plain toll is nothing', () => {
+  assert.deepEqual(
+    parseFastag('Paytm FASTag: Your FASTag balance for MH12AB1234 is Rs 85.50, which is below the minimum threshold. Recharge now to avoid paying double toll.'),
+    { vehicle: 'MH12AB1234', balancePaise: 8550, status: 'low', issuer: 'Paytm' },
+  )
+  assert.equal(
+    parseFastag('ICICI Bank FASTag: Rs 120.00 deducted at Khed Shivapur Toll Plaza for MH12AB1234. Available balance: Rs 60.00')!.status,
+    'low',
+    'too little left for the next toll',
+  )
+  assert.equal(parseFastag('ICICI Bank FASTag: Rs 120.00 deducted at Khed Shivapur Toll Plaza for MH12AB1234. Available balance: Rs 1,560.00'), null)
+  const done = parseFastag('Your FASTag (MH12AB1234) has been recharged with Rs 500 successfully. Available balance Rs 585.50. - HDFC Bank')!
+  assert.equal(done.status, 'recharged')
+  assert.equal(done.balancePaise, 58550)
+})
+
+test('challans: issued with the fine, offence and number; paid; a GST challan is not one', () => {
+  assert.deepEqual(
+    parseChallan(
+      'An e-Challan No. MH12345678901234 has been issued for your vehicle MH12AB1234 on 10/10/2026 for Over speeding. Fine amount: Rs 1,000. Pay before 09/12/2026 at echallan.parivahan.gov.in',
+    ),
+    {
+      number: 'MH12345678901234',
+      vehicle: 'MH12AB1234',
+      amountPaise: 100000,
+      offence: 'Over speeding',
+      issuedOn: null,
+      dueOn: '2026-12-09',
+      status: 'issued',
+    },
+  )
+  const btp = parseChallan('Bangalore Traffic Police: Challan 4567891234 for KA05MN4321. Offence: Jumping red light. Date of offence: 08-10-2026. Penalty Rs 500.')!
+  assert.equal(btp.offence, 'Jumping red light')
+  assert.equal(btp.issuedOn, '2026-10-08')
+  assert.equal(btp.amountPaise, 50000)
+  assert.equal(parseChallan('Your payment for e-Challan No. MH12345678901234 of Rs 1,000 is successful. Thank you.')!.status, 'paid')
+  assert.equal(parseChallan('GST challan CPIN 26101234567890 generated for Rs 18,000. Pay before 20/10/2026.'), null)
 })

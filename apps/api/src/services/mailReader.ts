@@ -7,6 +7,8 @@ import {
   parseDueNotice,
   parseInsurance,
   parseVehicleNotice,
+  parseFastag,
+  parseChallan,
   serviceAsBooking,
   vehicleNoticeName,
   type ParsedDelivery,
@@ -17,6 +19,7 @@ import { freshAccessToken, type AccountRow } from './oauthConnect.ts'
 import { billFromInsurance, billFromNotice, billFromPuc } from './bills.ts'
 import { saveFoundBooking } from './bookings.ts'
 import { recordDelivery } from './deliveries.ts'
+import { challanFromNotice, fastagFromNotice } from './vehicles.ts'
 import { knownPlaces } from './captureLinks.ts'
 
 /**
@@ -59,25 +62,39 @@ export const SENDERS = [
   'hyundai', 'tatamotors', 'mahindra', 'hondacarindia', 'toyotabharat', 'kia-india', 'kiaindia', 'mgmotor', 'renault',
   'skoda', 'volkswagen', 'heromotocorp', 'honda2wheelersindia', 'bajajauto', 'tvsmotor', 'royalenfield', 'yamaha-motor',
   'suzukimotorcycle', 'atherenergy', 'olaelectric',
+  // FASTag and traffic challans
+  'ihmcl', 'nhai', 'paytmbank', 'paytm', 'airtelbank', 'onlinesbi', 'sbi.co.in', 'echallan',
+  'trafficpolice', 'delhitrafficpolice', 'mumbaitrafficpolice', 'btp.gov', 'bangaloretrafficpolice',
 ]
 
 /** Subjects worth opening even from a sender not on the list: a travel agent, a small bank. */
-const SUBJECTS = /\b(?:credit card statement|e-?statement|payment due|bill (?:is )?generated|electricity bill|pnr|booking confirm|e-?ticket|out for delivery|has (?:been )?shipped|order (?:has been )?delivered|insurance|policy (?:is )?(?:issued|renewal|expir\w*)|premium due|renewal reminder|puc|pollution|service (?:due|reminder)|free service)\b/i
+const SUBJECTS = /\b(?:credit card statement|e-?statement|payment due|bill (?:is )?generated|electricity bill|pnr|booking confirm|e-?ticket|out for delivery|has (?:been )?shipped|order (?:has been )?delivered|insurance|policy (?:is )?(?:issued|renewal|expir\w*)|premium due|renewal reminder|puc|pollution|service (?:due|reminder)|free service|fas ?tag|e-?challan|challan|low balance|traffic violation)\b/i
 
 export function worthOpening(from: string, subject: string): boolean {
   const f = from.toLowerCase()
   return SENDERS.some((s) => f.includes(s)) || SUBJECTS.test(subject)
 }
 
-/** The search Gmail runs, so only those messages ever leave the inbox. */
-export function gmailQuery(days: number): string {
-  const subjects = [
-    '"credit card statement"', 'statement', '"payment due"', '"bill generated"', '"electricity bill"', 'PNR',
-    '"booking confirmed"', '"e-ticket"', '"out for delivery"', 'shipped', 'delivered',
-    'insurance', '"policy issued"', '"policy renewal"', '"premium due"', '"renewal reminder"',
-    'PUC', 'pollution', '"service due"', '"service reminder"', '"free service"',
-  ]
-  return `newer_than:${days}d (from:(${SENDERS.join(' OR ')}) OR subject:(${subjects.join(' OR ')}))`
+const GMAIL_SUBJECTS = [
+  '"credit card statement"', 'statement', '"payment due"', '"bill generated"', '"electricity bill"', 'PNR',
+  '"booking confirmed"', '"e-ticket"', '"out for delivery"', 'shipped', 'delivered',
+  'insurance', '"policy issued"', '"policy renewal"', '"premium due"', '"renewal reminder"',
+  'PUC', 'pollution', '"service due"', '"service reminder"', '"free service"',
+  'FASTag', 'challan', '"low balance"', '"traffic violation"',
+]
+
+/**
+ * The searches Gmail runs, so only those messages ever leave the inbox. In
+ * a few parts, so no one search grows past what Gmail will take.
+ */
+export function gmailQueries(days: number): string[] {
+  const chunk = 60
+  const out: string[] = []
+  for (let i = 0; i < SENDERS.length; i += chunk) {
+    out.push(`newer_than:${days}d from:(${SENDERS.slice(i, i + chunk).join(' OR ')})`)
+  }
+  out.push(`newer_than:${days}d subject:(${GMAIL_SUBJECTS.join(' OR ')})`)
+  return out
 }
 
 /** Readable text from an email's HTML: what a person would see, in order. */
@@ -132,11 +149,14 @@ async function getJson<T>(url: string, token: string, headers: Record<string, st
 
 /** New messages worth opening, from Gmail. */
 async function fromGmail(token: string, days: number, seen: (ids: string[]) => Promise<Set<string>>): Promise<MailMessage[]> {
-  const list = await getJson<{ messages?: { id: string }[] }>(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=30&q=${encodeURIComponent(gmailQuery(days))}`,
-    token,
-  )
-  const ids = (list.messages ?? []).map((m) => m.id)
+  const ids: string[] = []
+  for (const q of gmailQueries(days)) {
+    const list = await getJson<{ messages?: { id: string }[] }>(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=30&q=${encodeURIComponent(q)}`,
+      token,
+    )
+    for (const m of list.messages ?? []) if (!ids.includes(m.id)) ids.push(m.id)
+  }
   const already = await seen(ids)
   const out: MailMessage[] = []
   for (const id of ids.filter((x) => !already.has(x)).slice(0, 25)) {
@@ -219,6 +239,12 @@ export async function actOn(orgId: string, userId: string, msg: MailMessage, now
     const saved = await saveFoundBooking(orgId, userId, service, null, now)
     return saved ? `${saved.title}: service due ${dayWords(vehicle.dueOn)}` : null
   }
+
+  // A FASTag running low or recharged; a traffic challan issued or paid.
+  const tag = parseFastag(text)
+  if (tag) return fastagFromNotice(orgId, userId, tag, now)
+  const challan = parseChallan(text)
+  if (challan) return challanFromNotice(orgId, userId, challan, now)
 
   // Car, bike, health, life: when cover ends, or a premium is due.
   const policy = parseInsurance(text)

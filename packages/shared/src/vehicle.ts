@@ -145,3 +145,110 @@ export function serviceAsBooking(n: VehicleNotice): import('./bookings.ts').Pars
     remindBeforeMinutes: 3 * 24 * 60,
   }
 }
+
+export interface FastagNotice {
+  vehicle: string | null
+  /** What is left on the tag, when the message says. */
+  balancePaise: number | null
+  /** Low: recharge it. Recharged: the reminder can go. */
+  status: 'low' | 'recharged'
+  issuer: string | null
+}
+
+const FASTAG_ISSUERS: [RegExp, string][] = [
+  [/\bpaytm\b/i, 'Paytm'],
+  [/\bicici\b/i, 'ICICI'],
+  [/\bhdfc\b/i, 'HDFC'],
+  [/\bairtel\b/i, 'Airtel'],
+  [/\baxis\b/i, 'Axis'],
+  [/\bsbi\b/i, 'SBI'],
+  [/\bidfc\b/i, 'IDFC FIRST'],
+  [/\bkotak\b/i, 'Kotak'],
+  [/\bpark ?\+|\bparkplus\b/i, 'Park+'],
+  [/\bbank of baroda\b|\bbob\b/i, 'Bank of Baroda'],
+  [/\bindusind\b/i, 'IndusInd'],
+  [/\bequitas\b/i, 'Equitas'],
+]
+
+function rupees(s: string): number {
+  const [whole, frac] = s.replace(/,/g, '').split('.')
+  return Number(whole) * 100 + (frac ? Number(frac.padEnd(2, '0').slice(0, 2)) : 0)
+}
+
+/** Below this, a toll can bounce and cost double: worth recharging. */
+const LOW_FASTAG_PAISE = 200_00
+
+/**
+ * A FASTag running low, or recharged. A plain toll deduction is neither,
+ * unless what it leaves is too little for the next toll.
+ */
+export function parseFastag(input: string): FastagNotice | null {
+  const text = input.replace(/\s+/g, ' ')
+  if (!/\bfas ?tag\b/i.test(text)) return null
+  // "Available balance: Rs 60", "balance for MH12AB1234 is Rs 85.50": always with the rupee mark,
+  // so the vehicle's digits are never read as money.
+  const bal = /\bbal(?:ance)?\.?(?:\s+(?:for|of|on)\s+[A-Z0-9 -]{6,16}?)?(?:\s+(?:is|of|now))?\s*(?::|-)?\s*(?:₹|rs\.?|inr)\s*(-?\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?|-?\d+(?:\.\d{1,2})?)/i.exec(text)
+  const balancePaise = bal ? rupees(bal[1]!) : null
+  const issuer = FASTAG_ISSUERS.find(([re]) => re.test(text))?.[1] ?? null
+  const vehicle = vehicleIn(text)
+
+  if (/\b(?:recharged|recharge (?:of|for)\b[^.]{0,60}\b(?:successful|done|credited)|successfully (?:recharged|added|credited)|has been credited|credited to your fas ?tag|top[- ]?up (?:successful|done))\b/i.test(text)) {
+    return { vehicle, balancePaise, status: 'recharged', issuer }
+  }
+  const low =
+    /\b(?:low balance|minimum (?:threshold|balance)|insufficient balance|below the (?:threshold|minimum)|recharge (?:now|immediately|your fas ?tag|at the earliest)|negative balance|blacklist(?:ed)?)\b/i.test(text) ||
+    (balancePaise !== null && balancePaise < LOW_FASTAG_PAISE && /\b(?:deducted|debited|toll (?:paid|charged)|paid at)\b/i.test(text))
+  return low ? { vehicle, balancePaise, status: 'low', issuer } : null
+}
+
+export interface ChallanNotice {
+  /** The challan's number, to find it again when it is paid. */
+  number: string | null
+  vehicle: string | null
+  amountPaise: number | null
+  offence: string | null
+  /** YYYY-MM-DD. */
+  issuedOn: string | null
+  /** YYYY-MM-DD: when the message says to pay by. */
+  dueOn: string | null
+  status: 'issued' | 'paid'
+}
+
+const OFFENCES =
+  /\b(over ?speeding|red light (?:jumping|violation)|signal jumping|jumping (?:the )?red light|no parking|wrong parking|parking violation|(?:riding )?without helmet|no helmet|without seat ?belt|no seat ?belt|using mobile(?: phone)?(?: while driving)?|wrong side driving|triple riding|without puc|no puc|without insurance|drunk(?:en)? driving|lane violation|stop line violation|dangerous driving|no entry|tinted glass)\b/i
+
+/**
+ * A traffic challan, issued or paid. A tax challan (GST, TDS, PF) is not
+ * one: it has to be about a vehicle or traffic.
+ */
+export function parseChallan(input: string): ChallanNotice | null {
+  const text = input.replace(/\s+/g, ' ')
+  if (!/\be-?challan\b|\bchallan\b/i.test(text)) return null
+  if (/\b(?:gst|tds|tax|itns|epf|pf|esic|income)\b[^.]{0,20}\bchallan\b/i.test(text)) return null
+  const vehicle = vehicleIn(text)
+  if (!vehicle && !/\btraffic\b|\bvehicle\b|\bviolation\b|\boffen[cs]e\b|\bparivahan\b|\be-?challan\b/i.test(text)) return null
+
+  const number = /\bchallan\s*(?:no\.?|number|id)?\s*[:#-]?\s*([A-Z]{0,6}\d{6,}[A-Z0-9]*)\b/i.exec(text)?.[1] ?? null
+  if (!number && !vehicle) return null
+  const amount =
+    /\b(?:fine|penalty|challan amount|total amount|amount(?: due| payable)?)\s*(?:amount\s*)?(?:of|:|-|is)?\s*(?:₹|rs\.?|inr)\s*(\d{1,3}(?:,\d{2,3})+|\d+)(?:\.\d{1,2})?/i.exec(text) ??
+    /(?:₹|rs\.?|inr)\s*(\d{1,3}(?:,\d{2,3})+|\d+)(?:\.\d{1,2})?\s*(?:fine|penalty)/i.exec(text)
+  const offence =
+    /\b(?:offen[cs]e|violation)s?\s*(?:name|details|type)?\s*[:-]\s*([A-Za-z][^.;\n]{2,50}?)(?=\s*(?:[.;,]|fine|amount|on\b|$))/i.exec(text)?.[1]?.trim() ??
+    OFFENCES.exec(text)?.[1] ??
+    null
+  const issuedOn = dateAfter(text, /\b(?:issued on|dated|date of (?:offen[cs]e|violation|challan)|offen[cs]e date|violation date)\b\s*(?::|-)?\s*/)
+  const dueOn = dateAfter(text, /\b(?:pay (?:before|by|within)|due date|last date(?: to pay| of payment)?|payable by|pay it by)\b\s*(?::|-)?\s*/)
+  const paid =
+    /\b(?:paid successfully|has been paid|payment (?:has been )?received|successfully paid|disposed)\b/i.test(text) ||
+    /\bpayment\b.{0,80}?\b(?:is|was|has been)\s+successful\b/i.test(text)
+  return {
+    number,
+    vehicle,
+    amountPaise: amount ? rupees(amount[1]!) : null,
+    offence: offence ? offence[0]!.toUpperCase() + offence.slice(1).toLowerCase() : null,
+    issuedOn,
+    dueOn,
+    status: paid ? 'paid' : 'issued',
+  }
+}
