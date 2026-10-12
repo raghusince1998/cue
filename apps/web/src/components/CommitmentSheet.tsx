@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { KIND_LABELS, PRIORITY_LABELS, WINDOW_LABELS, type CommitmentDTO } from '@cue/shared'
+import { KIND_LABELS, PRIORITY_LABELS, WINDOW_LABELS, hasWork, type CommitmentDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
+import { useAuth } from '../lib/auth.tsx'
 import { dayLabel, formatSpan, overdueBy, relativeDay } from '../lib/time.ts'
 import { readNotes } from '../lib/sample.ts'
 import { reopenPlan } from '../lib/reopen.ts'
@@ -88,6 +89,8 @@ export function CommitmentSheet({
   const [c, setC] = useState<CommitmentDTO | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const { me } = useAuth()
+  const working = hasWork(me?.uses ?? [])
 
   const load = useCallback(async () => {
     try {
@@ -124,6 +127,20 @@ export function CommitmentSheet({
       await api(`/commitments/${id}/done`, { method: 'POST' })
       onChanged()
       await loadPrep()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Work, personal, or (tapped again) back to what its words say. */
+  async function setSphere(sphere: 'work' | 'personal' | null) {
+    setBusy(true)
+    try {
+      await api(`/commitments/${commitmentId}`, { method: 'PATCH', body: { sphere } })
+      await load()
+      onChanged()
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -299,6 +316,25 @@ export function CommitmentSheet({
               <div>
                 <dt>Priority</dt>
                 <dd>{PRIORITY_LABELS[c.priority]}</dd>
+              </div>
+            )}
+            {/* Work or personal: as its words read, and one tap to say otherwise. */}
+            {working && (
+              <div>
+                <dt>Part of</dt>
+                <dd className="sphere-pick" role="group" aria-label="Work or personal">
+                  {(['work', 'personal'] as const).map((s) => (
+                    <button
+                      key={s}
+                      className={`sphere-tag is-${s}${c.sphere === s ? ' is-on' : ''}`}
+                      aria-pressed={c.sphere === s}
+                      disabled={busy}
+                      onClick={() => void setSphere(c.sphere === s && c.sphereSaid ? null : s)}
+                    >
+                      {s === 'work' ? 'Work' : 'Personal'}
+                    </button>
+                  ))}
+                </dd>
               </div>
             )}
             {(c.placeName || c.placeLabel) && (

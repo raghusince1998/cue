@@ -3,6 +3,7 @@ import { db, schema } from '../db/index.ts'
 import { env } from '../env.ts'
 import { sendToUser } from '../push.ts'
 import { activeFocus } from '../services/focus.ts'
+import { holdUntil, planSphere, workLifeOf } from '../services/workLife.ts'
 
 interface ClaimedReminder {
   id: string
@@ -115,6 +116,20 @@ async function processOne(claim: ClaimedReminder) {
   const waiting = commitment.waitingOn !== null
   // A booking: ahead of time, with the reference to hand, and never chased.
   const booked = commitment.booking !== null
+
+  // Work and personal kept apart. Only what nags waits — a chase after the
+  // first reminder, or a plan with no set time. A time someone chose is kept.
+  const nags = claim.attempt > 0 || commitment.flexibility === 'flexible'
+  if (nags && !mirrored && !focusing && !waiting && !booked && commitment.priority !== 'critical') {
+    const until = holdUntil(await workLifeOf(commitment.userId), planSphere(commitment), new Date())
+    if (until) {
+      await db
+        .update(schema.reminders)
+        .set({ status: 'pending', fireAt: until, held: true })
+        .where(eq(schema.reminders.id, claim.id))
+      return
+    }
+  }
 
   await sendToUser(commitment.userId, {
     title: commitment.title,

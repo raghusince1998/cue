@@ -62,7 +62,8 @@ test('it counts the day, names the first meeting, and who to chase', async () =>
 
   const brief = svc.composeBrief(stats, TZ)!
   assert.equal(brief.title, 'Today: 2 meetings, 1 to do')
-  assert.match(brief.body, /First up: Sprint planning at 10:00/i)
+  // A working life kept apart from home: the day in two halves.
+  assert.match(brief.body, /Work: 3, first Sprint planning at 10:00/i)
   assert.match(brief.body, /Longest free stretch/)
   assert.match(brief.body, /Check in with Ravi\./)
   assert.match(brief.body, /1 meeting still needs follow-ups\./)
@@ -91,4 +92,46 @@ test('it goes once, at or after the chosen hour, in the person\'s own zone', asy
   // Switched off: nothing, even when due.
   await h.sql`update users set morning_brief_enabled = false, last_brief_on = null`
   assert.equal((await svc.usersDueForBrief(NOW)).length, 0)
+})
+
+test('work and personal, a journey, parcels and bills: the whole day in one place', async () => {
+  await add('Daily standup', at(8, 10), { kind: 'meeting', minutes: 15 })
+  await add('Send the Q3 report', at(8, 16), { kind: 'task' })
+  await add('Pick up kids from school', at(8, 15, 30), { kind: 'task' })
+  await add('Call mom', at(8, 20), { kind: 'callback' })
+  await h.sql`
+    insert into commitments (org_id, user_id, title, kind, due_at, duration_minutes, booking)
+    values (${me.orgId}, ${me.userId}, 'Flight to Goa', 'task', ${at(8, 19)}, 120,
+            ${h.sql.json({ type: 'flight', ref: null, from: null, city: 'Goa', provider: null, remindBeforeMinutes: 180 })})`
+  await h.sql`
+    insert into deliveries (org_id, user_id, store, item, status, expected_on, cod_paise)
+    values (${me.orgId}, ${me.userId}, 'Flipkart', 'Redmi Note 13', 'out_for_delivery', '2026-10-08', 1799900)`
+  await h.sql`
+    insert into bills (org_id, user_id, name, due_on) values (${me.orgId}, ${me.userId}, 'Electricity', '2026-10-09')`
+
+  const stats = await svc.briefStats(me.userId, TZ, NOW)
+  assert.equal(stats.split, true)
+  assert.equal(stats.work.count, 2)
+  assert.equal(stats.personal.count, 3, 'the kids, mom and the holiday flight')
+  assert.equal(stats.travel?.title, 'Flight to Goa')
+
+  const body = svc.composeBrief(stats, TZ)!.body
+  assert.match(body, /Flight to Goa at 7:00 pm — leave by 4:00 pm\./)
+  assert.match(body, /Work: 2, first Daily standup at 10:00 am\./)
+  assert.match(body, /Personal: 3, first Pick up kids from school at 3:30 pm\./)
+  assert.match(body, /Arriving today: Flipkart · Redmi Note 13 \(₹17,999 cash on delivery\)\./)
+  assert.match(body, /To pay: Electricity \(tomorrow\)\./)
+
+  await h.sql`delete from deliveries`
+  await h.sql`delete from bills`
+})
+
+test('someone without a working life gets one list, as before', async () => {
+  await h.sql`update users set uses = '{personal}' where id = ${me.userId}`
+  await add('Call mom', at(8, 20), { kind: 'callback' })
+  const stats = await svc.briefStats(me.userId, TZ, NOW)
+  assert.equal(stats.split, false)
+  const body = svc.composeBrief(stats, TZ)!.body
+  assert.ok(!/Work:|Personal:/.test(body), body)
+  await h.sql`update users set uses = '{}' where id = ${me.userId}`
 })

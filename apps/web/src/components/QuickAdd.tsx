@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
 import { DictateButton } from './DictateButton.tsx'
 import { announceChange } from '../lib/changes.ts'
-import { examplesFor } from '@cue/shared'
+import { examplesFor, hasWork, type Sphere } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
 import {
   NO_CHOICES,
@@ -79,6 +79,8 @@ interface Plan {
   choices?: Choice[]
   /** Better plans on offer, applied on save only if accepted. */
   suggestions?: Suggestion[]
+  /** Work or personal, as the words read; null when they say neither. */
+  sphere?: Sphere | null
 }
 
 interface Choice {
@@ -172,7 +174,13 @@ export function QuickAdd({
   const [reading, setReading] = useState(false)
   /** Suggestions accepted for this line, by id. A new line starts with none. */
   const [accepted, setAccepted] = useState<string[]>([])
-  useEffect(() => setAccepted([]), [text])
+  /** Work or personal, flipped by hand from what the words read. */
+  const [sphere, setSphere] = useState<Sphere | null>(null)
+  useEffect(() => {
+    setAccepted([])
+    setSphere(null)
+  }, [text])
+  const working = hasWork(me?.uses ?? [])
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -250,6 +258,7 @@ export function QuickAdd({
         if (plan?.upcomingTrip) body.onTrip = choices.onTrip
         const offered = (plan?.suggestions ?? []).filter((s) => accepted.includes(s.id))
         if (offered.length) body.accept = offered.map((s) => s.id)
+        if (sphere && sphere !== plan?.sphere) body.sphere = sphere
         const result = await api<Saved>('/quick', { method: 'POST', body })
         setSaved({ ...result, typed: text, acceptedActions: offered.map((s) => s.action) })
         setText('')
@@ -278,7 +287,7 @@ export function QuickAdd({
         setBusy(false)
       }
     },
-    [text, onSaved, plan, choices, accepted],
+    [text, onSaved, plan, choices, accepted, sphere],
   )
 
   async function undo() {
@@ -471,6 +480,19 @@ export function QuickAdd({
                       <li key={a}>{a}</li>
                     ))}
                   </ul>
+                )}
+                {/* Which half of the day it is part of, as read, and one tap to change. */}
+                {working && (plan.kind === 'commitment' || plan.kind === 'recurrence') && (
+                  <div className="sphere-pick" role="group" aria-label="Work or personal">
+                    {(['work', 'personal'] as const).map((s) => {
+                      const on = (sphere ?? plan.sphere) === s
+                      return (
+                        <button key={s} className={`sphere-tag is-${s}${on ? ' is-on' : ''}`} aria-pressed={on} onClick={() => setSphere(s)}>
+                          {s === 'work' ? 'Work' : 'Personal'}
+                        </button>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
               <kbd>Enter</kbd>

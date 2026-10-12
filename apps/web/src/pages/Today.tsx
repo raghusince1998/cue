@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { WINDOW_LABELS, type CommitmentDTO } from '@cue/shared'
+import { WINDOW_LABELS, hasWork, type CommitmentDTO, type Sphere } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
 import { UsesPicker } from '../components/UsesPicker.tsx'
 import { Deliveries } from '../components/Deliveries.tsx'
@@ -75,6 +75,26 @@ function endedAgo(end: Date, now = new Date()): string {
 }
 
 /** Mirrors toneOf in CalendarView, so a card and its chip agree on colour. */
+/** Whether cards say "Work" or "Personal": only for someone with a working life. */
+const ShowSphere = createContext(false)
+
+/**
+ * One half of the day: work, or personal. A plan whose words say neither stays
+ * in both, since hiding something that might be either is how it gets missed.
+ */
+function onlyHalf(agenda: Agenda, half: Sphere): Agenda {
+  const keep = (list: CommitmentDTO[] | undefined) => list?.filter((c) => !c.sphere || c.sphere === half)
+  return {
+    ...agenda,
+    overdue: keep(agenda.overdue)!,
+    today: keep(agenda.today)!,
+    upcoming: keep(agenda.upcoming)!,
+    doneToday: keep(agenda.doneToday)!,
+    justFinished: keep(agenda.justFinished),
+    waiting: keep(agenda.waiting),
+  }
+}
+
 function cardTone(c: CommitmentDTO, overdue?: boolean): string {
   if (overdue) return 'overdue'
   if (c.priority === 'critical') return 'critical'
@@ -101,6 +121,7 @@ function Card({
 }) {
   const [moving, setMoving] = useState(false)
   const { notes, sample } = readNotes(commitment.notes)
+  const showSphere = useContext(ShowSphere)
 
   return (
     <li
@@ -126,6 +147,11 @@ function Card({
           <p className="commitment-title">
             {commitment.title}
             {sample && <span className="sample-tag">Sample</span>}
+            {showSphere && commitment.sphere && (
+              <span className={`sphere-tag is-${commitment.sphere}`}>
+                {commitment.sphere === 'work' ? 'Work' : 'Personal'}
+              </span>
+            )}
           </p>
           <p className="muted small">
             {commitment.flexibility === 'flexible' && commitment.preferredWindow
@@ -317,7 +343,29 @@ export default function Today() {
       return false
     }
   })
-  const [agenda, setAgenda] = useState<Agenda>(EMPTY)
+  const [allAgenda, setAgenda] = useState<Agenda>(EMPTY)
+  // Work and personal on one day: both by default, or one half of it.
+  const working = hasWork(me?.uses ?? [])
+  const [half, setHalf] = useState<'all' | Sphere>(() => {
+    try {
+      const saved = localStorage.getItem('cue.half')
+      return saved === 'work' || saved === 'personal' ? saved : 'all'
+    } catch {
+      return 'all'
+    }
+  })
+  function chooseHalf(next: 'all' | Sphere) {
+    setHalf(next)
+    try {
+      localStorage.setItem('cue.half', next)
+    } catch {
+      // Remembering is a convenience; the choice still applies now.
+    }
+  }
+  const agenda = useMemo(
+    () => (working && half !== 'all' ? onlyHalf(allAgenda, half) : allAgenda),
+    [allAgenda, half, working],
+  )
   const [loading, setLoading] = useState(true)
   /** The meeting being wrapped up: "what came out of it?". */
   const [wrapping, setWrapping] = useState<CommitmentDTO | null>(null)
@@ -662,6 +710,7 @@ export default function Today() {
      * and the plans take the main one — a single 800px column on a 1440px
      * screen left two thirds of it empty and made the day 4,500px tall.
      */
+    <ShowSphere.Provider value={working}>
     <div className="today">
       {/* Opened from the brief, which is the only thing that raises it. */}
       {(params.get('triage') === '1' || params.get('triage') === 'all') && (
@@ -805,6 +854,16 @@ export default function Today() {
             </button>
           ))}
         </div>
+        {/* Work and personal on one day: both, or one half of it. */}
+        {working && view === 'agenda' && (
+          <div className="viewswitch" role="group" aria-label="Show">
+            {(['all', 'work', 'personal'] as const).map((h) => (
+              <button key={h} className={half === h ? 'selected' : ''} aria-pressed={half === h} onClick={() => chooseHalf(h)}>
+                {h === 'all' ? 'All' : h === 'work' ? 'Work' : 'Personal'}
+              </button>
+            ))}
+          </div>
+        )}
         {view === 'agenda' && (agenda.waiting ?? []).length === 0 && !addingWaiting && (
           <button className="link small" onClick={() => setAddingWaiting(true)}>
             + Waiting on someone
@@ -1235,5 +1294,6 @@ export default function Today() {
         />
       )}
     </div>
+    </ShowSphere.Provider>
   )
 }

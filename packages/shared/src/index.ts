@@ -966,6 +966,8 @@ export const updateCommitmentInput = z.object({
   priority: z.enum(PRIORITIES).optional(),
   status: z.enum(COMMITMENT_STATUS).optional(),
   allowConflict: z.boolean().optional(),
+  /** Work or personal, said by the person; null goes back to reading the words. */
+  sphere: z.enum(['work', 'personal']).nullable().optional(),
 })
 export type UpdateCommitmentInput = z.infer<typeof updateCommitmentInput>
 
@@ -1067,6 +1069,10 @@ export interface CommitmentDTO {
   checklistDone: number
   notes: string | null
   createdAt: string
+  /** Work or personal: the person's own say, or read from the words; null when neither. */
+  sphere?: 'work' | 'personal' | null
+  /** True when the person sorted it themselves, rather than its words. */
+  sphereSaid?: boolean
 }
 
 export interface ContactDTO {
@@ -1201,3 +1207,4 @@ export interface VisitDTO {
   /** Present on the single-visit fetch, omitted from list responses. */
   commitments?: CommitmentDTO[]
 }
+export { sphereOf, isWorkTime, nextWorkBoundary, describeWorkHours, DEFAULT_WORK_HOURS, SPHERES, type Sphere, type SphereHints, type WorkHours } from './sphere.ts'

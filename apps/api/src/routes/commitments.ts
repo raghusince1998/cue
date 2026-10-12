@@ -30,6 +30,7 @@ import { recentCalls } from '../services/calls.ts'
 import { owedPeople } from '../services/owed.ts'
 import { ownsItem } from '../services/trackers.ts'
 import { activeFocus, heldCount } from '../services/focus.ts'
+import { planSphere } from '../services/workLife.ts'
 import { peopleSummary, personLinks } from '../services/people.ts'
 
 const agendaQuery = z.object({
@@ -106,6 +107,8 @@ const selection = {
     string | null
   >`coalesce(${schema.commitments.notes}, ${schema.interactions.notes})`,
   createdAt: schema.commitments.createdAt,
+  sphere: schema.commitments.sphere,
+  isBooking: sql<boolean>`${schema.commitments.booking} is not null`,
 }
 
 type SelectedRow = {
@@ -144,6 +147,13 @@ function toDTO(row: SelectedRow): CommitmentDTO {
     checklistDone: Number(row.checklistDone ?? 0),
     notes: (row.notes as string | null) ?? null,
     createdAt: (row.createdAt as Date).toISOString(),
+    sphere: planSphere({
+      sphere: row.sphere as string | null,
+      title: row.title as string,
+      kind: row.kind as string,
+      booking: row.isBooking,
+    }),
+    sphereSaid: row.sphere != null,
   }
 }
 
@@ -573,6 +583,7 @@ export async function commitmentRoutes(app: FastifyInstance) {
             ? { deadline: body.deadline ? new Date(body.deadline) : null }
             : {}),
           ...(body.priority !== undefined ? { priority: body.priority } : {}),
+          ...(body.sphere !== undefined ? { sphere: body.sphere } : {}),
           ...(body.endsAt !== undefined
             ? { endsAt: body.endsAt ? new Date(body.endsAt) : null }
             : {}),

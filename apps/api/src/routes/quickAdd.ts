@@ -10,6 +10,8 @@ import {
   type ParsedWhen,
   normalizeHinglish,
   HINDI_LEFTOVER,
+  sphereOf,
+  type Sphere,
   titleFrom,
   placeFrom,
   parseIntention,
@@ -136,6 +138,8 @@ const quickInput = z.object({
   careful: z.boolean().optional(),
   /** The suggestions the person accepted, by id. */
   accept: z.array(z.enum(['start-early', 'gift', 'prepare', 'move-after-trip'])).max(4).optional(),
+  /** Work or personal, flipped by the person from what the preview read. */
+  sphere: z.enum(['work', 'personal']).optional(),
 })
 
 export type QuickKind =
@@ -189,6 +193,7 @@ export async function quickAddRoutes(app: FastifyInstance) {
     // Worked out again here rather than trusted from the screen, and only the
     // ones the person accepted are applied.
     const accepted = plan.suggestions.filter((s) => body.accept?.includes(s.id))
+    if (body.sphere) plan.sphere = body.sphere
     const moved = accepted.find((s) => s.moveTo)
     if (moved && plan.kind === 'commitment') {
       plan.dueAt = moved.moveTo!
@@ -357,6 +362,8 @@ export async function quickAddRoutes(app: FastifyInstance) {
                 setPos: plan.rule!.setPos ?? null,
                 untilOn: plan.rule!.until ?? null,
                 count: plan.rule!.count ?? null,
+                // Stored only when the person flipped it: otherwise read from the words.
+                sphere: body.sphere ?? null,
               })
               .returning(),
             'recurrence',
@@ -433,6 +440,8 @@ export async function quickAddRoutes(app: FastifyInstance) {
             flexibility: plan.flexibility,
             preferredWindow: plan.preferredWindow ?? null,
             trackerItemId: plan.trackerItem?.id ?? null,
+            // Stored only when the person flipped it: otherwise read from the words.
+            sphere: body.sphere ?? null,
             booking: plan.booking
               ? {
                   type: plan.booking.type,
@@ -651,6 +660,8 @@ export interface QuickPlan {
   deadline: boolean
   /** Better plans on offer, each applied on save only if accepted. */
   suggestions: Suggestion[]
+  /** Work or personal, as read from the words; null when they say neither. */
+  sphere: Sphere | null
   /** Why the app could not tell, when it could not. */
   problem: string | null
   summary: string
@@ -902,9 +913,16 @@ type Repeat = NonNullable<ReturnType<typeof parseRecurrence>> & { yearlyOccasion
 const NAMES_SOMEONE =
   /(?<=\S\s+)(?!(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|Mon|Tue|Wed|Thu|Fri|Sat|Sun|I|EOD|PR)\b)[A-Z][a-z]{2,}\b/
 
-/** Suggestions worked out for a plan, from what it has become after linking. */
+/**
+ * Suggestions worked out for a plan, from what it has become after linking,
+ * and which half of life it reads as.
+ */
 async function withSuggestions(userId: string, line: string, plan: QuickPlan): Promise<QuickPlan> {
-  return { ...plan, suggestions: await suggestionsFor(userId, plan, line, new Date()) }
+  return {
+    ...plan,
+    suggestions: await suggestionsFor(userId, plan, line, new Date()),
+    sphere: sphereOf(plan.title, { kind: plan.commitmentKind, booking: Boolean(plan.booking), board: plan.tracker?.board ?? null }),
+  }
 }
 
 /**
@@ -1124,6 +1142,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     choices: [],
     deadline: false,
     suggestions: [],
+    sphere: null,
     problem: null,
     summary: '',
   }

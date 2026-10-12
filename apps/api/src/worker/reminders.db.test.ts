@@ -26,6 +26,9 @@ before(async () => {
   process.env.MAX_ESCALATIONS = '3'
   worker = await import('./reminders.ts')
   me = await seedUser(h.sql, 'worker@test.local')
+  // The nag engine on its own: work hours holding nags back would make these
+  // depend on the time of day the suite runs (see workLife.db.test.ts).
+  await h.sql`update users set keep_apart = false where id = ${me.userId}`
 })
 
 after(async () => {

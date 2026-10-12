@@ -6,6 +6,8 @@ import { keepInTouch, orgOf } from './keepInTouch.ts'
 import { behindLine, weekTargets } from './targets.ts'
 import { occasionLabel, upcomingOccasions } from './occasions.ts'
 import { canBeOverdue, isAwaitingWrapUp, managedByCue, meetingEnd } from './overdue.ts'
+import { formatRupees, hasWork } from '@cue/shared'
+import { planSphere } from './workLife.ts'
 
 /**
  * The morning brief.
@@ -38,6 +40,21 @@ export interface BriefStats {
   behind: string | null
   /** Today's occasions: "Dr. Mehta's birthday". */
   occasions: string[]
+  /** Work and personal told apart, for someone with a working life who keeps them so. */
+  split: boolean
+  work: { count: number; first: { title: string; dueAt: Date } | null }
+  personal: { count: number; first: { title: string; dueAt: Date } | null }
+  /** Today's journey, if any: when it leaves, and when to set off for it. */
+  travel: { title: string; dueAt: Date; leaveAt: Date } | null
+  /** Parcels expected today. */
+  parcels: { count: number; first: string | null; codPaise: number }
+  /** Bills due today or tomorrow: "Electricity (today)". */
+  bills: string[]
+}
+
+/** YYYY-MM-DD for that moment in that zone. */
+function localDay(at: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at)
 }
 
 /** Today in the person's own zone, as SQL bounds — the server's zone is not theirs. */
@@ -88,6 +105,37 @@ export async function briefStats(userId: string, timezone: string, now = new Dat
       ),
     )
 
+  // The day as one list, to tell work from personal and find the journey.
+  const dayRows = await db
+    .select({ title: c.title, kind: c.kind, dueAt: c.dueAt, booking: c.booking, sphere: c.sphere })
+    .from(c)
+    .where(and(mine, today, eq(c.allDay, false), isNull(c.waitingOn), managedByCue()))
+    .orderBy(asc(c.dueAt))
+  const [person] = await db
+    .select({ uses: schema.users.uses, keepApart: schema.users.keepApart })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+  const half = (which: 'work' | 'personal') => {
+    const rows = dayRows.filter((r) => planSphere(r) === which)
+    const first = rows.find((r) => r.dueAt > now) ?? rows[0]
+    return { count: rows.length, first: first ? { title: first.title, dueAt: first.dueAt } : null }
+  }
+  const journey = dayRows.find((r) => r.booking && ['flight', 'train', 'bus'].includes(r.booking.type) && r.dueAt > now)
+
+  const todayOn = localDay(now, timezone)
+  const tomorrowOn = localDay(new Date(now.getTime() + 86_400_000), timezone)
+  const d = schema.deliveries
+  const parcelRows = await db
+    .select({ store: d.store, item: d.item, codPaise: d.codPaise })
+    .from(d)
+    .where(and(eq(d.userId, userId), eq(d.expectedOn, todayOn), sql`${d.status} not in ('delivered', 'cancelled')`))
+  const b = schema.bills
+  const billRows = await db
+    .select({ name: b.name, dueOn: b.dueOn, autopay: b.autopay })
+    .from(b)
+    .where(and(eq(b.userId, userId), eq(b.active, true), gte(b.dueOn, todayOn), sql`${b.dueOn} <= ${tomorrowOn}`))
+    .orderBy(asc(b.dueOn))
+
   const summary = await buildSummary(userId, now)
   const names = [...new Set(checkInRows.map((r) => r.who!).filter(Boolean))]
   const orgId = await orgOf(userId)
@@ -110,6 +158,24 @@ export async function briefStats(userId: string, timezone: string, now = new Dat
     reachOut,
     behind: behindLine((await weekTargets(userId, now)).metrics),
     occasions: orgId ? (await upcomingOccasions(orgId, 0, now)).map(occasionLabel) : [],
+    split: Boolean(person?.keepApart && hasWork(person.uses)),
+    work: half('work'),
+    personal: half('personal'),
+    travel: journey
+      ? {
+          title: journey.title,
+          dueAt: journey.dueAt,
+          leaveAt: new Date(journey.dueAt.getTime() - (journey.booking!.remindBeforeMinutes ?? 120) * 60_000),
+        }
+      : null,
+    parcels: {
+      count: parcelRows.length,
+      first: parcelRows[0] ? [parcelRows[0].store, parcelRows[0].item].filter(Boolean).join(' · ') || null : null,
+      codPaise: parcelRows.reduce((sum, p) => sum + (p.codPaise ?? 0), 0),
+    },
+    bills: billRows
+      .filter((r) => !r.autopay)
+      .map((r) => `${r.name} (${r.dueOn === todayOn ? 'today' : 'tomorrow'})`),
   }
 }
 
@@ -140,7 +206,10 @@ export function composeBrief(
     stats.wrapUps === 0 &&
     stats.reachOut.length === 0 &&
     !stats.behind &&
-    stats.occasions.length === 0
+    stats.occasions.length === 0 &&
+    !stats.travel &&
+    stats.parcels.count === 0 &&
+    stats.bills.length === 0
   if (nothing) return null
 
   const head = [
@@ -151,7 +220,28 @@ export function composeBrief(
 
   const lines: string[] = []
   if (stats.occasions.length > 0) lines.push(`Today: ${listNames(stats.occasions)}.`)
-  if (stats.first) lines.push(`First up: ${stats.first.title} at ${clockIn(stats.first.dueAt, timezone)}.`)
+  if (stats.travel) {
+    lines.push(
+      `${stats.travel.title} at ${clockIn(stats.travel.dueAt, timezone)} — leave by ${clockIn(stats.travel.leaveAt, timezone)}.`,
+    )
+  }
+  const firstOf = (h: BriefStats['work']) => (h.first ? `, first ${h.first.title} at ${clockIn(h.first.dueAt, timezone)}` : '')
+  if (stats.split && (stats.work.count > 0 || stats.personal.count > 0)) {
+    // Work and personal, each with its first thing: the day in two halves.
+    if (stats.work.count > 0) lines.push(`Work: ${stats.work.count}${firstOf(stats.work)}.`)
+    if (stats.personal.count > 0) lines.push(`Personal: ${stats.personal.count}${firstOf(stats.personal)}.`)
+  } else if (stats.first) {
+    lines.push(`First up: ${stats.first.title} at ${clockIn(stats.first.dueAt, timezone)}.`)
+  }
+  if (stats.parcels.count > 0) {
+    const cod = stats.parcels.codPaise > 0 ? ` (${formatRupees(stats.parcels.codPaise)} cash on delivery)` : ''
+    lines.push(
+      stats.parcels.count === 1
+        ? `Arriving today: ${stats.parcels.first ?? 'a parcel'}${cod}.`
+        : `${stats.parcels.count} parcels arriving today${cod}.`,
+    )
+  }
+  if (stats.bills.length > 0) lines.push(`To pay: ${listNames(stats.bills)}.`)
   if (stats.longestGap && (stats.meetings > 0 || stats.tasks > 0)) {
     lines.push(
       `Longest free stretch ${clockIn(stats.longestGap.from, timezone)}–${clockIn(stats.longestGap.to, timezone)}.`,

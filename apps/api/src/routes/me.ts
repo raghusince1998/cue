@@ -48,6 +48,16 @@ const preferencesInput = z.object({
   upiId: optionalText(120).refine((v) => !v || /^[\w.\-]{2,256}@[a-zA-Z][a-zA-Z0-9]{1,63}$/.test(v), {
     message: 'A UPI ID looks like name@okaxis.',
   }),
+  /** Work and personal kept apart: nagging reminders wait for their own time. */
+  keepApart: z.boolean().optional(),
+  /** The working week: 0 is Sunday. */
+  workDays: z
+    .array(z.number().int().min(0).max(6))
+    .max(7)
+    .transform((v) => [...new Set(v)].sort())
+    .optional(),
+  workStartHour: z.number().int().min(0).max(23).optional(),
+  workEndHour: z.number().int().min(1).max(24).optional(),
 })
 
 const selection = {
@@ -69,6 +79,10 @@ const selection = {
   homeCity: schema.users.homeCity,
   upiId: schema.users.upiId,
   uses: schema.users.uses,
+  keepApart: schema.users.keepApart,
+  workDays: schema.users.workDays,
+  workStartHour: schema.users.workStartHour,
+  workEndHour: schema.users.workEndHour,
 }
 
 export async function meRoutes(app: FastifyInstance) {
@@ -83,6 +97,18 @@ export async function meRoutes(app: FastifyInstance) {
   app.patch('/me/preferences', async (req, reply) => {
     const { sub } = scope(req)
     const body = preferencesInput.parse(req.body)
+
+    if (body.workStartHour !== undefined || body.workEndHour !== undefined) {
+      // A working day has to end after it starts — checked against what is
+      // already saved when only one end of it is being changed.
+      const [current] = await db
+        .select({ start: schema.users.workStartHour, end: schema.users.workEndHour })
+        .from(schema.users)
+        .where(eq(schema.users.id, sub))
+      const start = body.workStartHour ?? current?.start ?? 9
+      const end = body.workEndHour ?? current?.end ?? 18
+      if (start >= end) return reply.code(400).send({ error: 'work_hours_backwards' })
+    }
 
     if (body.timezone) {
       // Reject nonsense before it reaches SQL: an unknown zone name would make
@@ -120,6 +146,10 @@ export async function meRoutes(app: FastifyInstance) {
         ...(body.homeCity !== undefined ? { homeCity: body.homeCity } : {}),
         ...(body.upiId !== undefined ? { upiId: body.upiId } : {}),
         ...(body.uses !== undefined ? { uses: body.uses } : {}),
+        ...(body.keepApart !== undefined ? { keepApart: body.keepApart } : {}),
+        ...(body.workDays !== undefined ? { workDays: body.workDays } : {}),
+        ...(body.workStartHour !== undefined ? { workStartHour: body.workStartHour } : {}),
+        ...(body.workEndHour !== undefined ? { workEndHour: body.workEndHour } : {}),
       })
       .where(eq(schema.users.id, sub))
 

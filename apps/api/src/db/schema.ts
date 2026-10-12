@@ -96,6 +96,15 @@ export const users = pgTable(
     lastBriefOn: date('last_brief_on'),
     /** Where they live: a plan in this city is not a trip. */
     homeCity: text('home_city'),
+    /**
+     * Work and personal kept apart: nagging reminders for one wait while it is
+     * the other's time. Only for someone with a working life (see hasWork).
+     */
+    keepApart: boolean('keep_apart').notNull().default(true),
+    /** 0 is Sunday. */
+    workDays: integer('work_days').array().notNull().default(sql`'{1,2,3,4,5}'::integer[]`),
+    workStartHour: integer('work_start_hour').notNull().default(9),
+    workEndHour: integer('work_end_hour').notNull().default(18),
     /** Put in a reminder to pay back, so paying is one tap. */
     upiId: text('upi_id'),
     /** A one-tap demo from the website, removed after a day. */
@@ -534,6 +543,8 @@ export const commitments = pgTable(
      * the calendar: it claims no slot and is never overdue — see overdue.ts.
      */
     waitingOn: text('waiting_on'),
+    /** Work or personal, when the person said so; otherwise read from the words. */
+    sphere: text('sphere').$type<'work' | 'personal'>(),
     /** Local date this occurrence stands for — safer to compare than dueAt. */
     occurrenceOn: date('occurrence_on'),
     /** Edited on its own, so regenerating the series must leave it alone. */
@@ -894,6 +905,8 @@ export const recurrences = pgTable(
 
     /** Dates the series skips — "delete just this one" in a source calendar. */
     exdates: date('exdates').array(),
+    /** Work or personal, when the person said so: copied to each day. */
+    sphere: text('sphere').$type<'work' | 'personal'>(),
 
     /** Set when this series mirrors an event from a subscribed calendar. */
     feedId: uuid('feed_id'),

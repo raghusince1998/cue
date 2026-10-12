@@ -104,6 +104,8 @@ export async function materialise(
           placeId: row.placeId,
           contactId: row.contactId,
           placeLabel: row.placeLabel,
+          // Work or personal, if the person sorted the series themselves.
+          sphere: row.sphere ?? null,
           status: 'pending' as const,
         })),
       )

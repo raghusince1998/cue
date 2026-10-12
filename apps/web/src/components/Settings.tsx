@@ -8,6 +8,8 @@ import { DeleteAccount } from './DeleteAccount.tsx'
 import { Modal } from './Modal.tsx'
 import { TemplateManager } from './QuickMessage.tsx'
 import { api } from '../lib/api.ts'
+import { useAuth } from '../lib/auth.tsx'
+import { describeWorkHours, hasWork } from '@cue/shared'
 
 interface Me {
   id: string
@@ -30,7 +32,23 @@ interface Preferences {
   dailyNudgeEnabled: boolean
   dailyNudgeHour: number
   lastNudgeOn: string | null
+  keepApart: boolean
+  /** 0 is Sunday. */
+  workDays: number[]
+  workStartHour: number
+  workEndHour: number
 }
+
+/** Monday first, the way a working week is read. */
+const WEEK = [
+  { day: 1, label: 'Mon' },
+  { day: 2, label: 'Tue' },
+  { day: 3, label: 'Wed' },
+  { day: 4, label: 'Thu' },
+  { day: 5, label: 'Fri' },
+  { day: 6, label: 'Sat' },
+  { day: 0, label: 'Sun' },
+]
 
 function label(hour: number): string {
   const suffix = hour < 12 ? 'am' : 'pm'
@@ -58,6 +76,9 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false)
   const [editingMessages, setEditingMessages] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  // Work hours only mean something to someone with a working life.
+  const { me: account } = useAuth()
+  const working = hasWork(account?.uses ?? [])
 
   useEffect(() => {
     void api<Preferences>('/me/preferences').then(setPrefs)
@@ -300,8 +321,9 @@ export function Settings({ onClose }: { onClose: () => void }) {
           <span>Send me a brief of the day each morning</span>
         </label>
         <InfoTip label="What is in it?">
-          How many meetings and things to do, the first one, your longest free stretch for
-          focused work, who is due a check-in, and anything left over. Tapping it opens your
+          Your day in one place: work and personal, each with its first thing; a train or
+          flight and when to leave for it; parcels arriving; bills due; who is due a
+          check-in; your longest free stretch; and anything left over. Tapping it opens your
           day hour by hour. On a day with nothing in it, it stays quiet.
         </InfoTip>
       </div>
@@ -322,6 +344,83 @@ export function Settings({ onClose }: { onClose: () => void }) {
           <button className="ghost small-btn" onClick={testBrief} disabled={busy}>
             Send today&rsquo;s brief now
           </button>
+        </>
+      )}
+
+      {/* Work and personal on one day: each waits for its own time. */}
+      {working && (
+        <>
+          <hr className="rule" />
+          <div className="setting-row has-infotip">
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={prefs.keepApart}
+                disabled={busy}
+                onChange={(e) => void update({ keepApart: e.target.checked })}
+              />
+              <span>Keep work and personal apart</span>
+            </label>
+            <InfoTip label="What does it do?">
+              During your working hours, personal reminders that only nag (a second &ldquo;still
+              open&rdquo;, or something with no set time) wait until the evening. After hours, work
+              ones wait for the morning. Anything at a time you chose still rings on time, and
+              critical things always do.
+            </InfoTip>
+          </div>
+          <p className="muted small">Your working week: {describeWorkHours({ days: prefs.workDays, start: prefs.workStartHour, end: prefs.workEndHour })}</p>
+          <div className="chips" role="group" aria-label="Working days">
+            {WEEK.map(({ day, label: name }) => {
+              const on = prefs.workDays.includes(day)
+              return (
+                <button
+                  key={day}
+                  className={`chip${on ? ' selected' : ''}`}
+                  aria-pressed={on}
+                  disabled={busy}
+                  onClick={() =>
+                    void update({ workDays: on ? prefs.workDays.filter((d) => d !== day) : [...prefs.workDays, day] })
+                  }
+                >
+                  {name}
+                </button>
+              )
+            })}
+          </div>
+          <div className="row work-hours">
+            <label>
+              Starts{' '}
+              <select
+                value={prefs.workStartHour}
+                disabled={busy}
+                onChange={(e) => void update({ workStartHour: Number(e.target.value) })}
+              >
+                {Array.from({ length: 24 }, (_, h) => h)
+                  .filter((h) => h < prefs.workEndHour)
+                  .map((h) => (
+                    <option key={h} value={h}>
+                      {label(h)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              Ends{' '}
+              <select
+                value={prefs.workEndHour}
+                disabled={busy}
+                onChange={(e) => void update({ workEndHour: Number(e.target.value) })}
+              >
+                {Array.from({ length: 24 }, (_, h) => h + 1)
+                  .filter((h) => h > prefs.workStartHour)
+                  .map((h) => (
+                    <option key={h} value={h}>
+                      {h === 24 ? 'midnight' : label(h)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </div>
         </>
       )}
 
