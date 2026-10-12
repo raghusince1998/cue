@@ -1717,6 +1717,53 @@ button:disabled {
   margin-bottom: 3px;
 }
 
+/* A better plan, offered under the preview: nothing changes unless accepted. */
+.quick-suggestions {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.quick-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+.quick-suggestion.is-warning {
+  border-left-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.quick-suggestion .small-btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* Accepted: it will happen on save, and looks it. */
+.quick-suggestion.is-on .small-btn {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-text);
+}
+
+@media (max-width: 560px) {
+  .quick-suggestion {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 /* A careful reading of an unsure line is on its way. */
 .quick-reading {
   display: block;

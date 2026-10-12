@@ -300,6 +300,13 @@ export function describeRecurrence(rule: RecurrenceRule, anchor?: RecurrenceAnch
     const which = rule.setPos < 0 ? 'last' : ordinal(rule.setPos)
     const day = WEEKDAY_LABELS[rule.byWeekday[0]!]
     base = `${every} ${n === 1 ? 'month' : 'months'}, the ${which} ${day}`
+  } else if (rule.freq === 'yearly' && (rule.byMonth != null || anchor)) {
+    // "Every year on 3 Nov": a birthday is a date, and "on the 3rd" says
+    // nothing about which month.
+    const month = rule.byMonth ?? anchor!.startsOn.getMonth()
+    const day = rule.byMonthDay ?? anchor?.startsOn.getDate() ?? 1
+    const on = new Date(2000, month, day).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    base = `${every} ${n === 1 ? 'year' : 'years'} on ${on}`
   } else {
     const day = rule.byMonthDay ?? anchor?.startsOn.getDate()
     const unit = FREQUENCY_LABELS[rule.freq]

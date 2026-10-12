@@ -27,9 +27,9 @@ function fake(text: string, now: Date): Promise<unknown> {
   const tomorrow = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))
   const blank = { date: null, time: null, partOfDay: null, endDate: null, repeat: null, place: null, person: null, planKind: 'task', question: null, choices: [], assumptions: [] }
   const readings: Record<string, unknown> = {
-    doctor: { ...blank, kind: 'ask', title: 'Doctor’s appointment', question: 'When is the appointment?', choices: ['tomorrow 10am', 'friday 5pm'] },
+    'sort the car thing': { ...blank, kind: 'ask', title: 'Car service', question: 'When should the car be sorted?', choices: ['tomorrow 10am', 'friday 5pm'] },
     'mom ko sham ko call karna hai': { ...blank, kind: 'plan', title: 'Call mom', date: ymd(now), partOfDay: 'evening', planKind: 'callback' },
-    'dentist tomorrow': { ...blank, kind: 'plan', title: 'Dentist', date: tomorrow, time: '11:30', planKind: 'meeting' },
+    'papa ki dawai lana kal': { ...blank, kind: 'plan', title: 'Get dad’s medicine', date: tomorrow, time: '11:30', planKind: 'task' },
     'sabzi lana har sunday': { ...blank, kind: 'repeat', title: 'Buy vegetables', time: '10:00', repeat: { freq: 'weekly', interval: 1, weekdays: [0], monthDay: null } },
     'something odd': { nonsense: true },
     'meeting yesterday': { ...blank, kind: 'plan', title: 'Meeting', date: '2020-01-01', time: '10:00' },
@@ -63,7 +63,7 @@ const read = (text: string, mode: 'preview' | 'careful' | 'save') => quick.readF
 
 test('with the AI off, every line reads exactly as the rules read it', async () => {
   ai.setCaptureAiForTest(null)
-  const plan = await read('doctor', 'careful')
+  const plan = await read('sort the car thing', 'careful')
   assert.equal(plan.readBy, 'rules')
   assert.equal(plan.canReadCarefully, undefined, 'nothing to offer')
   assert.deepEqual(asked, [])
@@ -78,16 +78,16 @@ test('a sure line never goes to the AI', async () => {
 })
 
 test('typing previews never wait on the AI; a pause reads carefully', async () => {
-  const typing = await read('doctor', 'preview')
+  const typing = await read('sort the car thing', 'preview')
   assert.equal(typing.readBy, 'rules')
   assert.equal(typing.canReadCarefully, true, 'the screen is told a better reading is possible')
   assert.deepEqual(asked, [], 'no call while typing')
 
-  const careful = await read('doctor', 'careful')
+  const careful = await read('sort the car thing', 'careful')
   assert.equal(careful.readBy, 'ai')
   assert.equal(careful.kind, 'needsTime', 'too vague to plan: a question, not a guess')
-  assert.equal(careful.question, 'When is the appointment?')
-  assert.deepEqual(careful.choices, ['tomorrow 10am', 'friday 5pm'])
+  assert.equal(careful.question, 'When should the car be sorted?')
+  assert.deepEqual(careful.choices.map((c) => c.line), ['sort the car thing tomorrow 10am', 'sort the car thing friday 5pm'])
   assert.equal(asked.length, 1)
 })
 
@@ -107,17 +107,18 @@ test('save uses the reading the preview showed, without asking again', async () 
 })
 
 test('save with no careful preview keeps what the person saw: the rules', async () => {
-  const plan = await read('dentist tomorrow', 'save')
+  const plan = await read('papa ki dawai lana kal', 'save')
   assert.equal(plan.readBy, 'rules')
   assert.deepEqual(asked, [])
 })
 
-test('a meeting with no time reads with its time, and a Hinglish repeat as a repeat', async () => {
-  const dentist = await read('dentist tomorrow', 'careful')
-  assert.equal(dentist.readBy, 'ai')
-  const due = new Date(dentist.dueAt!)
+test('Hindi left in a title reads in plain words, and a Hinglish repeat as a repeat', async () => {
+  const medicine = await read('papa ki dawai lana kal', 'careful')
+  assert.equal(medicine.readBy, 'ai')
+  const due = new Date(medicine.dueAt!)
   assert.equal(`${pad(due.getHours())}:${pad(due.getMinutes())}`, '11:30')
-  assert.equal(dentist.flexibility, 'fixed')
+  assert.equal(medicine.flexibility, 'fixed')
+  assert.equal(medicine.title, 'Get dad’s medicine', 'Hindi left in the title went for a careful reading')
 
   const veg = await read('sabzi lana har sunday', 'careful')
   assert.equal(veg.readBy, 'ai')
@@ -137,8 +138,8 @@ test('a reading that cannot be used leaves the rules’ reading standing', async
 test('each person has a daily allowance, after which the rules read alone', async () => {
   env.captureAiDailyLimit = 1
   ai.setCaptureAiForTest(fake)
-  assert.equal((await read('doctor', 'careful')).readBy, 'ai')
-  assert.equal((await read('dentist tomorrow', 'careful')).readBy, 'rules', 'over the allowance')
+  assert.equal((await read('sort the car thing', 'careful')).readBy, 'ai')
+  assert.equal((await read('papa ki dawai lana kal', 'careful')).readBy, 'rules', 'over the allowance')
   assert.equal(asked.length, 1)
 })
 

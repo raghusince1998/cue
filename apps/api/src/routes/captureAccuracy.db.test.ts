@@ -103,9 +103,9 @@ const LINES: [string, Expect][] = [
   // ------------------------------------------------- vague: ask, do not guess
   ['something about the bank', { kind: 'needsTime' }],
   ['lunch at 1', { kind: 'commitment', due: '2026-10-13 13:00' }],
-  ['meeting tomorrow', { kind: 'needsTime', todo: 'rules alone guess 9am. The AI reading asks for a time' }],
-  ['call him later', { kind: 'needsPerson', todo: 'rules alone cannot know who. The AI reading asks' }],
-  ['doctor', { kind: 'needsTime', todo: 'rules alone guess. The AI reading asks what and when' }],
+  ['meeting tomorrow', { kind: 'needsTime' }],
+  ['call him later', { kind: 'needsPerson' }],
+  ['doctor', { kind: 'needsTime' }],
 ]
 
 const score = { right: 0, total: 0, todoRight: 0, todo: 0 }

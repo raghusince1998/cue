@@ -78,6 +78,16 @@ import { recordDelivery } from '../services/deliveries.ts'
 import { bookingReminderTimes, webCheckInAt } from '../services/bookings.ts'
 import { cachedReading, captureAiEnabled, readWithAi, type AiPart, type AiReading } from '../services/captureAi.ts'
 import {
+  APPOINTMENT_WORD,
+  CONTACT_VERB,
+  PRONOUN,
+  recentPeople,
+  suggestionsFor,
+  timeChoices,
+  type Choice,
+  type Suggestion,
+} from '../services/suggest.ts'
+import {
   findLinks,
   knownPlaces,
   tripLinkFor,
@@ -124,6 +134,8 @@ const quickInput = z.object({
    * may be read by the AI. Never on every keystroke.
    */
   careful: z.boolean().optional(),
+  /** The suggestions the person accepted, by id. */
+  accept: z.array(z.enum(['start-early', 'gift', 'prepare', 'move-after-trip'])).max(4).optional(),
 })
 
 export type QuickKind =
@@ -166,14 +178,22 @@ export async function quickAddRoutes(app: FastifyInstance) {
   app.post('/quick/preview', async (req) => {
     const { sub: userId, orgId } = scope(req)
     const { text, careful } = quickInput.parse(req.body)
-    return enrich(userId, orgId, text, await read(userId, orgId, text, careful ? 'careful' : 'preview'))
+    return withSuggestions(userId, text, await enrich(userId, orgId, text, await read(userId, orgId, text, careful ? 'careful' : 'preview')))
   })
 
   app.post('/quick', async (req, reply) => {
     const { sub: userId, orgId } = scope(req)
     const body = quickInput.parse(req.body)
     const { text, allowConflict } = body
-    const plan = await enrich(userId, orgId, text, await read(userId, orgId, text, 'save'))
+    const plan = await withSuggestions(userId, text, await enrich(userId, orgId, text, await read(userId, orgId, text, 'save')))
+    // Worked out again here rather than trusted from the screen, and only the
+    // ones the person accepted are applied.
+    const accepted = plan.suggestions.filter((s) => body.accept?.includes(s.id))
+    const moved = accepted.find((s) => s.moveTo)
+    if (moved && plan.kind === 'commitment') {
+      plan.dueAt = moved.moveTo!
+      plan.summary = `${plan.title} — ${new Date(plan.dueAt).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`
+    }
 
     // What the person chose about what the preview offered.
     if (body.contactId === null) {
@@ -346,7 +366,8 @@ export async function quickAddRoutes(app: FastifyInstance) {
         }
         return rows
       })
-      return reply.code(201).send({ ...plan, id: created[0]!.id, ids: created.map((r) => r.id) })
+      const extras = await addExtras(orgId, userId, accepted)
+      return reply.code(201).send({ ...plan, id: created[0]!.id, ids: created.map((r) => r.id), extras })
     }
 
     // ------------------------------------------------------- a single plan
@@ -479,11 +500,15 @@ export async function quickAddRoutes(app: FastifyInstance) {
       )
     }
 
+    // What the person accepted alongside: a start reminder, an hour to prepare.
+    const extras = await addExtras(orgId, userId, accepted)
+
     return reply.code(201).send({
       ...plan,
       id: row.id,
-      // Undo takes the check-in with it.
+      // Undo takes the check-in with it, and anything accepted alongside.
       ...(checkInId ? { ids: [row.id, checkInId] } : {}),
+      extras,
       savedTrip:
         tripLink && row.tripId
           ? {
@@ -620,8 +645,12 @@ export interface QuickPlan {
   canReadCarefully?: boolean
   /** When it is a question instead of a plan: what to ask. */
   question: string | null
-  /** Answers to tap, each added to the end of the line. */
-  choices: string[]
+  /** Answers to tap: each sets the line to how it reads with that answer. */
+  choices: Choice[]
+  /** "before 31 July", "by Friday": a date to finish by, not to start at. */
+  deadline: boolean
+  /** Better plans on offer, each applied on save only if accepted. */
+  suggestions: Suggestion[]
   /** Why the app could not tell, when it could not. */
   problem: string | null
   summary: string
@@ -661,7 +690,7 @@ async function read(userId: string, orgId: string, text: string, mode: 'preview'
     reading = await readWithAi(userId, text, now, { isDemo: user?.isDemo })
   }
   if (!reading) return mode === 'preview' ? { ...plan, canReadCarefully: true } : plan
-  return planFromAi(plan, reading, now)
+  return planFromAi(plan, reading, now, text)
 }
 
 /** `read` for the tests, which have no HTTP server to go through. */
@@ -674,7 +703,7 @@ const PART_HOUR: Record<AiPart, number> = { morning: 9, afternoon: 14, evening: 
  * it cannot be used — a date gone by, a trip with no place — the rules'
  * reading stands rather than a broken one.
  */
-export function planFromAi(rules: QuickPlan, r: AiReading, now: Date): QuickPlan {
+export function planFromAi(rules: QuickPlan, r: AiReading, now: Date, line: string): QuickPlan {
   const note = 'Read carefully by Cue’s AI, as the usual rules were not sure.'
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const day = r.date ? new Date(`${r.date}T00:00:00`) : today
@@ -705,7 +734,7 @@ export function planFromAi(rules: QuickPlan, r: AiReading, now: Date): QuickPlan
         ...common,
         kind: 'needsTime',
         question: r.question ?? 'When is it?',
-        choices: r.choices,
+        choices: r.choices.map((c) => ({ label: c, line: `${line.trim()} ${c}` })),
         assumptions: r.assumptions,
         summary: r.title,
       }
@@ -866,6 +895,98 @@ async function enrich(userId: string, orgId: string, raw: string, plan: QuickPla
 
 type Repeat = NonNullable<ReturnType<typeof parseRecurrence>> & { yearlyOccasion?: boolean }
 
+/**
+ * A capitalised name after the first word — "call Ravi and tell him" — that is
+ * not a day or a month. With one, "him" has someone to be.
+ */
+const NAMES_SOMEONE =
+  /(?<=\S\s+)(?!(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|Mon|Tue|Wed|Thu|Fri|Sat|Sun|I|EOD|PR)\b)[A-Z][a-z]{2,}\b/
+
+/** Suggestions worked out for a plan, from what it has become after linking. */
+async function withSuggestions(userId: string, line: string, plan: QuickPlan): Promise<QuickPlan> {
+  return { ...plan, suggestions: await suggestionsFor(userId, plan, line, new Date()) }
+}
+
+/**
+ * What accepting a suggestion adds: a plan of its own, or a yearly reminder.
+ * Returned with their kinds, so Undo can take them away again too.
+ */
+async function addExtras(
+  orgId: string,
+  userId: string,
+  accepted: Suggestion[],
+): Promise<{ kind: 'commitment' | 'recurrence'; id: string }[]> {
+  const out: { kind: 'commitment' | 'recurrence'; id: string }[] = []
+  for (const s of accepted) {
+    if (s.extra) {
+      const dueAt = new Date(s.extra.dueAt)
+      const row = takeFirst(
+        await db
+          .insert(schema.commitments)
+          .values({
+            orgId,
+            userId,
+            title: s.extra.title,
+            kind: s.extra.kind,
+            dueAt,
+            durationMinutes: s.extra.durationMinutes,
+            flexibility: s.extra.flexible ? 'flexible' : 'fixed',
+            preferredWindow: s.extra.flexible ? 'morning' : null,
+          })
+          .returning(),
+        'commitment',
+      )
+      await scheduleFirstReminder({ orgId, commitmentId: row.id, fireAt: dueAt })
+      out.push({ kind: 'commitment', id: row.id })
+    }
+    if (s.yearly) {
+      const row = takeFirst(
+        await db
+          .insert(schema.recurrences)
+          .values({
+            orgId,
+            userId,
+            title: s.yearly.title,
+            kind: 'task',
+            durationMinutes: 15,
+            startsOn: ymd(new Date()),
+            hour: s.yearly.hour,
+            minute: s.yearly.minute,
+            freq: 'yearly',
+            interval: 1,
+            byMonth: s.yearly.byMonth,
+            byMonthDay: s.yearly.byMonthDay,
+          })
+          .returning(),
+        'recurrence',
+      )
+      await materialise(row, {})
+      out.push({ kind: 'recurrence', id: row.id })
+    }
+  }
+  return out
+}
+
+/**
+ * The question for an appointment with no time, and the free times that
+ * answer it: that day's when a day was said, the next few days' when not.
+ */
+async function askWhatTime(
+  userId: string,
+  line: string,
+  title: string,
+  now: Date,
+  day: Date | null,
+): Promise<{ question: string; choices: Choice[] }> {
+  const choices = await timeChoices(userId, line.trim(), DEFAULT_DURATION_MINUTES.meeting, now, day)
+  const on = day ? ` on ${day.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}` : ''
+  const question = day ? `What time is “${title}”${on}?` : `When is “${title}”?`
+  return { question: choices.length ? `${question} You’re free at:` : question, choices }
+}
+
+/** Where a journey's first reminder sends you. */
+const LEAVING_FOR: Record<string, string> = { flight: 'for the airport', train: 'for the station', bus: 'for the bus' }
+
 /** Birthdays and anniversaries come round every year, whether or not the line says so. */
 const OCCASION = /\b(?:birthday|bday|b'day|anniversary)\b/i
 const DAY_AND_MONTH =
@@ -1001,6 +1122,8 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     readBy: 'rules',
     question: null,
     choices: [],
+    deadline: false,
+    suggestions: [],
     problem: null,
     summary: '',
   }
@@ -1107,6 +1230,13 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     const city =
       booked.city ?? (booked.type === 'hotel' || booked.type === 'bus' ? findCity(raw, await knownPlaces(userId)) : null)
     const webCheckIn = new Date(booked.startsAt.getTime() - 48 * 3_600_000)
+    // A journey's reminder is the time to leave, so it says so, by the clock.
+    const leaveAt = new Date(booked.startsAt.getTime() - booked.remindBeforeMinutes * 60_000)
+    const leaving = LEAVING_FOR[booked.type]
+    const firstReminder =
+      leaving && booked.timeKnown && leaveAt > now
+        ? `A reminder at ${clockLabel(leaveAt.getHours(), leaveAt.getMinutes())} to leave ${leaving}, ${leadLabel(booked.remindBeforeMinutes)}, with ${booked.ref ? 'the reference' : 'the details'} to hand.`
+        : `A reminder ${leadLabel(booked.remindBeforeMinutes)}, with ${booked.ref ? 'the reference' : 'the details'} to hand.`
     return {
       ...base,
       kind: 'commitment',
@@ -1128,7 +1258,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
         endsOn: booked.endsOn,
       },
       assumptions: [
-        `A reminder ${leadLabel(booked.remindBeforeMinutes)}, with ${booked.ref ? 'the reference' : 'the details'} to hand.`,
+        firstReminder,
         ...(booked.type === 'flight' && webCheckIn > now ? ['A web check-in reminder 48 hours before.'] : []),
         ...(booked.timeKnown
           ? []
@@ -1270,6 +1400,26 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
         ],
         summary: `${formatRupees(spend.amountPaise)} · ${category.label}${note ? ` · ${note}` : ''}`,
       }
+    }
+  }
+
+  // "call him later", "remind her about the invoice": a person the line never
+  // names. Guessing who is worse than asking, so ask — with the people this
+  // account talks to most as the answers.
+  const pronoun = PRONOUN.exec(text)
+  if (pronoun && CONTACT_VERB.test(text) && !NAMES_SOMEONE.test(text) && !(await matchKnownPerson(orgId, text))) {
+    const word = pronoun[1]!
+    const people = await recentPeople(orgId)
+    return {
+      ...base,
+      kind: 'needsPerson',
+      title: text.trim(),
+      commitmentKind: /\b(?:call|ring|phone)\b/i.test(text) ? 'callback' : 'task',
+      personName: word,
+      people,
+      question: `Who is “${word}”?`,
+      choices: people.map((p) => ({ label: p.name, line: text.trim().replace(new RegExp(`\\b${word}\\b`, 'i'), p.name) })),
+      summary: text.trim(),
     }
   }
 
@@ -1514,20 +1664,32 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
 
     // No date in the sentence is the one thing history cannot supply, so it is
     // the one thing worth asking about — rather than inventing a time.
-    if (!whenPart) {
-      if (!learned?.hour && !learned?.lastHour) {
-        return {
-          ...base,
-          kind: 'needsTime',
-          title: roles.title,
-          commitmentKind,
-          durationMinutes: learned?.durationMinutes ?? DEFAULT_DURATION_MINUTES[commitmentKind],
-          placeLabel: place,
-          personName: roles.person,
-          assumptions: assumptionsFromRoles,
-          summary: roles.title,
-          problem: null,
-        }
+    // So is a meeting on a day with no time at all: "meeting with Ravi
+    // tomorrow" at a 9am nobody said is a meeting Ravi will not be at.
+    // Only a real appointment: a line that merely names a person ("follow up
+    // with Priya in 2 days") is a task for that day, not a meeting to time.
+    const appointment = ['appointment', 'meeting', 'demo', 'interview'].includes(roles.kind ?? '') || APPOINTMENT_WORD.test(roles.title)
+    const meetingWithoutTime =
+      whenPart !== null &&
+      whenPart.timeAssumed &&
+      !whenPart.window &&
+      !whenPart.deadline &&
+      !whenPart.meal &&
+      appointment &&
+      !PREP.test(text)
+    if ((!whenPart || meetingWithoutTime) && !learned?.hour && !learned?.lastHour) {
+      return {
+        ...base,
+        kind: 'needsTime',
+        title: roles.title,
+        commitmentKind,
+        durationMinutes: learned?.durationMinutes ?? DEFAULT_DURATION_MINUTES[commitmentKind],
+        placeLabel: place,
+        personName: roles.person,
+        assumptions: assumptionsFromRoles,
+        ...(await askWhatTime(userId, text, roles.title, now, whenPart?.date ?? null)),
+        summary: roles.title,
+        problem: null,
       }
     }
 
@@ -1555,9 +1717,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       notes: roles.subject && roles.subject !== roles.title ? roles.subject : null,
       assumptions: assumptionsFromRoles,
       summary: `${roles.title} — ${dueAt.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`,
-      // A meeting at a 9am nobody said and history does not know: asking
-      // what time beats a guess the other person will not be at.
-      unsure: commitmentKind === 'meeting' && Boolean(whenPart?.timeAssumed) && !whenPart?.window && !prep && !learned?.hour && !learned?.lastHour,
+      deadline: Boolean(whenPart?.deadline),
     }
   }
 
@@ -1607,6 +1767,21 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     // lacks a clock time is the app serving its data model rather than the
     // person. It becomes a flexible item for today — something that wants to
     // happen, with no slot claimed and nothing to clash with.
+    // "doctor", "meeting with the CA": an appointment, which happens at a time
+    // somebody else keeps too. Filing it for "this afternoon" is a guess that
+    // is wrong more often than right, so ask — with the free times to tap.
+    if (likely && APPOINTMENT_WORD.test(likely) && likely.split(/\s+/).length <= 4) {
+      return {
+        ...base,
+        kind: 'needsTime',
+        title: likely,
+        commitmentKind: 'meeting',
+        durationMinutes: DEFAULT_DURATION_MINUTES.meeting,
+        ...(await askWhatTime(userId, text, likely, now, null)),
+        summary: likely,
+      }
+    }
+
     if (likely && !problem?.message?.includes('could not read')) {
       const hour = now.getHours()
       const window = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'
@@ -1653,6 +1828,31 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
   const prep = prepDue(text, when, now)
   const dueAt = prep ?? when.date
 
+  // "meeting tomorrow", "dentist friday": a day, and an appointment, but no
+  // time — and nothing in history says when these usually are. Ask, with the
+  // times free that day, rather than book 9am and hope.
+  if (
+    when.timeAssumed &&
+    !when.window &&
+    !when.deadline &&
+    !when.meal &&
+    !prep &&
+    APPOINTMENT_WORD.test(title) &&
+    learned?.hour == null &&
+    learned?.lastHour == null
+  ) {
+    return {
+      ...base,
+      kind: 'needsTime',
+      title,
+      commitmentKind: 'meeting',
+      durationMinutes: learned?.durationMinutes ?? DEFAULT_DURATION_MINUTES.meeting,
+      placeLabel: parsedPlace ?? learned?.placeLabel ?? null,
+      ...(await askWhatTime(userId, text, title, now, when.date)),
+      summary: title,
+    }
+  }
+
   if (learned?.because) assumptions.push(learned.because)
   if (prep) assumptions.push(prepNote(prep))
   else if (when.timeAssumed && !when.window) assumptions.push('No time given, so 9am.')
@@ -1661,7 +1861,9 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
   const ignored = findMalformedTime(text)
   if (ignored) assumptions.push(`I could not read "${ignored}" as a time.`)
 
-  const kind = (learned?.kind as CommitmentKind) ?? 'task'
+  // "meeting with the builder", "dentist": an appointment, an hour long and
+  // somewhere to be, unless history says otherwise.
+  const kind = (learned?.kind as CommitmentKind) ?? (APPOINTMENT_WORD.test(title) ? 'meeting' : 'task')
   const duration =
     when.durationMinutes ?? learned?.durationMinutes ?? DEFAULT_DURATION_MINUTES[kind]
 
@@ -1683,5 +1885,6 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     // "meeting tomorrow": a day, a 9am nobody said, and a word or two. A
     // careful reading may well ask what time instead.
     unsure: when.timeAssumed && !when.window && !when.deadline && !prep && title.split(/\s+/).length <= 2,
+    deadline: Boolean(when.deadline),
   }
 }

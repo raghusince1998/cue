@@ -75,7 +75,22 @@ interface Plan {
   readBy?: 'rules' | 'ai'
   /** When the answer is a question: what to ask, and answers to tap. */
   question?: string | null
-  choices?: string[]
+  /** Each sets the line to how it reads with that answer. */
+  choices?: Choice[]
+  /** Better plans on offer, applied on save only if accepted. */
+  suggestions?: Suggestion[]
+}
+
+interface Choice {
+  label: string
+  line: string
+}
+
+interface Suggestion {
+  id: string
+  text: string
+  action: string
+  warning?: boolean
 }
 
 interface Saved extends Plan {
@@ -87,6 +102,10 @@ interface Saved extends Plan {
   savedTrip?: { id: string; placeLabel: string; startsOn: string; endsOn: string; created?: boolean } | null
   waiting?: { id: string; title: string }[]
   scheduledOnTrip?: UpcomingTrip | null
+  /** Added alongside because a suggestion was accepted: undo takes them too. */
+  extras?: { kind: string; id: string }[]
+  /** What was accepted, to say so once saved. */
+  acceptedActions?: string[]
 }
 
 interface Frequent {
@@ -151,6 +170,9 @@ export function QuickAdd({
   const [reread, setReread] = useState(0)
   /** A careful reading of an unsure line is on its way. */
   const [reading, setReading] = useState(false)
+  /** Suggestions accepted for this line, by id. A new line starts with none. */
+  const [accepted, setAccepted] = useState<string[]>([])
+  useEffect(() => setAccepted([]), [text])
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -226,8 +248,10 @@ export function QuickAdd({
         }
         if (plan?.trip && !plan.trip.existing) body.trip = choices.trip
         if (plan?.upcomingTrip) body.onTrip = choices.onTrip
+        const offered = (plan?.suggestions ?? []).filter((s) => accepted.includes(s.id))
+        if (offered.length) body.accept = offered.map((s) => s.id)
         const result = await api<Saved>('/quick', { method: 'POST', body })
-        setSaved({ ...result, typed: text })
+        setSaved({ ...result, typed: text, acceptedActions: offered.map((s) => s.action) })
         setText('')
         setPlan(null)
         setChoices(NO_CHOICES)
@@ -254,7 +278,7 @@ export function QuickAdd({
         setBusy(false)
       }
     },
-    [text, onSaved, plan, choices],
+    [text, onSaved, plan, choices, accepted],
   )
 
   async function undo() {
@@ -265,6 +289,10 @@ export function QuickAdd({
       const alsoTrip = saved.savedTrip?.created ? `?alsoTrip=${saved.savedTrip.id}` : ''
       for (const id of saved.ids ?? [saved.id]) {
         await api(`/quick/${saved.kind}/${id}${alsoTrip}`, { method: 'DELETE' })
+      }
+      // And whatever was accepted alongside it.
+      for (const extra of saved.extras ?? []) {
+        await api(`/quick/${extra.kind}/${extra.id}`, { method: 'DELETE' }).catch(() => undefined)
       }
       // The line as it was typed, time and amount included, to fix and save again.
       setText(saved.typed ?? saved.title)
@@ -354,10 +382,19 @@ export function QuickAdd({
             <span className="quick-kind">{KIND_WORD.needsPerson}</span>
             <strong>{plan.title}</strong>
             <p className="muted small">
-              {plan.people.length} people match &ldquo;{plan.personName}&rdquo;.
+              {plan.question
+                ? plan.choices?.length
+                  ? plan.question
+                  : `${plan.question} Type their name in place of “${plan.personName}”.`
+                : `${plan.people.length} people match “${plan.personName}”.`}
             </p>
             <div className="quick-frequent">
-              {plan.people.map((person) => (
+              {plan.choices?.map((c) => (
+                <button key={c.line} className="chip" onClick={() => setText(c.line)}>
+                  {c.label}
+                </button>
+              ))}
+              {!plan.choices?.length && plan.people.map((person) => (
                 <button
                   key={person.id}
                   className="chip"
@@ -397,9 +434,14 @@ export function QuickAdd({
             </ul>
             <p className="muted small">{plan.question ?? 'When is it?'}</p>
             <div className="quick-frequent">
-              {(plan.choices?.length ? plan.choices : plan.question ? [] : WHEN_CHIPS).map((c) => (
-                <button key={c} className="chip" onClick={() => setText((t) => `${t} ${c}`)}>
-                  {c}
+              {(plan.choices?.length
+                ? plan.choices
+                : plan.question
+                  ? []
+                  : WHEN_CHIPS.map((c) => ({ label: c, line: `${text.trim()} ${c}` }))
+              ).map((c) => (
+                <button key={c.line} className="chip" onClick={() => setText(c.line)}>
+                  {c.label}
                 </button>
               ))}
             </div>
@@ -408,7 +450,7 @@ export function QuickAdd({
       )}
 
       {/* What it will do, before it does it. */}
-      {plan && !needsTime && !saved && (
+      {plan && !needsTime && !needsPerson && !saved && (
         <div className={`quick-plan${plan.problem ? ' is-problem' : ''}`}>
           {plan.problem ? (
             <>
@@ -435,6 +477,27 @@ export function QuickAdd({
             </>
           )}
         </div>
+      )}
+
+      {/* A better plan, offered: nothing changes unless it is accepted. */}
+      {plan && ready && !saved && (plan.suggestions ?? []).length > 0 && (
+        <ul className="quick-suggestions" aria-label="Suggestions">
+          {plan.suggestions!.map((s) => {
+            const on = accepted.includes(s.id)
+            return (
+              <li key={s.id} className={`quick-suggestion${s.warning ? ' is-warning' : ''}${on ? ' is-on' : ''}`}>
+                <span>{s.text}</span>
+                <button
+                  className={on ? 'small-btn' : 'ghost small-btn'}
+                  aria-pressed={on}
+                  onClick={() => setAccepted((a) => (on ? a.filter((x) => x !== s.id) : [...a, s.id]))}
+                >
+                  {on ? `✓ ${s.action}` : s.action}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
       )}
 
       {/* What the sentence already knows about: ask before attaching. */}
@@ -481,6 +544,9 @@ export function QuickAdd({
             </strong>
             {saved.assumptions.length > 0 && (
               <p className="muted small">{saved.assumptions.join(' ')}</p>
+            )}
+            {(saved.acceptedActions ?? []).length > 0 && (
+              <p className="muted small">Also done: {saved.acceptedActions!.join(' · ')}.</p>
             )}
             {saved.savedTrip && saved.kind === 'commitment' && (
               <p className="muted small">

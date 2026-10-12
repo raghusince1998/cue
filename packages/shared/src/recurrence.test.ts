@@ -393,7 +393,8 @@ test('describeRecurrence reads back the way someone would say it', () => {
     [{ freq: 'weekly', interval: 1, byWeekday: [1, 2, 3, 4, 5] }, 'Every weekday'],
     [{ freq: 'monthly', interval: 1, byMonthDay: 1 }, 'Every month on the 1st'],
     [{ freq: 'monthly', interval: 3, byMonthDay: 22 }, 'Every 3 months on the 22nd'],
-    [{ freq: 'yearly', interval: 1, byMonthDay: 14 }, 'Every year on the 14th'],
+    // The month, said: a yearly date is a date.
+    [{ freq: 'yearly', interval: 1, byMonthDay: 14 }, 'Every year on 14 Mar'],
     [{ freq: 'monthly', interval: 1, byMonthDay: 31 }, 'Every month on the last day'],
     [
       { freq: 'monthly', interval: 1, byWeekday: [2], setPos: 2 },
