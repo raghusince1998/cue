@@ -159,7 +159,8 @@ function timeIn(text: string, near?: RegExp): { h: number; m: number } | null {
     return h <= 23 && min <= 59 ? { h, m: min } : null
   }
   if (near) {
-    const m = new RegExp(String.raw`(?:${near.source})\s*(?:time)?\s*(?:is|at|:|-)?\s*${T}`, 'i').exec(text)
+    // "Departure* : 17:00", "Dep 06:15", "Reporting time 21:30".
+    const m = new RegExp(String.raw`(?:${near.source})[\s*]*(?:time)?[\s*]*(?:is|at|:|-)?\s*${T}`, 'i').exec(text)
     const t = read(m)
     if (t) return t
   }
@@ -180,13 +181,18 @@ const provider = (text: string) => PLATFORMS.find(([re]) => re.test(text))?.[1] 
 
 function train(text: string, now: Date): ParsedBooking | null {
   const pnr = /\bPNR\s*(?:no\.?|number)?\s*[:-]?\s*(\d{10})\b/i.exec(text)?.[1] ?? null
-  const trn = /\b(?:TRN|TRAIN)\s*(?:no\.?|number)?\s*[:-]?\s*(\d{5})\b/i.exec(text)?.[1] ?? null
+  // "TRN:12951" in a message, "Train No./Name : 12951/MUMBAI RAJDHANI" in the e-ticket.
+  const trn =
+    /\b(?:TRN|TRAIN)\s*(?:no\.?|number)?\s*[:-]?\s*(\d{5})\b/i.exec(text)?.[1] ?? /\btrain\b[^\d]{0,20}?(\d{5})\b/i.exec(text)?.[1] ?? null
   if (!pnr || (!trn && !/\b(?:irctc|doj|train)\b/i.test(text))) return null
   const doj =
     /\bDOJ\s*[:-]?\s*([^,;]+)/i.exec(text)?.[1] ?? /\b(?:date of journey|journey date)\s*[:-]?\s*([^,;]+)/i.exec(text)?.[1] ?? text
   const date = datesIn(doj, now)[0] ?? datesIn(text, now)[0]
   if (!date) return null
-  const route = /\b([A-Z]{1,5})\s*(?:-|to|→)\s*([A-Z]{1,5})\b/.exec(text.replace(/\bPNR\b|\bTRN\b|\bDOJ\b|\bDP\b/g, ' '))
+  // "From : MUMBAI CENTRAL (MMCT) … To : NEW DELHI (NDLS)" in the e-ticket, "MMCT-NDLS" in a message.
+  const route =
+    /\bfrom\b[\s:]*[^()]{0,40}\(([A-Z]{2,5})\)[\s\S]{0,200}?\bto\b[\s:]*[^()]{0,40}\(([A-Z]{2,5})\)/i.exec(text) ??
+    /\b([A-Z]{1,5})\s*(?:-|to|→)\s*([A-Z]{1,5})\b/.exec(text.replace(/\bPNR\b|\bTRN\b|\bDOJ\b|\bDP\b/g, ' '))
   const fromCode = route?.[1] ?? null
   const toCode = route?.[2] ?? null
   const from = fromCode ? (STATIONS[fromCode]?.[0] ?? fromCode) : null
@@ -226,7 +232,9 @@ function flight(text: string, now: Date): ParsedBooking | null {
   if (!(fl || named) || !flighty) return null
   const date = datesIn(text, now)[0]
   if (!date) return null
-  const route = /\b([A-Z]{3})\s*(?:-|–|—|→|to)\s*([A-Z]{3})\b/.exec(text)
+  // "BLR-DEL" in a message, "Bengaluru (BLR) → Delhi (DEL)" in an itinerary.
+  const route =
+    /\b([A-Z]{3})\s*(?:-|–|—|→|to)\s*([A-Z]{3})\b/.exec(text) ?? /\(([A-Z]{3})\)[^()]{0,40}?\(([A-Z]{3})\)/.exec(text)
   const fromCode = route && AIRPORTS[route[1]!] ? route[1]! : null
   const toCode = route && AIRPORTS[route[2]!] ? route[2]! : null
   const from = fromCode ? AIRPORTS[fromCode]![0] : null

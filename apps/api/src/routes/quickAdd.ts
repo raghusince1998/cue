@@ -64,6 +64,7 @@ import { addOwed } from '../services/owed.ts'
 import { createItem, itemMentionedIn, updateItem } from '../services/trackers.ts'
 import { createBill } from '../services/bills.ts'
 import { recordDelivery } from '../services/deliveries.ts'
+import { bookingReminderTimes, webCheckInAt } from '../services/bookings.ts'
 import {
   findLinks,
   knownPlaces,
@@ -403,17 +404,8 @@ export async function quickAddRoutes(app: FastifyInstance) {
         'commitment',
       )
       if (plan.booking) {
-        // Ahead of time: the first of these still to come.
-        const now = Date.now()
-        const lead = dueAt.getTime() - plan.booking.remindBeforeMinutes * 60_000
-        const fireAt = [lead, dueAt.getTime() - 30 * 60_000, dueAt.getTime()].find((t) => t > now) ?? dueAt.getTime()
-        await scheduleFirstReminder({ orgId, commitmentId: created.id, fireAt: new Date(fireAt) }, tx)
-        // An early start gets a word the evening before, too.
-        if (['train', 'flight', 'bus'].includes(plan.booking.type) && dueAt.getHours() < 11) {
-          const eve = new Date(dueAt.getFullYear(), dueAt.getMonth(), dueAt.getDate() - 1, 20, 0)
-          if (eve.getTime() > now && eve.getTime() < fireAt) {
-            await scheduleFirstReminder({ orgId, commitmentId: created.id, fireAt: eve }, tx)
-          }
+        for (const at of bookingReminderTimes(dueAt, plan.booking.type, plan.booking.remindBeforeMinutes)) {
+          await scheduleFirstReminder({ orgId, commitmentId: created.id, fireAt: at }, tx)
         }
       } else {
         await scheduleFirstReminder({ orgId, commitmentId: created.id, fireAt: dueAt }, tx)
@@ -424,8 +416,8 @@ export async function quickAddRoutes(app: FastifyInstance) {
     // A flight: web check-in opens about two days ahead, and is its own job.
     let checkInId: string | null = null
     if (plan.booking?.type === 'flight') {
-      const opens = new Date(dueAt.getTime() - 48 * 3_600_000)
-      if (opens.getTime() > Date.now() + 30 * 60_000) {
+      const opens = webCheckInAt(dueAt)
+      if (opens) {
         const checkIn = takeFirst(
           await db
             .insert(schema.commitments)

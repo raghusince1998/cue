@@ -98,6 +98,7 @@ export async function beginConsent(
   provider: Provider,
   orgId: string,
   userId: string,
+  purpose: 'calendar' | 'mail' = 'calendar',
 ): Promise<string> {
   const config = configFor(provider)
   if (!config.clientId || !config.clientSecret) {
@@ -117,6 +118,7 @@ export async function beginConsent(
     orgId,
     userId,
     codeVerifier,
+    purpose,
     expiresAt: new Date(Date.now() + STATE_TTL_MS),
   })
 
@@ -124,7 +126,11 @@ export async function beginConsent(
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
     response_type: 'code',
-    scope: config.scopes.join(' '),
+    // Mail is asked for on its own — read-only mail and nothing else — never by surprise.
+    scope: (purpose === 'mail'
+      ? [...config.scopes.filter((s) => s !== config.calendarScope), config.mailScope]
+      : config.scopes
+    ).join(' '),
     state,
     code_challenge: challenge,
     code_challenge_method: 'S256',
@@ -182,7 +188,7 @@ export async function completeConsent(
   provider: Provider,
   state: string,
   code: string,
-): Promise<{ accountId: string; email: string; userId: string }> {
+): Promise<{ accountId: string; email: string; userId: string; purpose: string }> {
   const config = configFor(provider)
 
   const [pending] = await db
@@ -230,9 +236,17 @@ export async function completeConsent(
   //
   // Microsoft returns the scope without its resource prefix, so the tail is
   // what gets compared rather than the whole URI.
-  const wanted = config.calendarScope.split('/').pop()!
   const granted = (body.scope ?? '').split(' ')
-  if (body.scope && !granted.some((s) => s === config.calendarScope || s.endsWith(wanted))) {
+  const has = (full: string) => granted.some((s) => s === full || s.endsWith(full.split('/').pop()!))
+  const forMail = pending.purpose === 'mail'
+  if (body.scope && forMail && !has(config.mailScope)) {
+    throw new OAuthError(
+      'Email access was not granted — tick the box to let Cue read your email, and connect again.',
+      'mail_scope_missing',
+      true,
+    )
+  }
+  if (body.scope && !forMail && !has(config.calendarScope)) {
     throw new OAuthError(
       'Calendar access was not granted — Cue needs permission to read your calendar.',
       'scope_missing',
@@ -257,24 +271,33 @@ export async function completeConsent(
   }
 
   // Reconnecting the same account updates it rather than stacking duplicates,
-  // and clears whatever error made them reconnect in the first place.
+  // and clears whatever error made them reconnect in the first place. Mail is
+  // switched on by asking for it, and never switched off by a calendar reconnect.
+  const withMail = forMail ? { ...values, mailEnabled: true, mailError: null } : values
   const [row] = await db
     .insert(schema.oauthAccounts)
-    .values(values)
+    .values(withMail)
     .onConflictDoUpdate({
       target: [
         schema.oauthAccounts.userId,
         schema.oauthAccounts.provider,
         schema.oauthAccounts.email,
       ],
-      set: values,
+      set: withMail,
     })
     .returning({ id: schema.oauthAccounts.id })
 
-  return { accountId: row!.id, email, userId: pending.userId }
+  return { accountId: row!.id, email, userId: pending.userId, purpose: pending.purpose }
 }
 
 export type AccountRow = typeof schema.oauthAccounts.$inferSelect
+
+/** Whether this account was given calendar access, or only connected to read email. */
+export function hasCalendar(account: Pick<AccountRow, 'provider' | 'scope'>): boolean {
+  if (!account.scope) return true
+  const tail = configFor(account.provider as Provider).calendarScope.split('/').pop()!
+  return account.scope.split(' ').some((s) => s.endsWith(tail))
+}
 
 /**
  * A usable access token, refreshing first if the stored one is spent.
@@ -301,8 +324,12 @@ export async function freshAccessToken(account: AccountRow): Promise<string> {
     client_secret: config.clientSecret,
     refresh_token: decryptSecret(account.refreshTokenEncrypted),
     grant_type: 'refresh_token',
-    // Microsoft requires the scope again on refresh; Google ignores it.
-    scope: config.scopes.join(' '),
+    // Microsoft requires the scope again on refresh, and only what was granted;
+    // Google ignores it.
+    scope: [
+      ...config.scopes.filter((s) => s !== config.calendarScope || hasCalendar(account)),
+      ...(account.mailEnabled ? [config.mailScope] : []),
+    ].join(' '),
   })
 
   const body = (await res.json().catch(() => ({}))) as TokenResponse

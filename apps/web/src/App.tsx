@@ -174,13 +174,21 @@ export default function App() {
   // outcome. Opening Settings straight away is the difference between "it
   // worked" and being dropped back on Today wondering whether it did.
   const [settingsOpen, setSettingsOpen] = useState(
-    () => new URLSearchParams(window.location.search).has('connected'),
+    () => {
+      const q = new URLSearchParams(window.location.search)
+      return q.has('connected') || q.has('settings')
+    },
   )
   const [searchOpen, setSearchOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [addOptions, setAddOptions] = useState<AddOptions>({})
   const location = useLocation()
   const navigate = useNavigate()
+
+  // "Connect email" on a Today card: Settings, open at that section.
+  useEffect(() => {
+    if (new URLSearchParams(location.search).has('settings')) setSettingsOpen(true)
+  }, [location.search])
   /** Set while turning an old /log link into the sheet, so the redirect that
    *  follows does not close the sheet it just opened. */
   const openedFromLink = useRef(false)

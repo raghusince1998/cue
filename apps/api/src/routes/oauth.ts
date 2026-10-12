@@ -10,6 +10,7 @@ import {
   completeConsent,
   OAuthError,
   revokeAccount,
+  hasCalendar,
   type AccountRow,
 } from '../services/oauthConnect.ts'
 import { configFor, isProvider, providerConfigured, PROVIDERS, type Provider } from '../services/oauthProviders.ts'
@@ -37,6 +38,11 @@ function accountDTO(row: AccountRow, calendarCount = 0) {
     createdAt: row.createdAt.toISOString(),
     /** How many of its calendars are being read, so the list can say so. */
     calendarCount,
+    /** False for an account connected only to read email. */
+    calendarAccess: hasCalendar(row),
+    mailEnabled: row.mailEnabled,
+    mailCheckedAt: row.mailCheckedAt?.toISOString() ?? null,
+    mailError: row.mailError,
   }
 }
 
@@ -107,8 +113,12 @@ export async function oauthRoutes(app: FastifyInstance) {
         message: `This server has no ${config.label} credentials set.`,
       })
     }
+    // Reading email is its own request, so the consent screen says exactly that.
+    const { purpose } = z
+      .object({ purpose: z.enum(['calendar', 'mail']).default('calendar') })
+      .parse(req.body ?? {})
     try {
-      return { url: await beginConsent(provider, orgId, userId) }
+      return { url: await beginConsent(provider, orgId, userId, purpose) }
     } catch (err) {
       if (err instanceof OAuthError) {
         return reply.code(400).send({ error: err.code, message: err.message })
@@ -147,8 +157,8 @@ export async function oauthRoutes(app: FastifyInstance) {
     if (!query.data.code || !query.data.state) return reply.redirect(back('failed'))
 
     try {
-      await completeConsent(provider, query.data.state, query.data.code)
-      return reply.redirect(back('connected'))
+      const done = await completeConsent(provider, query.data.state, query.data.code)
+      return reply.redirect(back(done.purpose === 'mail' ? 'mail_connected' : 'connected'))
     } catch (err) {
       if (err instanceof OAuthError) {
         req.log.warn({ provider, code: err.code }, 'consent failed')

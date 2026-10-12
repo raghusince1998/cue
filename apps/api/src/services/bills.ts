@@ -303,3 +303,37 @@ export function startBillWorker(intervalMs = 15 * 60_000) {
   console.log(`[bills] bill reminder worker checking every ${intervalMs / 60_000} min`)
   return () => clearInterval(handle)
 }
+
+/**
+ * A statement or bill notice, onto the bill it belongs to: this month's
+ * amount and due date on the same card or connection, or a new bill the
+ * first time. A notice older than what is already known changes nothing.
+ */
+export async function billFromNotice(
+  orgId: string,
+  userId: string,
+  notice: { name: string; category: string; amountPaise: number; dueOn: string },
+): Promise<{ bill: BillDTO; created: boolean } | null> {
+  const [existing] = await db
+    .select({ id: b.id, dueOn: b.dueOn, lastPaidOn: b.lastPaidOn })
+    .from(b)
+    .where(and(eq(b.userId, userId), eq(b.active, true), sql`lower(${b.name}) = lower(${notice.name})`))
+    .limit(1)
+  if (!existing) {
+    const bill = await createBill(orgId, userId, {
+      name: notice.name,
+      category: notice.category,
+      amountPaise: notice.amountPaise,
+      dueOn: notice.dueOn,
+      repeat: 'monthly',
+    })
+    return { bill, created: true }
+  }
+  // Already paid for that cycle, or already told about a later one.
+  if (notice.dueOn < existing.dueOn || (existing.lastPaidOn && notice.dueOn <= existing.lastPaidOn)) return null
+  const bill = await updateBill(userId, existing.id, {
+    amountPaise: notice.amountPaise,
+    ...(notice.dueOn !== existing.dueOn ? { dueOn: notice.dueOn } : {}),
+  })
+  return bill ? { bill, created: false } : null
+}

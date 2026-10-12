@@ -35,6 +35,7 @@ export {
 import { CLAIM_STATUSES as CLAIMS, EXPENSE_CATEGORY_KEYS as EXPENSE_KEYS } from './expenses.ts'
 export { owedMessage, parseOwed, splitEqually, type OwedLine, type ParsedOwed } from './owed.ts'
 export { leadLabel, parseBooking, type BookingType, type ParsedBooking } from './bookings.ts'
+export { parseDueNotice, type DueNotice } from './dueNotices.ts'
 export {
   DELIVERY_STATUSES,
   STATUS_LABEL as DELIVERY_STATUS_LABEL,

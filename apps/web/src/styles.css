@@ -5674,3 +5674,23 @@ a.link-btn:hover {
   align-items: center;
   gap: 6px;
 }
+
+/* ---- Reading email --------------------------------------------------- */
+
+.mail-account {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.mail-finds {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}

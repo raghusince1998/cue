@@ -800,9 +800,27 @@ export const oauthAccounts = pgTable(
     scope: text('scope'),
     status: text('status').notNull().default('active'),
     lastError: text('last_error'),
+    /** Reading bookings, parcels and bills from this account's email. */
+    mailEnabled: boolean('mail_enabled').notNull().default(false),
+    mailCheckedAt: timestamp('mail_checked_at', { withTimezone: true }),
+    mailError: text('mail_error'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('oauth_accounts_user_idx').on(t.userId, t.status)],
+)
+
+/** A message already read, and what was found in it. Never its contents. */
+export const mailSeen = pgTable(
+  'mail_seen',
+  {
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => oauthAccounts.id, { onDelete: 'cascade' }),
+    messageId: text('message_id').notNull(),
+    found: text('found'),
+    seenAt: timestamp('seen_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.accountId, t.messageId] })],
 )
 
 /**
@@ -822,6 +840,8 @@ export const oauthStates = pgTable('oauth_states', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   codeVerifier: text('code_verifier').notNull(),
+  /** 'calendar', or 'mail' when reading email was asked for as well. */
+  purpose: text('purpose').notNull().default('calendar'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 })

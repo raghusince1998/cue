@@ -24,6 +24,8 @@ interface Account {
   createdAt: string
   /** How many of its calendars Cue is reading. */
   calendarCount: number
+  /** False when it was connected only to read email. */
+  calendarAccess?: boolean
 }
 
 interface Calendar {
@@ -96,10 +98,12 @@ export function ConnectedCalendars({
   const load = useCallback(async () => {
     try {
       const r = await api<{ providers: ProviderInfo[]; accounts: Account[] }>('/oauth/status')
+      // An account connected only to read email has no calendars to offer.
+      const withCalendars = r.accounts.filter((a) => a.calendarAccess !== false)
       setProviders(r.providers)
-      setAccounts(r.accounts)
+      setAccounts(withCalendars)
       setError(null)
-      return r.accounts
+      return withCalendars
     } catch (err) {
       setError(messageOf(err))
       return []
@@ -129,7 +133,8 @@ export function ConnectedCalendars({
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const code = params.get('connected')
-    if (!code) return
+    // Reading email has its own section and its own outcomes.
+    if (!code || code.startsWith('mail')) return
 
     setOutcome(OUTCOME[code] ?? { text: 'That did not work. Try connecting again.', bad: true })
     // The answer to "did it connect?" is the first thing to see, not

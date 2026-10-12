@@ -4,6 +4,7 @@ import { WINDOW_LABELS, type CommitmentDTO } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
 import { UsesPicker } from '../components/UsesPicker.tsx'
 import { Deliveries } from '../components/Deliveries.tsx'
+import { ConnectMailCard } from '../components/ConnectMailCard.tsx'
 import { api } from '../lib/api.ts'
 import { dayBounds, dayLabel, formatSpan, overdueBy } from '../lib/time.ts'
 import { enablePush, pushState, sendTestPush } from '../lib/push.ts'
@@ -751,6 +752,7 @@ export default function Today() {
             />
           </section>
         )}
+        {me && (me.uses.length > 0 || usesAsked) && <ConnectMailCard />}
         {shared?.original && (
           <details className="shared-original">
             <summary className="muted small">The whole message</summary>

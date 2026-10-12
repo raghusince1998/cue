@@ -29,6 +29,8 @@ export interface ProviderConfig {
   scopes: string[]
   /** The one scope without which there is nothing to read. */
   calendarScope: string
+  /** Read-only mail, asked for only when reading email is switched on. */
+  mailScope: string
   /** Provider-specific authorisation parameters. */
   extraAuthParams: Record<string, string>
   clientId: string
@@ -53,6 +55,7 @@ export function configFor(provider: Provider): ProviderConfig {
       // access_type parameter. Without it the connection dies after an hour.
       scopes: ['openid', 'email', 'offline_access', 'https://graph.microsoft.com/Calendars.Read'],
       calendarScope: 'https://graph.microsoft.com/Calendars.Read',
+      mailScope: 'https://graph.microsoft.com/Mail.Read',
       // Asking every time is the only way to be sure of a refresh token on a
       // reconnect, exactly as with Google.
       extraAuthParams: { prompt: 'consent', response_mode: 'query' },
@@ -70,6 +73,7 @@ export function configFor(provider: Provider): ProviderConfig {
     revokeEndpoint: 'https://oauth2.googleapis.com/revoke',
     scopes: ['openid', 'email', 'https://www.googleapis.com/auth/calendar.readonly'],
     calendarScope: 'https://www.googleapis.com/auth/calendar.readonly',
+    mailScope: 'https://www.googleapis.com/auth/gmail.readonly',
     // offline + consent together are what actually yield a refresh token.
     // Google returns one only on a fresh grant, so somebody reconnecting after
     // a revoke would otherwise get an account that works for an hour and then

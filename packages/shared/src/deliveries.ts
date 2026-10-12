@@ -87,7 +87,19 @@ const pad = (n: number) => String(n).padStart(2, '0')
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
 /** The day it is expected, looking ahead: a delivery date is never in the past. */
+/**
+ * The day it is expected. Said next to "arriving" or "delivered by" first: an
+ * email also carries the day it was ordered, which is not when it comes.
+ */
 function expectedDay(text: string, now: Date): string | null {
+  for (const m of text.matchAll(/\b(?:arriv\w*|deliver\w*|expected|estimated|eta|reach(?:es)?)\b[^.]{0,40}/gi)) {
+    const d = dayIn(m[0], now)
+    if (d) return d
+  }
+  return dayIn(text, now)
+}
+
+function dayIn(text: string, now: Date): string | null {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const ahead = (month: number, day: number) => {
     const d = new Date(today.getFullYear(), month, day)
@@ -157,7 +169,8 @@ function itemOf(text: string, store: string | null): string | null {
   const ref = String.raw`(?:\s*(?:#|no\.?|id)?\s*[A-Z0-9][A-Z0-9-]{5,})?`
   const m =
     new RegExp(String.raw`\b(?:package|order|shipment|parcel)${ref}\s+(?:with|for|of|containing)\s+['"‘“]?(.+?)['"’”]?\s+(?:will|has|is|was|from|with|are|have)\b`, 'i').exec(text) ??
-    /^\s*(?:out for delivery|shipped|delivered|dispatched|arriving (?:today|tomorrow)|order (?:placed|confirmed))\s*[:-]\s*(?:your\s+)?(.+?)\s+(?:from\s+\S+\s+)?(?:will|has|is|was|with order|with)\b/i.exec(text)
+    // Anywhere, not only at the start: in an email the subject line comes first.
+    /\b(?:out for delivery|shipped|delivered|dispatched|arriving (?:today|tomorrow)|order (?:placed|confirmed))\s*[:-]\s*(?:your\s+)?(.+?)\s+(?:from\s+\S+\s+)?(?:will|has|is|was|with order|with)\b/i.exec(text)
   if (!m) return null
   let item = m[1]!
     .replace(/\s+from\s+\S+$/i, '')

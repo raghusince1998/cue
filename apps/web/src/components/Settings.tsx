@@ -3,6 +3,7 @@ import { CalendarFeeds } from './CalendarFeeds.tsx'
 import { ProfilePhoto } from './ProfilePhoto.tsx'
 import { InfoTip } from './InfoTip.tsx'
 import { UsesPicker } from './UsesPicker.tsx'
+import { MailReading } from './MailReading.tsx'
 import { Modal } from './Modal.tsx'
 import { TemplateManager } from './QuickMessage.tsx'
 import { api } from '../lib/api.ts'
@@ -250,6 +251,10 @@ export function Settings({ onClose }: { onClose: () => void }) {
       <hr className="rule" />
       <span className="label-text">What you use Cue for</span>
       <UsesPicker compact />
+
+      <hr className="rule" />
+      <span className="label-text">Bookings, parcels &amp; bills from your email</span>
+      <MailReading />
 
       <hr className="rule" />
 

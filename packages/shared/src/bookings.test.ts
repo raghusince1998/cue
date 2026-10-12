@@ -70,3 +70,25 @@ test('not a booking', () => {
   assert.equal(parseBooking('interview at Infosys friday 11am', now), null)
   assert.equal(parseBooking('Your Meesho order for Women Kurti will be delivered by 16 Oct.', now), null)
 })
+
+test('the same bookings as emails lay them out', () => {
+  const ers = parseBooking(
+    `Electronic Reservation Slip (ERS) PNR No. : 2345678901 Train No./Name : 12951/MUMBAI RAJDHANI Class : AC 3 TIER (3A) Quota : GENERAL (GN)
+     Booking Date : 12-Oct-2026 10:15:32 HRS From : MUMBAI CENTRAL (MMCT) Date of Journey : 17-Oct-2026 To : NEW DELHI (NDLS)
+     Boarding At : MUMBAI CENTRAL (MMCT) Departure* : 17:00 17-Oct-2026 Arrival* : 08:32 18-Oct-2026 Passenger Details 1 ASHA RAO 34 F CNF/B2/45/LOWER`,
+    now,
+  )!
+  assert.equal(ers.type, 'train')
+  assert.equal(ers.title, 'Train 12951 · Mumbai Central → New Delhi')
+  assert.equal(local(ers.startsAt), '2026-10-17 17:00')
+  assert.equal(ers.city, 'Delhi')
+  assert.equal(ers.notes, 'PNR 2345678901 · 3A · B2 45')
+
+  const itinerary = parseBooking(
+    `Booking Confirmed | IndiGo. Your PNR is X7K2LM. Bengaluru (BLR) → Delhi (DEL) Flight 6E 2134 Sun, 18 Oct 2026 Departure 06:15 Terminal 1 Arrival 09:05 Terminal 2. Web check-in opens 48 hours before departure.`,
+    now,
+  )!
+  assert.equal(itinerary.title, 'Flight 6E 2134 · Bengaluru → Delhi')
+  assert.equal(local(itinerary.startsAt), '2026-10-18 06:15')
+  assert.equal(itinerary.ref, 'X7K2LM')
+})

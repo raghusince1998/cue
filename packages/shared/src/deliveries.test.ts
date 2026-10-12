@@ -73,3 +73,13 @@ test('not a parcel: plans that only mention delivering or an order', () => {
   assert.equal(parseDelivery('call Ravi tomorrow 4pm', now), null)
   assert.equal(parseDelivery('Your Flipkart order OD430012345678901234 has been cancelled.', now)!.status, 'cancelled')
 })
+
+test('a shipping email: the arriving day, not the day it was ordered', () => {
+  const email = parseDelivery(
+    'Your Amazon.in order #402-1234567-1234567 has shipped. Ordered on 10 October 2026. Arriving Wednesday, October 14. Prestige Electric Kettle 1.5L. Order Total: ₹1,299.00. Track package: https://amazon.in/progress-tracker/package?orderId=402-1234567-1234567',
+    now,
+  )!
+  assert.equal(email.status, 'shipped')
+  assert.equal(email.expectedOn, '2026-10-14')
+  assert.equal(email.codPaise, null, 'an order total is not cash to pay')
+})
