@@ -49,6 +49,31 @@ const DAYS: { english: string; words: string }[] = [
   { english: 'today', words: 'aaj|आज' },
 ]
 
+/**
+ * How often: "har sunday", "roz", "har mahine". Only "har" in front of a day
+ * or a unit of time — on its own it is too short a word to trust.
+ */
+const REPEATS: { english: string; pattern: RegExp }[] = [
+  { english: ' every day ', pattern: new RegExp(String.raw`(?<!${LETTER})(?:har\s+(?:roz|din)|roz(?:aana|ana)?|rozana|daily|हर\s+(?:रोज़?|दिन)|रोज़?(?:ाना)?)(?!${LETTER})`, 'giu') },
+  { english: ' every week ', pattern: new RegExp(String.raw`(?<!${LETTER})(?:har\s+(?:hafte|hafta|week)|हर\s+हफ़?्ते)(?!${LETTER})`, 'giu') },
+  { english: ' every month ', pattern: new RegExp(String.raw`(?<!${LETTER})(?:har\s+(?:mahine|mahina|month)|हर\s+महीने)(?!${LETTER})`, 'giu') },
+  {
+    english: ' every ',
+    pattern: new RegExp(String.raw`(?<!${LETTER})(?:har|हर)\s+(?=(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday|ravivar|somvar|mangalvar|budhvar|guruvar|shukravar|shanivar)(?!${LETTER}))`, 'giu'),
+  },
+]
+
+/** The Hindi weekday names, to the English the parser reads. */
+const WEEKDAY_NAMES: [string, string][] = [
+  ['ravivar|itvaar|रविवार', 'sunday'],
+  ['somvar|सोमवार', 'monday'],
+  ['mangalvar|मंगलवार', 'tuesday'],
+  ['budhvar|बुधवार', 'wednesday'],
+  ['guruvar|veervar|गुरुवार', 'thursday'],
+  ['shukravar|शुक्रवार', 'friday'],
+  ['shanivar|शनिवार', 'saturday'],
+]
+
 /** "9 baje", "9:30 baje", "९ बजे" — after digits have been made Western. */
 const BAJE = new RegExp(
   String.raw`(?<!\d)(\d{1,2})(?:[:.](\d{2}))?\s*(?:baje|बजे)(?!${LETTER})`,
@@ -107,6 +132,15 @@ export function normalizeHinglish(input: string): string {
   }
 
   for (const day of DAYS) text = text.replace(wordKo(day.words), ` ${day.english} `)
+  for (const [words, english] of WEEKDAY_NAMES) text = text.replace(wordKo(words), ` ${english} `)
+  for (const repeat of REPEATS) text = text.replace(repeat.pattern, repeat.english)
 
   return text.replace(/\s{2,}/g, ' ').trim()
 }
+
+/**
+ * Hindi words left in a title once the time words are gone: "sabzi lana",
+ * "mom ko call karna hai". A sign the line was only half understood, and
+ * worth a careful second reading when one is on hand.
+ */
+export const HINDI_LEFTOVER = /\b(?:hai|hain|karna|karni|karne|karo|lana|lani|lena|leni|dena|deni|jana|jaana|wala|wali|raha|rahi|mein|nahi|parso|sabzi|doodh|dawai|kapde|ghar)\b/i

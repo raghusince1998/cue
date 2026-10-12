@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeHinglish } from './hinglish.ts'
+import { HINDI_LEFTOVER, normalizeHinglish } from './hinglish.ts'
 import { parseWhen, titleFrom } from './parseWhen.ts'
 
 /**
@@ -101,4 +101,20 @@ test('plain English passes through unchanged', () => {
   for (const text of ['dentist friday 6pm', 'gym every mon wed fri at 7', 'call amma tomorrow morning']) {
     assert.equal(normalizeHinglish(text), text)
   }
+})
+
+test('how often, said in Hindi', () => {
+  assert.equal(normalizeHinglish('sabzi lana har sunday'), 'sabzi lana every sunday')
+  assert.equal(normalizeHinglish('roz subah 7 baje walk'), 'every day 7am walk')
+  assert.equal(normalizeHinglish('dawai har din raat 9 baje'), 'dawai every day 9pm')
+  assert.equal(normalizeHinglish('kiraya har mahine 1 tarikh'), 'kiraya every month 1 tarikh')
+  assert.equal(normalizeHinglish('mandir har somvar'), 'mandir every monday')
+  assert.equal(normalizeHinglish('Har Gobind birthday on 5 Jan'), 'Har Gobind birthday on 5 Jan', 'a name, not "every"')
+})
+
+test('Hindi left in a title is spotted', () => {
+  assert.ok(HINDI_LEFTOVER.test('sabzi lana'))
+  assert.ok(HINDI_LEFTOVER.test('mom ko call karna hai'))
+  assert.ok(!HINDI_LEFTOVER.test('call mom'))
+  assert.ok(!HINDI_LEFTOVER.test('Har Gobind birthday'))
 })

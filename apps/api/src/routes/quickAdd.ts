@@ -9,6 +9,7 @@ import {
   clockLabel,
   type ParsedWhen,
   normalizeHinglish,
+  HINDI_LEFTOVER,
   titleFrom,
   placeFrom,
   parseIntention,
@@ -75,6 +76,7 @@ import { createItem, itemMentionedIn, updateItem } from '../services/trackers.ts
 import { createBill } from '../services/bills.ts'
 import { recordDelivery } from '../services/deliveries.ts'
 import { bookingReminderTimes, webCheckInAt } from '../services/bookings.ts'
+import { cachedReading, captureAiEnabled, readWithAi, type AiPart, type AiReading } from '../services/captureAi.ts'
 import {
   findLinks,
   knownPlaces,
@@ -117,6 +119,11 @@ const quickInput = z.object({
   trip: z.enum(['add', 'skip']).optional(),
   /** A "when I go to …" with a trip there already coming: put it on that trip. */
   onTrip: z.boolean().optional(),
+  /**
+   * Preview only: the person has paused, so a line the rules were unsure of
+   * may be read by the AI. Never on every keystroke.
+   */
+  careful: z.boolean().optional(),
 })
 
 export type QuickKind =
@@ -158,15 +165,15 @@ export async function quickAddRoutes(app: FastifyInstance) {
    */
   app.post('/quick/preview', async (req) => {
     const { sub: userId, orgId } = scope(req)
-    const { text } = quickInput.parse(req.body)
-    return enrich(userId, orgId, text, await interpret(userId, orgId, text))
+    const { text, careful } = quickInput.parse(req.body)
+    return enrich(userId, orgId, text, await read(userId, orgId, text, careful ? 'careful' : 'preview'))
   })
 
   app.post('/quick', async (req, reply) => {
     const { sub: userId, orgId } = scope(req)
     const body = quickInput.parse(req.body)
     const { text, allowConflict } = body
-    const plan = await enrich(userId, orgId, text, await interpret(userId, orgId, text))
+    const plan = await enrich(userId, orgId, text, await read(userId, orgId, text, 'save'))
 
     // What the person chose about what the preview offered.
     if (body.contactId === null) {
@@ -605,6 +612,16 @@ export interface QuickPlan {
   trackerItem: { id: string; board: BoardKey; title: string; stage: string; moveTo: string | null } | null
   /** Plain-words account of every assumption made, shown before and after saving. */
   assumptions: string[]
+  /** The rules read this, but would be guessing: a line for the AI, when it is on. */
+  unsure: boolean
+  /** Who read it: the rules, or the AI for a line the rules were unsure of. */
+  readBy: 'rules' | 'ai'
+  /** Set when the AI is on and could read this line better, once typing pauses. */
+  canReadCarefully?: boolean
+  /** When it is a question instead of a plan: what to ask. */
+  question: string | null
+  /** Answers to tap, each added to the end of the line. */
+  choices: string[]
   /** Why the app could not tell, when it could not. */
   problem: string | null
   summary: string
@@ -618,6 +635,162 @@ export interface QuickPlan {
 /** What the preview shows for a line: read, then linked to what it mentions. */
 export async function enrichForTest(userId: string, orgId: string, raw: string): Promise<QuickPlan> {
   return enrich(userId, orgId, raw, await interpret(userId, orgId, raw))
+}
+
+/**
+ * The rules' reading, or — for a line they were unsure of, with the AI on —
+ * the AI's.
+ *
+ * A preview while typing never waits on the AI: it says a careful reading is
+ * possible, and the screen asks for one when typing pauses. Save uses only a
+ * reading the preview already showed (it is cached), so what is saved is what
+ * was seen.
+ */
+async function read(userId: string, orgId: string, text: string, mode: 'preview' | 'careful' | 'save'): Promise<QuickPlan> {
+  const now = new Date()
+  const plan = await interpret(userId, orgId, text, now)
+  // Hindi left in the title ("sabzi lana", "call karna hai") means the rules
+  // read the time and not the rest: worth a careful look too.
+  const halfRead =
+    (plan.kind === 'commitment' || plan.kind === 'recurrence' || plan.kind === 'needsTime') && HINDI_LEFTOVER.test(plan.title)
+  if (!(plan.unsure || halfRead) || !captureAiEnabled()) return plan
+
+  let reading = cachedReading(userId, text)
+  if (!reading && mode === 'careful') {
+    const [user] = await db.select({ isDemo: schema.users.isDemo }).from(schema.users).where(eq(schema.users.id, userId))
+    reading = await readWithAi(userId, text, now, { isDemo: user?.isDemo })
+  }
+  if (!reading) return mode === 'preview' ? { ...plan, canReadCarefully: true } : plan
+  return planFromAi(plan, reading, now)
+}
+
+/** `read` for the tests, which have no HTTP server to go through. */
+export const readForTest = read
+
+const PART_HOUR: Record<AiPart, number> = { morning: 9, afternoon: 14, evening: 18, night: 20 }
+
+/**
+ * The AI's reading as a plan, through the same shapes the rules produce. Where
+ * it cannot be used — a date gone by, a trip with no place — the rules'
+ * reading stands rather than a broken one.
+ */
+export function planFromAi(rules: QuickPlan, r: AiReading, now: Date): QuickPlan {
+  const note = 'Read carefully by Cue’s AI, as the usual rules were not sure.'
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const day = r.date ? new Date(`${r.date}T00:00:00`) : today
+  if (day < today) return rules
+  const common: QuickPlan = {
+    ...rules,
+    readBy: 'ai',
+    unsure: false,
+    problem: null,
+    title: r.title,
+    personName: r.person ?? rules.personName,
+    commitmentKind: r.planKind as CommitmentKind,
+    durationMinutes: DEFAULT_DURATION_MINUTES[r.planKind as CommitmentKind] ?? rules.durationMinutes,
+    assumptions: [...r.assumptions, note],
+  }
+  const clock = (fallback: number) =>
+    r.time
+      ? { hour: Number(r.time.slice(0, 2)), minute: Number(r.time.slice(3)), said: true }
+      : { hour: r.partOfDay ? PART_HOUR[r.partOfDay] : fallback, minute: 0, said: false }
+
+  switch (r.kind) {
+    case 'not_a_plan':
+      return { ...rules, readBy: 'ai', unsure: false, kind: 'unclear', problem: 'That does not look like something to plan. Say what, and when.', summary: '' }
+
+    case 'ask':
+      // Understood, bar one thing: ask exactly that, with answers to tap.
+      return {
+        ...common,
+        kind: 'needsTime',
+        question: r.question ?? 'When is it?',
+        choices: r.choices,
+        assumptions: r.assumptions,
+        summary: r.title,
+      }
+
+    case 'wish':
+      if (!r.place) return rules
+      return {
+        ...common,
+        kind: 'intention',
+        placeLabel: r.place,
+        assumptions: [`No date — it waits until you plan a trip to ${r.place}.`, note],
+        summary: `"${r.title}" saved for ${r.place}`,
+      }
+
+    case 'trip': {
+      if (!r.place || !r.date) return rules
+      const endsOn = r.endDate && r.endDate >= r.date ? r.endDate : r.date
+      return {
+        ...common,
+        kind: 'trip',
+        title: r.place,
+        placeLabel: r.place,
+        startsOn: r.date,
+        endsOn,
+        summary: `Trip to ${r.place}, ${tripSpan(r.date, endsOn)}`,
+      }
+    }
+
+    case 'repeat': {
+      const p = r.repeat!
+      const rule: NonNullable<QuickPlan['rule']> = { freq: p.freq, interval: p.interval }
+      if (p.freq === 'weekly' && p.weekdays.length) rule.byWeekday = p.weekdays
+      if (p.freq === 'monthly' && p.monthDay) rule.byMonthDay = p.monthDay
+      if (p.freq === 'yearly') {
+        if (!r.date) return rules
+        rule.byMonth = day.getMonth()
+        rule.byMonthDay = day.getDate()
+      }
+      const { hour, minute, said } = clock(9)
+      const horizon = new Date(now.getFullYear() + 2, now.getMonth(), now.getDate())
+      const [first] = expandRecurrence(rule, { startsOn: now, hour, minute }, { from: now, to: horizon })
+      if (!first) return rules
+      return {
+        ...common,
+        kind: 'recurrence',
+        startsOn: ymd(first),
+        hour,
+        minute,
+        rule,
+        alsoAt: [],
+        assumptions: [...(said || r.partOfDay ? [] : ['No time given, so 9am.']), ...common.assumptions],
+        summary: `${r.title} — ${describeRecurrence(rule, { startsOn: first, hour, minute })}, from ${first.toLocaleDateString()}`,
+      }
+    }
+
+    case 'plan': {
+      // A day and no time: today, whenever suits; another day, at nine.
+      const isToday = day.getTime() === today.getTime()
+      const fallback = isToday ? Math.min(now.getHours() + 1, 20) : 9
+      const { hour, minute, said } = clock(fallback)
+      const due = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour, minute)
+      const flexible = !said
+      if (due <= now) {
+        // A time already gone today: tomorrow if no day was said, otherwise
+        // the next hour for something flexible, and the rules if fixed.
+        if (!r.date) due.setDate(due.getDate() + 1)
+        else if (flexible) due.setTime(now.getTime() + 3_600_000 - (now.getTime() % 3_600_000))
+        else return rules
+      }
+      const window = flexible ? (r.partOfDay ?? (isToday ? (now.getHours() < 12 ? 'morning' : now.getHours() < 17 ? 'afternoon' : 'evening') : null)) : null
+      return {
+        ...common,
+        kind: 'commitment',
+        dueAt: due.toISOString(),
+        flexibility: flexible && window ? 'flexible' : 'fixed',
+        preferredWindow: flexible ? window : null,
+        assumptions: [
+          ...(said || r.partOfDay || isToday ? [] : ['No time given, so 9am.']),
+          ...(flexible && isToday && !r.partOfDay ? [`No time given, so this ${window}, whenever suits.`] : []),
+          ...common.assumptions,
+        ],
+        summary: `${r.title} — ${due.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`,
+      }
+    }
+  }
 }
 
 /** A sentence that starts by saying money is still to go out is a to-do. */
@@ -824,6 +997,10 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     delivery: null,
     booking: null,
     assumptions,
+    unsure: false,
+    readBy: 'rules',
+    question: null,
+    choices: [],
     problem: null,
     summary: '',
   }
@@ -1378,6 +1555,9 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       notes: roles.subject && roles.subject !== roles.title ? roles.subject : null,
       assumptions: assumptionsFromRoles,
       summary: `${roles.title} — ${dueAt.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`,
+      // A meeting at a 9am nobody said and history does not know: asking
+      // what time beats a guess the other person will not be at.
+      unsure: commitmentKind === 'meeting' && Boolean(whenPart?.timeAssumed) && !whenPart?.window && !prep && !learned?.hour && !learned?.lastHour,
     }
   }
 
@@ -1448,6 +1628,9 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
           `No time given, so it is filed for ${late ? 'tomorrow morning' : `this ${window}`} with no set slot.`,
         ],
         summary: `${likely} — ${late ? 'tomorrow morning' : `this ${window}`}, whenever suits`,
+        // Nothing in the line said when, or even for sure what: the best the
+        // rules can do, and worth a careful second reading.
+        unsure: true,
       }
     }
 
@@ -1456,6 +1639,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       title: likely,
       problem: problem?.message ?? 'I could not find a date or time in that.',
       summary: '',
+      unsure: true,
     }
   }
 
@@ -1496,5 +1680,8 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     notes: originalIfInformative(text, title),
     assumptions,
     summary: `${title} — ${dueAt.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`,
+    // "meeting tomorrow": a day, a 9am nobody said, and a word or two. A
+    // careful reading may well ask what time instead.
+    unsure: when.timeAssumed && !when.window && !when.deadline && !prep && title.split(/\s+/).length <= 2,
   }
 }

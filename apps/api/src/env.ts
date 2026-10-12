@@ -108,7 +108,17 @@ export const env = {
 
   /** Encrypts each org's stored provider key. Without it, BYOK is refused. */
   encryptionKey: process.env.ENCRYPTION_KEY ?? '',
-  aiDefaultModel: process.env.AI_DEFAULT_MODEL ?? 'claude-haiku-4-5-20251001',
+  aiDefaultModel: process.env.AI_DEFAULT_MODEL ?? 'claude-haiku-5-5',
+
+  /**
+   * Cue's own key, for reading the lines its rules cannot (services/captureAi.ts).
+   * Empty turns that off and the rules' reading stands, as before.
+   */
+  captureAiKey: process.env.ANTHROPIC_API_KEY ?? '',
+  captureAiModel: process.env.CAPTURE_AI_MODEL ?? 'claude-haiku-5-5',
+  /** Readings per person per day: a ceiling on what one account can cost. */
+  captureAiDailyLimit: num('CAPTURE_AI_DAILY_LIMIT', 40),
+  captureAiDemoLimit: num('CAPTURE_AI_DEMO_LIMIT', 8),
 
   /** Average door-to-door speed for travel estimates. Indian roads, not motorways. */
   travelSpeedKmh: num('TRAVEL_SPEED_KMH', 45),

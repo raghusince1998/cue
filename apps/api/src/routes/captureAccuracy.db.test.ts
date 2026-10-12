@@ -7,10 +7,12 @@ import { createTestDb, seedUser, type Harness, type Seeded } from '../testing/ha
  * work, travel, money, and the vague ones. Each line says what a careful
  * assistant would do with it.
  *
- * This is the accuracy bar. A change that makes a line here read worse fails
- * the build. A line marked `todo` is one the app does not get right yet — it
- * runs, it is counted, and it does not fail the build — so the score at the
- * end is an honest one. Fixing one means deleting its `todo`.
+ * This is the accuracy bar for the rules, which read every line first and
+ * alone when the AI is off. A change that makes a line here read worse fails
+ * the build. A line marked `todo` is one the rules do not get right — it runs,
+ * it is counted, and it does not fail the build — so the score at the end is
+ * an honest one. Most are the vague lines the AI reading exists for (see
+ * quickAddAi.db.test.ts). Fixing one in the rules means deleting its `todo`.
  */
 
 let h: Harness
@@ -58,11 +60,14 @@ const LINES: [string, Expect][] = [
   ['kal subah 8 baje doodh lena', { kind: 'commitment', due: '2026-10-13 08:00' }],
   [
     'mom ko sham ko call karna hai',
-    { kind: 'commitment', day: '2026-10-12', window: 'evening', todo: '"sham ko" is evening here but a name elsewhere: the AI reading' },
+    { kind: 'commitment', day: '2026-10-12', window: 'evening', todo: 'rules alone: "sham" is also a name. The AI reading (quickAddAi) gets it' },
   ],
   ['remind me in 30 minutes to check the oven', { kind: 'commitment', due: '2026-10-12 17:05' }],
   ['dinner at 8:30 with Priya', { kind: 'commitment', due: '2026-10-12 20:30' }],
   ['yoga at 6:30 tomorrow', { kind: 'commitment', due: '2026-10-13 06:30' }],
+  ['sabzi lana har sunday', { kind: 'recurrence', rule: { freq: 'weekly', byWeekday: [0] } }],
+  ['roz subah 7 baje walk', { kind: 'recurrence', title: 'walk', at: '07:00', rule: { freq: 'daily' } }],
+  ['dawai har din raat 9 baje', { kind: 'recurrence', at: '21:00', rule: { freq: 'daily' } }],
 
   // -------------------------------------------------------------------- work
   ['send the Q3 report to Ankit by Friday EOD', { kind: 'commitment', due: '2026-10-16 17:00' }],
@@ -98,9 +103,9 @@ const LINES: [string, Expect][] = [
   // ------------------------------------------------- vague: ask, do not guess
   ['something about the bank', { kind: 'needsTime' }],
   ['lunch at 1', { kind: 'commitment', due: '2026-10-13 13:00' }],
-  ['meeting tomorrow', { kind: 'needsTime', todo: 'a meeting with no time or person: ask (phase 2)' }],
-  ['call him later', { kind: 'needsPerson', todo: '"him" is nobody yet: ask who (phase 2)' }],
-  ['doctor', { kind: 'needsTime', todo: 'one word: ask what and when (phase 2)' }],
+  ['meeting tomorrow', { kind: 'needsTime', todo: 'rules alone guess 9am. The AI reading asks for a time' }],
+  ['call him later', { kind: 'needsPerson', todo: 'rules alone cannot know who. The AI reading asks' }],
+  ['doctor', { kind: 'needsTime', todo: 'rules alone guess. The AI reading asks what and when' }],
 ]
 
 const score = { right: 0, total: 0, todoRight: 0, todo: 0 }

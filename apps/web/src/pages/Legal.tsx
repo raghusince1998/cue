@@ -112,7 +112,8 @@ export function PrivacyPage() {
         <li><strong>Notifications:</strong> reminders are delivered through your browser’s push service (Google, Apple or Mozilla), which carries the reminder text to your device.</li>
         <li><strong>Place lookups:</strong> when you look up a place by name, that name is sent to OpenStreetMap or Google Places to find it.</li>
         <li><strong>Password reset emails</strong> are sent through an email delivery provider.</li>
-        <li><strong>AI, only if you turn it on:</strong> if you add your own AI key in Settings, text you ask Cue to read with it is sent to the AI provider you chose. This is off unless you set it up, and never applies to email.</li>
+        <li><strong>Reading unclear lines (Anthropic):</strong> Cue reads what you type with its own rules first. When they cannot read a line with confidence — a vague one like “doctor”, or Hindi they do not know — Cue may send that one line, with today’s date, to Anthropic’s Claude API to understand it, and shows you the result before anything is saved. Nothing else goes with it: not your name, email address, contacts or other plans. Anthropic’s commercial terms do not allow it to train its models on what is sent. Email is never sent.</li>
+        <li><strong>AI with your own key:</strong> if you add your own AI key in Settings, text you ask Cue to read with it is sent to the AI provider you chose. This is off unless you set it up, and never applies to email.</li>
       </ul>
       <p>Cue may disclose information if required by law, or to protect its users and service from fraud or abuse.</p>
 

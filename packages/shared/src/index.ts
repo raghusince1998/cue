@@ -157,7 +157,7 @@ export {
   type IcsParseResult,
 } from './ics.ts'
 export { resolveZone, WINDOWS_ZONES } from './windowsZones.ts'
-export { normalizeHinglish } from './hinglish.ts'
+export { normalizeHinglish, HINDI_LEFTOVER } from './hinglish.ts'
 
 import { z } from 'zod'
 // Re-exporting a name does not put it in scope here, so the ones used below in

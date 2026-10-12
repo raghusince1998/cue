@@ -70,6 +70,12 @@ interface Plan {
   owed?: { amountPaise: number; name: string; note: string | null } | null
   /** A booking confirmation: a train, a flight, a hotel, a show. */
   booking?: { type: string; ref: string | null } | null
+  /** The rules were unsure and the AI is on: a careful reading, once typing pauses. */
+  canReadCarefully?: boolean
+  readBy?: 'rules' | 'ai'
+  /** When the answer is a question: what to ask, and answers to tap. */
+  question?: string | null
+  choices?: string[]
 }
 
 interface Saved extends Plan {
@@ -143,6 +149,8 @@ export function QuickAdd({
   const [choices, setChoices] = useState<LinkChoices>(NO_CHOICES)
   /** Bumped to read the sentence again, e.g. after "Pune is where I live". */
   const [reread, setReread] = useState(0)
+  /** A careful reading of an unsure line is on its way. */
+  const [reading, setReading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -159,12 +167,37 @@ export function QuickAdd({
       setPlan(null)
       return
     }
+    let careful: ReturnType<typeof setTimeout> | undefined
+    let stale = false
     const handle = setTimeout(() => {
       api<Plan>('/quick/preview', { method: 'POST', body: { text: value } })
-        .then(setPlan)
+        .then((first) => {
+          if (stale) return
+          setPlan(first)
+          // The rules were unsure of this one. Once typing has paused, ask for
+          // a careful reading — never per keystroke, since it is slower and
+          // costs something.
+          if (!first.canReadCarefully) return
+          careful = setTimeout(() => {
+            setReading(true)
+            api<Plan>('/quick/preview', { method: 'POST', body: { text: value, careful: true } })
+              .then((better) => {
+                if (!stale) setPlan(better)
+              })
+              .catch(() => undefined)
+              .finally(() => {
+                if (!stale) setReading(false)
+              })
+          }, 700)
+        })
         .catch(() => setPlan(null))
     }, 250)
-    return () => clearTimeout(handle)
+    return () => {
+      stale = true
+      clearTimeout(handle)
+      if (careful) clearTimeout(careful)
+      setReading(false)
+    }
   }, [text, reread])
 
   async function setHome(city: string) {
@@ -362,9 +395,9 @@ export function QuickAdd({
                 <li key={a}>{a}</li>
               ))}
             </ul>
-            <p className="muted small">When is it?</p>
+            <p className="muted small">{plan.question ?? 'When is it?'}</p>
             <div className="quick-frequent">
-              {WHEN_CHIPS.map((c) => (
+              {(plan.choices?.length ? plan.choices : plan.question ? [] : WHEN_CHIPS).map((c) => (
                 <button key={c} className="chip" onClick={() => setText((t) => `${t} ${c}`)}>
                   {c}
                 </button>
@@ -388,6 +421,7 @@ export function QuickAdd({
             <>
               <div>
                 <span className="quick-kind">{plan.booking ? 'Booking' : KIND_WORD[plan.kind]}</span>
+                {reading && <span className="quick-reading">Reading it more carefully…</span>}
                 <strong>{plan.summary}</strong>
                 {plan.assumptions.length > 0 && (
                   <ul className="quick-assumptions">
