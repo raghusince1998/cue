@@ -117,10 +117,11 @@ export function PrivacyPage() {
       </ul>
       <p>Cue may disclose information if required by law, or to protect its users and service from fraud or abuse.</p>
 
-      <h2>How long it is kept, and deleting it</h2>
+      <h2 id="delete">How long it is kept, and deleting it</h2>
       <ul>
         <li>What you add stays until you delete it. Deleting a plan, a person or a bill removes it.</li>
-        <li><strong>Delete your account</strong> in Settings: your account and everything in it are deleted, and connected accounts are disconnected first.</li>
+        <li><strong>Delete your account</strong> in Settings: your account and everything in it are deleted, and connected accounts are disconnected first. This works the same in the app from the Play Store and on the website: sign in at {SITE.url.replace('https://', '')}, open Settings, then Delete my account.</li>
+        <li>Can&rsquo;t sign in? Email <a href={`mailto:${SITE.supportEmail}`}>{SITE.supportEmail}</a> from the address on your account, and it will be deleted, with everything in it, within 7 days.</li>
         <li>Demo accounts made from the homepage hold only sample data and are deleted automatically after a day.</li>
         <li>Backups of the database, if kept, are overwritten within weeks.</li>
       </ul>

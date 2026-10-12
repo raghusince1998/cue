@@ -118,6 +118,25 @@ await app.register(checklistRoutes, { prefix: '/api' })
 await app.register(intentionRoutes, { prefix: '/api' })
 
 /**
+ * Digital Asset Links: the statement that the Android app signed with these
+ * keys is this site, so it opens as the app rather than as a browser tab with
+ * an address bar. Only once there is a key to vouch for.
+ */
+app.get('/.well-known/assetlinks.json', async (_req, reply) => {
+  if (env.androidCertSha256.length === 0) return reply.code(404).send({ error: 'not_found' })
+  return reply.header('cache-control', 'public, max-age=3600').send([
+    {
+      relation: ['delegate_permission/common.handle_all_urls'],
+      target: {
+        namespace: 'android_app',
+        package_name: env.androidPackage,
+        sha256_cert_fingerprints: env.androidCertSha256,
+      },
+    },
+  ])
+})
+
+/**
  * In production the API also serves the built frontend, so the whole thing is
  * one process on one port with one URL. That removes CORS entirely, and means
  * a deployment is a single service rather than two that have to agree about

@@ -1,0 +1,100 @@
+name: Android app
+
+# The Play Store app: Cue itself, opened full-screen by a thin Android shell
+# (a Trusted Web Activity) that Bubblewrap generates from android/twa-manifest.json.
+#
+# Run it by hand from the Actions tab. Without "release" it signs with a key
+# made on the runner and thrown away — a build to install and try, never to
+# upload. With "release" it signs with the upload key kept in the repository's
+# secrets, and that one goes to Play (see android/README.md).
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Sign with the real upload key (needs the ANDROID_* secrets)
+        type: boolean
+        default: false
+
+concurrency:
+  group: android
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the app bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Bubblewrap checks for exactly JDK 17.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install --global @bubblewrap/cli@1.25.0
+
+      # Without this file Bubblewrap stops to ask where Java and the Android SDK
+      # are, or offers to download them. The runner has both.
+      - name: Point Bubblewrap at the runner's JDK and Android SDK
+        run: |
+          mkdir -p ~/.bubblewrap
+          printf '{"jdkPath":"%s","androidSdkPath":"%s"}' "$JAVA_HOME" "$ANDROID_HOME" > ~/.bubblewrap/config.json
+
+      - name: The signing key
+        env:
+          RELEASE: ${{ inputs.release }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          cp android/twa-manifest.json build/
+          if [ "$RELEASE" = "true" ]; then
+            if [ -z "${KEYSTORE_BASE64:-}" ] || [ -z "${KEYSTORE_PASSWORD:-}" ]; then
+              echo "A release build needs the ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD secrets. See android/README.md." >&2
+              exit 1
+            fi
+            echo "$KEYSTORE_BASE64" | base64 -d > build/android.keystore
+            echo "BUBBLEWRAP_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "BUBBLEWRAP_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}" >> "$GITHUB_ENV"
+          else
+            # A key that lives as long as this job: a build to try, never to upload.
+            PW=$(openssl rand -hex 16)
+            echo "::add-mask::$PW"
+            keytool -genkeypair -keystore build/android.keystore -alias cue -keyalg RSA -keysize 2048 \
+              -validity 10000 -storepass "$PW" -keypass "$PW" -dname "CN=Cue test build" -noprompt
+            echo "BUBBLEWRAP_KEYSTORE_PASSWORD=$PW" >> "$GITHUB_ENV"
+            echo "BUBBLEWRAP_KEY_PASSWORD=$PW" >> "$GITHUB_ENV"
+          fi
+
+      # The Android project, generated fresh from twa-manifest.json each time,
+      # so the definition in the repository is the whole truth.
+      - name: Generate the Android project
+        working-directory: build
+        run: bubblewrap update --skipVersionUpgrade
+
+      - name: Build and sign
+        working-directory: build
+        run: bubblewrap build
+
+      # The fingerprint goes into ANDROID_CERT_SHA256 on the server, so the
+      # site vouches for the app (assetlinks.json). For a Play release, use
+      # the app signing key's fingerprint from Play Console instead.
+      - name: The signing key's fingerprint
+        working-directory: build
+        run: keytool -list -v -keystore android.keystore -alias cue -storepass "$BUBBLEWRAP_KEYSTORE_PASSWORD" | grep -E "SHA256:"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.release && 'cue-release' || 'cue-test-build' }}
+          path: |
+            build/app-release-bundle.aab
+            build/app-release-signed.apk
+          if-no-files-found: error
+          retention-days: 14

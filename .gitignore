@@ -10,3 +10,8 @@ apps/api/drizzle/meta/
 # Editor settings, personal to whoever is sitting here.
 .idea/
 .vscode/
+
+# Android signing keys never belong in the repository.
+*.keystore
+*.jks
+build/

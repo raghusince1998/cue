@@ -120,6 +120,19 @@ export const env = {
   captureAiDailyLimit: num('CAPTURE_AI_DAILY_LIMIT', 40),
   captureAiDemoLimit: num('CAPTURE_AI_DEMO_LIMIT', 8),
 
+  /**
+   * The Android app (a Trusted Web Activity) and the key it is signed with.
+   * Published at /.well-known/assetlinks.json so Android lets the app open
+   * this site full-screen, as itself. No fingerprints, no file: a wrong
+   * statement is worse than none.
+   */
+  androidPackage: process.env.ANDROID_PACKAGE ?? 'in.vitelio.cue',
+  /** SHA-256 fingerprints, comma-separated: Play's app signing key, and the upload key. */
+  androidCertSha256: (process.env.ANDROID_CERT_SHA256 ?? '')
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
+    .filter((s) => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(s)),
+
   /** Average door-to-door speed for travel estimates. Indian roads, not motorways. */
   travelSpeedKmh: num('TRAVEL_SPEED_KMH', 45),
 

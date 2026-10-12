@@ -1,0 +1,74 @@
+{
+  "packageId": "in.vitelio.cue",
+  "host": "cue.vitelio.in",
+  "name": "Cue — say it once, Cue remembers the rest",
+  "launcherName": "Cue",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#4F46E5",
+  "themeColorDark": "#0A0D14",
+  "navigationColor": "#0F172A",
+  "navigationColorDark": "#0A0D14",
+  "navigationDividerColor": "#0F172A",
+  "navigationDividerColorDark": "#0A0D14",
+  "backgroundColor": "#0F172A",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://cue.vitelio.in/icon-512.png",
+  "maskableIconUrl": "https://cue.vitelio.in/icon-maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "cue"
+  },
+  "appVersionName": "1.0.0",
+  "appVersion": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Speak a reminder",
+      "shortName": "Speak",
+      "url": "https://cue.vitelio.in/?capture=voice",
+      "chosenIconUrl": "https://cue.vitelio.in/icon-192.png"
+    },
+    {
+      "name": "Add something",
+      "shortName": "Add",
+      "url": "https://cue.vitelio.in/?capture=1",
+      "chosenIconUrl": "https://cue.vitelio.in/icon-192.png"
+    },
+    {
+      "name": "Log a call",
+      "shortName": "Log a call",
+      "url": "https://cue.vitelio.in/?logcall=1",
+      "chosenIconUrl": "https://cue.vitelio.in/icon-192.png"
+    }
+  ],
+  "shareTarget": {
+    "action": "/share",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://cue.vitelio.in/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://cue.vitelio.in/",
+  "minSdkVersion": 21,
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": []
+}

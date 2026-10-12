@@ -23,14 +23,30 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         injectManifest: {
           globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+          // Store screenshots are for the install sheet and the Play listing,
+          // not for working offline: a megabyte nobody needs cached.
+          globIgnores: ['store/**'],
         },
         // Without this the service worker is dead in `vite dev`, and push is the
         // whole point of the skeleton.
         devOptions: { enabled: true, type: 'module', navigateFallback: 'index.html' },
         manifest: {
-          name: 'Cue — your day, prompted',
+          // A stable identity, so the installed app (and the Play Store
+          // wrapper around it) stays the same app if start_url ever moves.
+          id: '/',
+          name: 'Cue — say it once, Cue remembers the rest',
           short_name: 'Cue',
-          description: 'Plans, trips and the things you meant to do there.',
+          description:
+            'A planner that remembers for you. Type a plan in one line, or let Cue find train tickets, parcels, bills and renewals in your email — each with a reminder at the right time.',
+          categories: ['productivity', 'lifestyle', 'travel'],
+          // Shown in the richer install sheet on Android and desktop Chrome.
+          screenshots: [
+            { src: '/store/phone-1.png', sizes: '1080x1920', type: 'image/png', form_factor: 'narrow', label: 'Plan in one line' },
+            { src: '/store/phone-2.png', sizes: '1080x1920', type: 'image/png', form_factor: 'narrow', label: 'Your day, work and personal' },
+            { src: '/store/phone-3.png', sizes: '1080x1920', type: 'image/png', form_factor: 'narrow', label: 'A trip, day by day' },
+            { src: '/store/phone-4.png', sizes: '1080x1920', type: 'image/png', form_factor: 'narrow', label: 'Bills and renewals, on time' },
+            { src: '/store/wide-1.png', sizes: '1920x1080', type: 'image/png', form_factor: 'wide', label: 'Cue on a bigger screen' },
+          ],
           theme_color: '#0f172a',
           background_color: '#0f172a',
           display: 'standalone',
