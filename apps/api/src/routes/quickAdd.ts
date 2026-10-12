@@ -25,6 +25,7 @@ import {
   parseOwed,
   parseTrackerLine,
   parseBill,
+  parseInsurance,
   parseDelivery,
   parseBooking,
   leadLabel,
@@ -846,6 +847,33 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
       summary: place
         ? `${n} things saved for ${place}: ${wishList.titles.join(', ')}`
         : `${n} things on your wishlist: ${wishList.titles.join(', ')}`,
+    }
+  }
+
+  // An insurer's message pasted in: the policy, by vehicle, renewed each year.
+  const policy = parseInsurance(raw)
+  if (policy) {
+    return {
+      ...base,
+      kind: 'bill',
+      title: policy.name,
+      checklist: [],
+      bill: {
+        name: policy.name,
+        kind: policy.kind,
+        category: 'insurance',
+        amountPaise: policy.amountPaise,
+        dueOn: policy.dueOn,
+        repeat: 'yearly',
+      },
+      summary: [
+        policy.name,
+        policy.amountPaise ? formatRupees(policy.amountPaise) : null,
+        dueLabel(policy.dueOn, policy.kind, now),
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      assumptions: [policy.kind === 'renewal' ? 'A reminder a month before it runs out.' : 'A reminder a week before it is due.'],
     }
   }
 

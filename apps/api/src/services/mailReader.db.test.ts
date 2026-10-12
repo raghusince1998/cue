@@ -190,3 +190,58 @@ test('only what is worth opening, and HTML made readable', () => {
     'Total Amount Due\nRs. 12,345 ₹5',
   )
 })
+
+test('insurance: a renewal reminder, then the new policy moves it a year on, by the vehicle', async () => {
+  const soon = new Date(Date.now() + 20 * 86_400_000)
+  const nextYear = new Date(soon.getTime() + 365 * 86_400_000)
+  const d = (x: Date) => `${pad(x.getDate())}/${pad(x.getMonth() + 1)}/${x.getFullYear()}`
+  const inbox: Record<string, { from: string; subject: string; plain: string }> = {
+    i1: {
+      from: 'Digit Insurance <noreply@godigit.com>',
+      subject: 'Your bike insurance is expiring soon',
+      plain: `Your two-wheeler policy for KA 01 XY 5678 expires on ${d(soon)}. Renewal premium: Rs 1,749. Renew now to stay covered.`,
+    },
+  }
+  const serve = () => {
+    globalThis.fetch = (async (input: string | URL) => {
+      const url = String(input)
+      if (url.includes('/messages?')) return new Response(JSON.stringify({ messages: Object.keys(inbox).map((id) => ({ id })) }))
+      const id = url.split('/messages/')[1]!.split('?')[0]!
+      const m = inbox[id]!
+      return new Response(
+        JSON.stringify({
+          id,
+          payload: {
+            mimeType: 'text/plain',
+            headers: [
+              { name: 'From', value: m.from },
+              { name: 'Subject', value: m.subject },
+            ],
+            body: { data: b64(m.plain) },
+          },
+        }),
+      )
+    }) as typeof fetch
+  }
+  serve()
+  const acc = await account('google')
+  const first = await svc.readMail(acc, new Date(), async () => 'token')
+  assert.match(first[0]!, /^Bike insurance · KA01XY5678 \(Digit\): renew by/)
+  let rows = await h.sql<{ name: string; kind: string; due_on: string; remind_days: number }[]>`select name, kind, due_on::text, remind_days from bills`
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0]!.kind, 'renewal')
+  assert.equal(rows[0]!.remind_days, 30)
+
+  // Renewed with another insurer: the new policy's email moves the same reminder.
+  inbox.i2 = {
+    from: 'ACKO <policy@acko.com>',
+    subject: 'Your two-wheeler policy is issued',
+    plain: `ACKO: Your Bike Insurance Policy No. ACKO/2W/998877 is issued for KA01XY5678. Policy Period: ${d(soon)} to ${d(nextYear)}. Total Premium: ₹1,699.`,
+  }
+  serve()
+  await svc.readMail({ ...acc, mailCheckedAt: new Date() }, new Date(), async () => 'token')
+  rows = await h.sql`select name, kind, due_on::text, remind_days from bills`
+  assert.equal(rows.length, 1, 'still one reminder for that bike')
+  const ymd = `${nextYear.getFullYear()}-${pad(nextYear.getMonth() + 1)}-${pad(nextYear.getDate())}`
+  assert.equal(rows[0]!.due_on, ymd)
+})

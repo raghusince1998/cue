@@ -337,3 +337,48 @@ export async function billFromNotice(
   })
   return bill ? { bill, created: false } : null
 }
+
+/**
+ * An insurer's email onto the policy it is about — found by the vehicle's
+ * number when there is one, so next year's email from another insurer still
+ * lands on the same reminder. A new policy's later expiry moves it on by
+ * itself: renewing is done the day the new policy is issued.
+ */
+export async function billFromInsurance(
+  orgId: string,
+  userId: string,
+  notice: { name: string; kind: 'renewal' | 'bill'; dueOn: string; amountPaise: number | null; vehicle: string | null },
+): Promise<{ bill: BillDTO; created: boolean } | null> {
+  const [existing] = await db
+    .select({ id: b.id, dueOn: b.dueOn })
+    .from(b)
+    .where(
+      and(
+        eq(b.userId, userId),
+        eq(b.active, true),
+        notice.vehicle
+          ? sql`replace(upper(${b.name}), ' ', '') like ${`%${notice.vehicle}%`}`
+          : sql`lower(${b.name}) = lower(${notice.name})`,
+      ),
+    )
+    .limit(1)
+  if (!existing) {
+    const bill = await createBill(orgId, userId, {
+      name: notice.name,
+      kind: notice.kind,
+      category: 'insurance',
+      amountPaise: notice.amountPaise,
+      dueOn: notice.dueOn,
+      repeat: 'yearly',
+      remindDays: notice.kind === 'renewal' ? 30 : 7,
+    })
+    return { bill, created: true }
+  }
+  // An older email about a cover already renewed changes nothing.
+  if (notice.dueOn < existing.dueOn) return null
+  const bill = await updateBill(userId, existing.id, {
+    ...(notice.amountPaise ? { amountPaise: notice.amountPaise } : {}),
+    ...(notice.dueOn !== existing.dueOn ? { dueOn: notice.dueOn } : {}),
+  })
+  return bill ? { bill, created: false } : null
+}

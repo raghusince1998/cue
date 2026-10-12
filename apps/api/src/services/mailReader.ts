@@ -1,9 +1,17 @@
 import { and, desc, eq, inArray } from 'drizzle-orm'
-import { findCity, formatRupees, parseBooking, parseDelivery, parseDueNotice, type ParsedDelivery } from '@cue/shared'
+import {
+  findCity,
+  formatRupees,
+  parseBooking,
+  parseDelivery,
+  parseDueNotice,
+  parseInsurance,
+  type ParsedDelivery,
+} from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { sendToUser } from '../push.ts'
 import { freshAccessToken, type AccountRow } from './oauthConnect.ts'
-import { billFromNotice } from './bills.ts'
+import { billFromInsurance, billFromNotice } from './bills.ts'
 import { saveFoundBooking } from './bookings.ts'
 import { recordDelivery } from './deliveries.ts'
 import { knownPlaces } from './captureLinks.ts'
@@ -37,10 +45,16 @@ export const SENDERS = [
   'yesbank', 'sc.com', 'hsbc', 'rblbank', 'getonecard', 'bescom', 'mahadiscom', 'tangedco', 'bsesdelhi', 'tatapower',
   'adanielectricity', 'jvvnl', 'uppcl', 'wbsedcl', 'kseb', 'cesc', 'airtel', 'jio.com', 'myvi', 'bsnl', 'actcorp',
   'hathway', 'tataplay',
+  // Insurance: car, bike, health, life
+  'acko', 'godigit', 'icicilombard', 'hdfcergo', 'bajajallianz', 'bajajgeneral', 'tataaig', 'reliancegeneral',
+  'sbigeneral', 'newindia', 'uiic', 'orientalinsurance', 'nationalinsurance', 'kotakgeneral', 'futuregenerali',
+  'royalsundaram', 'cholams', 'libertyinsurance', 'iffcotokio', 'magmahdi', 'shriramgi', 'hizuno', 'universalsompo',
+  'starhealth', 'nivabupa', 'careinsurance', 'adityabirlacapital', 'licindia', 'hdfclife', 'iciciprulife', 'sbilife',
+  'maxlifeinsurance', 'tataaia', 'policybazaar', 'insurancedekho', 'coverfox', 'turtlemint',
 ]
 
 /** Subjects worth opening even from a sender not on the list: a travel agent, a small bank. */
-const SUBJECTS = /\b(?:credit card statement|e-?statement|payment due|bill (?:is )?generated|electricity bill|pnr|booking confirm|e-?ticket|out for delivery|has (?:been )?shipped|order (?:has been )?delivered)\b/i
+const SUBJECTS = /\b(?:credit card statement|e-?statement|payment due|bill (?:is )?generated|electricity bill|pnr|booking confirm|e-?ticket|out for delivery|has (?:been )?shipped|order (?:has been )?delivered|insurance|policy (?:is )?(?:issued|renewal|expir\w*)|premium due|renewal reminder)\b/i
 
 export function worthOpening(from: string, subject: string): boolean {
   const f = from.toLowerCase()
@@ -52,6 +66,7 @@ export function gmailQuery(days: number): string {
   const subjects = [
     '"credit card statement"', 'statement', '"payment due"', '"bill generated"', '"electricity bill"', 'PNR',
     '"booking confirmed"', '"e-ticket"', '"out for delivery"', 'shipped', 'delivered',
+    'insurance', '"policy issued"', '"policy renewal"', '"premium due"', '"renewal reminder"',
   ]
   return `newer_than:${days}d (from:(${SENDERS.join(' OR ')}) OR subject:(${subjects.join(' OR ')}))`
 }
@@ -164,10 +179,12 @@ const dayWords = (d: Date | string) =>
  * already known.
  */
 export async function actOn(orgId: string, userId: string, msg: MailMessage, now = new Date()): Promise<string | null> {
-  const text = `${msg.subject}\n${msg.text}`.slice(0, 15_000)
+  // The sender too: an insurer or a shop is often named only there.
+  const text = `${msg.subject}\n${msg.from}\n${msg.text}`.slice(0, 15_000)
 
+  // A card statement first: it can mention insurance (a card's cover plan) too.
   const notice = parseDueNotice(text)
-  if (notice) {
+  if (notice?.category === 'card') {
     const r = await billFromNotice(orgId, userId, notice)
     return r ? `${notice.name}: ${formatRupees(notice.amountPaise)} due ${dayWords(notice.dueOn)}` : null
   }
@@ -178,6 +195,20 @@ export async function actOn(orgId: string, userId: string, msg: MailMessage, now
     const city = booking.city ?? (booking.type === 'hotel' || booking.type === 'bus' ? findCity(text, await knownPlaces(userId)) : null)
     const saved = await saveFoundBooking(orgId, userId, booking, city, now)
     return saved ? `${saved.title}, ${dayWords(booking.startsAt)}` : null
+  }
+
+  // Car, bike, health, life: when cover ends, or a premium is due.
+  const policy = parseInsurance(text)
+  if (policy) {
+    const r = await billFromInsurance(orgId, userId, policy)
+    return r
+      ? `${policy.name}: ${policy.kind === 'renewal' ? 'renew by' : 'premium due'} ${dayWords(policy.dueOn)}${policy.amountPaise ? ` (${formatRupees(policy.amountPaise)})` : ''}`
+      : null
+  }
+
+  if (notice) {
+    const r = await billFromNotice(orgId, userId, notice)
+    return r ? `${notice.name}: ${formatRupees(notice.amountPaise)} due ${dayWords(notice.dueOn)}` : null
   }
 
   const parcel = parseDelivery(text, now)
