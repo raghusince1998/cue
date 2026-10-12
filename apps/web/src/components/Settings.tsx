@@ -3,7 +3,7 @@ import { CalendarFeeds } from './CalendarFeeds.tsx'
 import { ProfilePhoto } from './ProfilePhoto.tsx'
 import { InfoTip } from './InfoTip.tsx'
 import { UsesPicker } from './UsesPicker.tsx'
-import { MailReading } from './MailReading.tsx'
+import { Integrations } from './Integrations.tsx'
 import { Modal } from './Modal.tsx'
 import { TemplateManager } from './QuickMessage.tsx'
 import { api } from '../lib/api.ts'
@@ -249,12 +249,12 @@ export function Settings({ onClose }: { onClose: () => void }) {
       {nameSaved && <p className="muted small">Saved.</p>}
 
       <hr className="rule" />
-      <span className="label-text">What you use Cue for</span>
-      <UsesPicker compact />
+      <span className="label-text">Connected accounts</span>
+      <Integrations />
 
       <hr className="rule" />
-      <span className="label-text">Bookings, parcels &amp; bills from your email</span>
-      <MailReading />
+      <span className="label-text">What you use Cue for</span>
+      <UsesPicker compact />
 
       <hr className="rule" />
 

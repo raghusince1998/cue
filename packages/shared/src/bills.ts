@@ -19,6 +19,7 @@ export const BILL_CATEGORIES = [
   { key: 'education', label: 'School & fees', mark: '🎓', words: /\b(?:school|tuition|fees?|college|coaching)\b/i },
   { key: 'tax', label: 'Tax', mark: '🧾', words: /\b(?:tax|gst|itr|tds)\b/i },
   { key: 'maintenance', label: 'Maintenance', mark: '🔧', words: /\b(?:maintenance|society)\b/i },
+  { key: 'vehicle', label: 'Vehicle', mark: '🚗', words: /\b(?:puc|pollution|service due|vehicle service|fastag)\b/i },
   { key: 'document', label: 'Document', mark: '🪪', words: /\b(?:passport|licen[cs]e|aadhaar|pan card|visa|puc|pollution|registration|rc book)\b/i },
   { key: 'other', label: 'Other', mark: '📌', words: null },
 ] as const

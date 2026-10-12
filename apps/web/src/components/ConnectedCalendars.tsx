@@ -134,7 +134,7 @@ export function ConnectedCalendars({
     const params = new URLSearchParams(window.location.search)
     const code = params.get('connected')
     // Reading email has its own section and its own outcomes.
-    if (!code || code.startsWith('mail')) return
+    if (!code || code.startsWith('mail') || code.startsWith('all')) return
 
     setOutcome(OUTCOME[code] ?? { text: 'That did not work. Try connecting again.', bad: true })
     // The answer to "did it connect?" is the first thing to see, not

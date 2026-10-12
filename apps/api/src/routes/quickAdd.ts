@@ -26,6 +26,9 @@ import {
   parseTrackerLine,
   parseBill,
   parseInsurance,
+  parseVehicleNotice,
+  serviceAsBooking,
+  vehicleNoticeName,
   parseDelivery,
   parseBooking,
   leadLabel,
@@ -783,7 +786,22 @@ export async function interpret(userId: string, orgId: string, raw: string): Pro
   // appointment. A plan at the time it starts, reminded well ahead of it,
   // with the PNR or booking ID in its notes. Before the list readers, for the
   // same reason as parcels: these messages are all colons and commas.
-  const booked = parseBooking(raw, now)
+  // A vehicle's PUC or service reminder pasted in.
+  const vehicle = parseVehicleNotice(raw)
+  if (vehicle?.kind === 'puc') {
+    const name = vehicleNoticeName(vehicle)
+    return {
+      ...base,
+      kind: 'bill',
+      title: name,
+      checklist: [],
+      bill: { name, kind: 'renewal', category: 'vehicle', amountPaise: null, dueOn: vehicle.dueOn, repeat: 'none' },
+      summary: `${name} · ${dueLabel(vehicle.dueOn, 'renewal', now)}`,
+      assumptions: ['A reminder 10 days before it runs out.'],
+    }
+  }
+
+  const booked = parseBooking(raw, now) ?? (vehicle?.kind === 'service' ? serviceAsBooking(vehicle) : null)
   if (booked) {
     if (booked.startsAt.getTime() < now.getTime() - 3_600_000) {
       return {

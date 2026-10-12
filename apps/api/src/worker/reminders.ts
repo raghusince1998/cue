@@ -39,16 +39,19 @@ function bookingLine(
 ): string {
   const time = dueAt.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
   const minutes = Math.round((dueAt.getTime() - Date.now()) / 60_000)
-  const sameDay = new Date().toDateString() === dueAt.toDateString()
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const days = Math.round((startOf(dueAt) - startOf(new Date())) / 86_400_000)
+  if (booking.type === 'service') {
+    return `Service due ${days <= 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`}: book a slot${notes ? ` · ${notes}` : ''}`
+  }
   const verb = ['train', 'flight', 'bus'].includes(booking.type) ? 'Leaves' : booking.type === 'hotel' ? 'Check-in' : 'Starts'
+  const day = days <= 0 ? 'today' : days === 1 ? 'tomorrow' : dueAt.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
   const when =
     minutes <= 0
       ? `${verb} now`
       : minutes < 90
         ? `${verb} in ${minutes} min, at ${time}`
-        : sameDay
-          ? `${verb} today at ${time}`
-          : `${verb} tomorrow at ${time}`
+        : `${verb} ${day} at ${time}`
   const from = booking.from && booking.type !== 'hotel' ? ` from ${booking.from}` : ''
   return `${when}${from}${notes ? ` · ${notes}` : ''}`
 }

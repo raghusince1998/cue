@@ -245,3 +245,62 @@ test('insurance: a renewal reminder, then the new policy moves it a year on, by 
   const ymd = `${nextYear.getFullYear()}-${pad(nextYear.getMonth() + 1)}-${pad(nextYear.getDate())}`
   assert.equal(rows[0]!.due_on, ymd)
 })
+
+test('a PUC certificate and a service reminder, by vehicle; an insurer’s PUC email stays a PUC', async () => {
+  const later = (days: number) => new Date(Date.now() + days * 86_400_000)
+  const d = (x: Date) => `${pad(x.getDate())}/${pad(x.getMonth() + 1)}/${x.getFullYear()}`
+  const inbox: Record<string, { from: string; subject: string; plain: string }> = {
+    v1: {
+      from: 'Parivahan <noreply@parivahan.gov.in>',
+      subject: 'PUC Certificate issued',
+      plain: `PUC certificate for vehicle MH12AB1234 issued at Shree Emission Centre. Valid till: ${d(later(180))}.`,
+    },
+    v2: {
+      from: 'Maruti Suzuki <service@marutisuzuki.com>',
+      subject: 'Service reminder',
+      plain: `Dear customer, your vehicle MH12AB1234 is due for its 3rd free service on ${d(later(12))} or at 10,000 km, whichever is earlier.`,
+    },
+    v3: {
+      from: 'ACKO <noreply@acko.com>',
+      subject: 'Your PUC is expiring',
+      plain: `The PUC of your car KA05MN4321 expires on ${d(later(9))}. Renew it at a nearby centre. ACKO General Insurance Ltd.`,
+    },
+  }
+  globalThis.fetch = (async (input: string | URL) => {
+    const url = String(input)
+    if (url.includes('/messages?')) {
+      assert.match(decodeURIComponent(url), /parivahan/)
+      return new Response(JSON.stringify({ messages: Object.keys(inbox).map((id) => ({ id })) }))
+    }
+    const id = url.split('/messages/')[1]!.split('?')[0]!
+    const m = inbox[id]!
+    return new Response(
+      JSON.stringify({
+        id,
+        payload: {
+          mimeType: 'text/plain',
+          headers: [
+            { name: 'From', value: m.from },
+            { name: 'Subject', value: m.subject },
+          ],
+          body: { data: b64(m.plain) },
+        },
+      }),
+    )
+  }) as typeof fetch
+  const acc = await account('google')
+  const found = await svc.readMail(acc, new Date(), async () => 'token')
+  assert.equal(found.length, 3, found.join(' | '))
+
+  const bills = await h.sql<{ name: string; kind: string; category: string }[]>`select name, kind, category from bills order by name`
+  assert.deepEqual(bills.map((x) => [x.name, x.kind, x.category]), [
+    ['PUC · KA05MN4321', 'renewal', 'vehicle'],
+    ['PUC · MH12AB1234', 'renewal', 'vehicle'],
+  ])
+  const [service] = await h.sql<{ title: string; type: string }[]>`select title, booking->>'type' as type from commitments where booking is not null`
+  assert.deepEqual(service, { title: 'Vehicle service · MH12AB1234 (Maruti Suzuki)', type: 'service' })
+  const [reminder] = await h.sql<{ days: number }[]>`
+    select round(extract(epoch from (c.due_at - r.fire_at)) / 86400)::int as days
+    from reminders r join commitments c on c.id = r.commitment_id where c.booking is not null`
+  assert.equal(reminder!.days, 3, 'three days ahead, to book a slot')
+})

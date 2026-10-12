@@ -17,6 +17,7 @@ import { configFor, isProvider, providerConfigured, PROVIDERS, type Provider } f
 import { GoogleCalendarError, listCalendars } from '../services/googleCalendar.ts'
 import { listMicrosoftCalendars, MicrosoftCalendarError } from '../services/microsoftCalendar.ts'
 import { FeedError, syncFeed } from '../services/calendarFeed.ts'
+import { readMail } from '../services/mailReader.ts'
 
 /**
  * Connecting Google and Microsoft calendars.
@@ -115,7 +116,7 @@ export async function oauthRoutes(app: FastifyInstance) {
     }
     // Reading email is its own request, so the consent screen says exactly that.
     const { purpose } = z
-      .object({ purpose: z.enum(['calendar', 'mail']).default('calendar') })
+      .object({ purpose: z.enum(['calendar', 'mail', 'all']).default('calendar') })
       .parse(req.body ?? {})
     try {
       return { url: await beginConsent(provider, orgId, userId, purpose) }
@@ -158,7 +159,9 @@ export async function oauthRoutes(app: FastifyInstance) {
 
     try {
       const done = await completeConsent(provider, query.data.state, query.data.code)
-      return reply.redirect(back(done.purpose === 'mail' ? 'mail_connected' : 'connected'))
+      return reply.redirect(
+        back(done.purpose === 'mail' ? 'mail_connected' : done.purpose === 'all' ? `all_connected:${done.accountId}` : 'connected'),
+      )
     } catch (err) {
       if (err instanceof OAuthError) {
         req.log.warn({ provider, code: err.code }, 'consent failed')
@@ -220,6 +223,77 @@ export async function oauthRoutes(app: FastifyInstance) {
   })
 
   /** Start mirroring one calendar, and read it immediately so it is not empty. */
+  /**
+   * The rest of a one-step connection: the account's main calendar mirrored
+   * and its email read for the first time, so nothing is left to pick.
+   */
+  app.post('/oauth/accounts/:id/setup', authed, async (req, reply) => {
+    const { orgId, sub: userId } = scope(req)
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params)
+    const account = await ownAccount(id, userId)
+    if (!account) return reply.code(404).send({ error: 'not_found' })
+
+    const result: { calendar: { name: string; events: number } | null; mail: { found: string[] } | null; errors: string[] } = {
+      calendar: null,
+      mail: null,
+      errors: [],
+    }
+    if (hasCalendar(account)) {
+      try {
+        const calendars = await calendarsOf(account)
+        const main = calendars.find((c) => c.primary) ?? calendars[0]
+        if (main) {
+          const [existing] = await db
+            .select({ id: schema.calendarFeeds.id })
+            .from(schema.calendarFeeds)
+            .where(and(eq(schema.calendarFeeds.oauthAccountId, id), eq(schema.calendarFeeds.externalCalendarId, main.id)))
+            .limit(1)
+          const events = existing ? 0 : await mirror(orgId, userId, account, main.id, main.name)
+          result.calendar = { name: main.name, events }
+        }
+      } catch (err) {
+        result.errors.push(failure(err)?.message ?? (err instanceof FeedError ? err.message : 'Could not read the calendar.'))
+      }
+    }
+    if (account.mailEnabled) {
+      try {
+        result.mail = { found: await readMail(account) }
+      } catch (err) {
+        result.errors.push(`Email: ${(err as Error).message}`)
+      }
+    }
+    return result
+  })
+
+  /** One calendar mirrored and read straight away. Returns how many events came in. */
+  async function mirror(orgId: string, userId: string, account: AccountRow, calendarId: string, label: string): Promise<number> {
+    const [feed] = await db
+      .insert(schema.calendarFeeds)
+      .values({
+        orgId,
+        userId,
+        label,
+        source: account.provider,
+        oauthAccountId: account.id,
+        externalCalendarId: calendarId,
+        calendarName: label,
+        remind: false,
+        historyDays: 365,
+      })
+      .returning()
+    const report = await syncFeed(feed!)
+    await db
+      .update(schema.calendarFeeds)
+      .set({
+        lastSyncedAt: new Date(),
+        lastError: null,
+        lastEventCount: report.imported + report.updated + report.repeating,
+        lastSkippedCount: report.skipped,
+      })
+      .where(eq(schema.calendarFeeds.id, feed!.id))
+    return report.imported + report.updated + report.repeating
+  }
+
   app.post('/oauth/accounts/:id/calendars', authed, async (req, reply) => {
     const { orgId, sub: userId } = scope(req)
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params)

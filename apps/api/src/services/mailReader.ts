@@ -6,12 +6,15 @@ import {
   parseDelivery,
   parseDueNotice,
   parseInsurance,
+  parseVehicleNotice,
+  serviceAsBooking,
+  vehicleNoticeName,
   type ParsedDelivery,
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { sendToUser } from '../push.ts'
 import { freshAccessToken, type AccountRow } from './oauthConnect.ts'
-import { billFromInsurance, billFromNotice } from './bills.ts'
+import { billFromInsurance, billFromNotice, billFromPuc } from './bills.ts'
 import { saveFoundBooking } from './bookings.ts'
 import { recordDelivery } from './deliveries.ts'
 import { knownPlaces } from './captureLinks.ts'
@@ -51,10 +54,15 @@ export const SENDERS = [
   'royalsundaram', 'cholams', 'libertyinsurance', 'iffcotokio', 'magmahdi', 'shriramgi', 'hizuno', 'universalsompo',
   'starhealth', 'nivabupa', 'careinsurance', 'adityabirlacapital', 'licindia', 'hdfclife', 'iciciprulife', 'sbilife',
   'maxlifeinsurance', 'tataaia', 'policybazaar', 'insurancedekho', 'coverfox', 'turtlemint',
+  // Vehicles: PUC and service
+  'parivahan', 'vahan', 'parkplus', 'carinfo', 'cardekho', 'cars24', 'spinny', 'gomechanic', 'marutisuzuki', 'nexaexperience',
+  'hyundai', 'tatamotors', 'mahindra', 'hondacarindia', 'toyotabharat', 'kia-india', 'kiaindia', 'mgmotor', 'renault',
+  'skoda', 'volkswagen', 'heromotocorp', 'honda2wheelersindia', 'bajajauto', 'tvsmotor', 'royalenfield', 'yamaha-motor',
+  'suzukimotorcycle', 'atherenergy', 'olaelectric',
 ]
 
 /** Subjects worth opening even from a sender not on the list: a travel agent, a small bank. */
-const SUBJECTS = /\b(?:credit card statement|e-?statement|payment due|bill (?:is )?generated|electricity bill|pnr|booking confirm|e-?ticket|out for delivery|has (?:been )?shipped|order (?:has been )?delivered|insurance|policy (?:is )?(?:issued|renewal|expir\w*)|premium due|renewal reminder)\b/i
+const SUBJECTS = /\b(?:credit card statement|e-?statement|payment due|bill (?:is )?generated|electricity bill|pnr|booking confirm|e-?ticket|out for delivery|has (?:been )?shipped|order (?:has been )?delivered|insurance|policy (?:is )?(?:issued|renewal|expir\w*)|premium due|renewal reminder|puc|pollution|service (?:due|reminder)|free service)\b/i
 
 export function worthOpening(from: string, subject: string): boolean {
   const f = from.toLowerCase()
@@ -67,6 +75,7 @@ export function gmailQuery(days: number): string {
     '"credit card statement"', 'statement', '"payment due"', '"bill generated"', '"electricity bill"', 'PNR',
     '"booking confirmed"', '"e-ticket"', '"out for delivery"', 'shipped', 'delivered',
     'insurance', '"policy issued"', '"policy renewal"', '"premium due"', '"renewal reminder"',
+    'PUC', 'pollution', '"service due"', '"service reminder"', '"free service"',
   ]
   return `newer_than:${days}d (from:(${SENDERS.join(' OR ')}) OR subject:(${subjects.join(' OR ')}))`
 }
@@ -195,6 +204,20 @@ export async function actOn(orgId: string, userId: string, msg: MailMessage, now
     const city = booking.city ?? (booking.type === 'hotel' || booking.type === 'bus' ? findCity(text, await knownPlaces(userId)) : null)
     const saved = await saveFoundBooking(orgId, userId, booking, city, now)
     return saved ? `${saved.title}, ${dayWords(booking.startsAt)}` : null
+  }
+
+  // A vehicle's PUC running out, or its service due. Before insurance: some
+  // insurers send PUC reminders too, and those are not policies.
+  const vehicle = parseVehicleNotice(text)
+  if (vehicle?.kind === 'puc') {
+    const name = vehicleNoticeName(vehicle)
+    const r = await billFromPuc(orgId, userId, { name, vehicle: vehicle.vehicle, dueOn: vehicle.dueOn })
+    return r ? `${name}: valid till ${dayWords(vehicle.dueOn)}` : null
+  }
+  if (vehicle?.kind === 'service') {
+    const service = serviceAsBooking(vehicle)
+    const saved = await saveFoundBooking(orgId, userId, service, null, now)
+    return saved ? `${saved.title}: service due ${dayWords(vehicle.dueOn)}` : null
   }
 
   // Car, bike, health, life: when cover ends, or a premium is due.

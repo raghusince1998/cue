@@ -5694,3 +5694,26 @@ a.link-btn:hover {
   gap: 4px;
   font-size: 13px;
 }
+
+.integration {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.integration-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mail-found summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+}

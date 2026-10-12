@@ -5,7 +5,7 @@
  * bookings, but every one of them sends this message, and it says enough.
  */
 
-export type BookingType = 'train' | 'flight' | 'bus' | 'hotel' | 'show' | 'appointment' | 'other'
+export type BookingType = 'train' | 'flight' | 'bus' | 'hotel' | 'show' | 'appointment' | 'service' | 'other'
 
 export interface ParsedBooking {
   type: BookingType

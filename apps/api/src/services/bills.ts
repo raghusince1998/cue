@@ -356,6 +356,8 @@ export async function billFromInsurance(
       and(
         eq(b.userId, userId),
         eq(b.active, true),
+        // Within insurance: the same car's PUC is a different reminder.
+        eq(b.category, 'insurance'),
         notice.vehicle
           ? sql`replace(upper(${b.name}), ' ', '') like ${`%${notice.vehicle}%`}`
           : sql`lower(${b.name}) = lower(${notice.name})`,
@@ -380,5 +382,44 @@ export async function billFromInsurance(
     ...(notice.amountPaise ? { amountPaise: notice.amountPaise } : {}),
     ...(notice.dueOn !== existing.dueOn ? { dueOn: notice.dueOn } : {}),
   })
+  return bill ? { bill, created: false } : null
+}
+
+/**
+ * A PUC certificate onto that vehicle's PUC reminder — a new certificate's
+ * later expiry moves it on by itself — or a new one the first time.
+ */
+export async function billFromPuc(
+  orgId: string,
+  userId: string,
+  notice: { name: string; vehicle: string | null; dueOn: string },
+): Promise<{ bill: BillDTO; created: boolean } | null> {
+  const [existing] = await db
+    .select({ id: b.id, dueOn: b.dueOn })
+    .from(b)
+    .where(
+      and(
+        eq(b.userId, userId),
+        eq(b.active, true),
+        eq(b.category, 'vehicle'),
+        notice.vehicle
+          ? sql`upper(${b.name}) like 'PUC%' and replace(upper(${b.name}), ' ', '') like ${`%${notice.vehicle}%`}`
+          : sql`lower(${b.name}) = lower(${notice.name})`,
+      ),
+    )
+    .limit(1)
+  if (!existing) {
+    const bill = await createBill(orgId, userId, {
+      name: notice.name,
+      kind: 'renewal',
+      category: 'vehicle',
+      dueOn: notice.dueOn,
+      repeat: 'none',
+      remindDays: 10,
+    })
+    return { bill, created: true }
+  }
+  if (notice.dueOn <= existing.dueOn) return null
+  const bill = await updateBill(userId, existing.id, { dueOn: notice.dueOn })
   return bill ? { bill, created: false } : null
 }

@@ -98,7 +98,7 @@ export async function beginConsent(
   provider: Provider,
   orgId: string,
   userId: string,
-  purpose: 'calendar' | 'mail' = 'calendar',
+  purpose: 'calendar' | 'mail' | 'all' = 'calendar',
 ): Promise<string> {
   const config = configFor(provider)
   if (!config.clientId || !config.clientSecret) {
@@ -126,10 +126,13 @@ export async function beginConsent(
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
     response_type: 'code',
-    // Mail is asked for on its own — read-only mail and nothing else — never by surprise.
+    // Mail on its own is read-only mail and nothing else; "all" is the calendar
+    // and read-only mail in one go. Neither is ever asked for by surprise.
     scope: (purpose === 'mail'
       ? [...config.scopes.filter((s) => s !== config.calendarScope), config.mailScope]
-      : config.scopes
+      : purpose === 'all'
+        ? [...config.scopes, config.mailScope]
+        : config.scopes
     ).join(' '),
     state,
     code_challenge: challenge,
@@ -239,6 +242,15 @@ export async function completeConsent(
   const granted = (body.scope ?? '').split(' ')
   const has = (full: string) => granted.some((s) => s === full || s.endsWith(full.split('/').pop()!))
   const forMail = pending.purpose === 'mail'
+  const forAll = pending.purpose === 'all'
+  // Both at once: whichever boxes were left ticked are what Cue uses.
+  if (body.scope && forAll && !has(config.mailScope) && !has(config.calendarScope)) {
+    throw new OAuthError(
+      'Neither calendar nor email access was granted. Connect again and leave the boxes ticked.',
+      'scope_missing',
+      true,
+    )
+  }
   if (body.scope && forMail && !has(config.mailScope)) {
     throw new OAuthError(
       'Email access was not granted — tick the box to let Cue read your email, and connect again.',
@@ -246,7 +258,7 @@ export async function completeConsent(
       true,
     )
   }
-  if (body.scope && !forMail && !has(config.calendarScope)) {
+  if (body.scope && !forMail && !forAll && !has(config.calendarScope)) {
     throw new OAuthError(
       'Calendar access was not granted — Cue needs permission to read your calendar.',
       'scope_missing',
@@ -273,7 +285,8 @@ export async function completeConsent(
   // Reconnecting the same account updates it rather than stacking duplicates,
   // and clears whatever error made them reconnect in the first place. Mail is
   // switched on by asking for it, and never switched off by a calendar reconnect.
-  const withMail = forMail ? { ...values, mailEnabled: true, mailError: null } : values
+  const readsMail = forMail || (forAll && (!body.scope || has(config.mailScope)))
+  const withMail = readsMail ? { ...values, mailEnabled: true, mailError: null } : values
   const [row] = await db
     .insert(schema.oauthAccounts)
     .values(withMail)

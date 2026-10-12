@@ -7,7 +7,7 @@ interface Status {
 }
 
 const KEY = 'cue.mailAsked'
-const NAME: Record<string, string> = { google: 'Gmail', microsoft: 'Outlook' }
+const NAME: Record<string, string> = { google: 'Google', microsoft: 'Microsoft' }
 
 /**
  * Asked once, on Today: let bookings, parcels and bills come in from email
@@ -46,7 +46,7 @@ export function ConnectMailCard() {
   async function connect(provider: string) {
     setBusy(true)
     try {
-      const { url } = await api<{ url: string }>(`/oauth/${provider}/connect`, { method: 'POST', body: { purpose: 'mail' } })
+      const { url } = await api<{ url: string }>(`/oauth/${provider}/connect`, { method: 'POST', body: { purpose: 'all' } })
       dismiss()
       window.location.assign(url)
     } catch {
@@ -56,11 +56,11 @@ export function ConnectMailCard() {
 
   return (
     <section className="card uses-card connect-mail-card">
-      <h2 className="section-title">Bookings, parcels and bills, by themselves</h2>
+      <h2 className="section-title">Connect once, and things come in by themselves</h2>
       <p className="muted small">
-        Connect your email once. Train and flight tickets, hotel and movie bookings, parcels on their
-        way, card dues and electricity bills then turn up here with reminders. Cue opens only emails
-        from booking sites, shops, couriers, banks and utilities, and keeps none of them.
+        Your calendar, plus what your email already says: train and flight tickets, parcels, card and
+        electricity bills, insurance, PUC and service dues, each with a reminder. One step. Email is
+        read-only and only from the senders that send these; none of it is kept.
       </p>
       <div className="row">
         {usable.map((p) => (
