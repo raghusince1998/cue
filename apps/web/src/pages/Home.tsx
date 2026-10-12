@@ -144,7 +144,7 @@ export default function Home() {
       <header className="site-header">
         <div className="site-wrap site-header-row">
           <Link to="/" className="site-brand">
-            <span className="brand-dot" />
+            <img className="brand-mark" src="/brand/cue-mark.svg" alt="" />
             Cue
           </Link>
           <nav className="site-nav" aria-label="Sections">

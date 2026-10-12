@@ -111,7 +111,7 @@ function Nav({
     <>
       <header className="topbar">
         <div className="brand">
-          <span className="brand-dot" />
+          <img className="brand-mark" src="/brand/cue-mark.svg" alt="" />
           Cue
         </div>
         <div className="topbar-right">

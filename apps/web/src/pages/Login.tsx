@@ -57,7 +57,7 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
     <div className="auth">
       <form className="card auth-card" onSubmit={submit}>
         <div className="brand big">
-          <span className="brand-dot" />
+          <img className="brand-mark" src="/brand/cue-mark.svg" alt="" />
           Cue
         </div>
         <p className="muted">

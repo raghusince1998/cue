@@ -60,7 +60,7 @@ export default function ResetPassword() {
       <div className="auth">
         <div className="card auth-card">
           <div className="brand big">
-            <span className="brand-dot" />
+            <img className="brand-mark" src="/brand/cue-mark.svg" alt="" />
             Cue
           </div>
           <p className="error">That link is missing its token. Ask for a new one.</p>
@@ -77,7 +77,7 @@ export default function ResetPassword() {
       <div className="auth">
         <div className="card auth-card">
           <div className="brand big">
-            <span className="brand-dot" />
+            <img className="brand-mark" src="/brand/cue-mark.svg" alt="" />
             Cue
           </div>
           <p>Your password is changed. Sign in with the new one.</p>
@@ -93,7 +93,7 @@ export default function ResetPassword() {
     <div className="auth">
       <form className="card auth-card" onSubmit={submit}>
         <div className="brand big">
-          <span className="brand-dot" />
+          <img className="brand-mark" src="/brand/cue-mark.svg" alt="" />
           Cue
         </div>
         <p className="muted">Choose a new password.</p>

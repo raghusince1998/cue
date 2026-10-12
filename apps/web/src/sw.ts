@@ -70,7 +70,8 @@ self.addEventListener('push', (event) => {
     renotify: Boolean(payload.tag),
     requireInteraction: true,
     icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    // A white silhouette: Android paints the badge from its alpha alone.
+    badge: '/badge-96.png',
     data: { url: payload.url ?? '/', commitmentId: payload.commitmentId },
     // Three is the most any platform shows, and Call earns its slot whenever
     // there is actually a number to ring.

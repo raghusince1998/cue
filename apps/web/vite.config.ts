@@ -40,7 +40,8 @@ export default defineConfig(({ mode }) => {
           icons: [
             { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
             { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
-            { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+            { src: '/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+            { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
           ],
           // Long-press the icon on the home screen. Each opens Today ready
           // for that one thing, so capture starts from outside the app.
