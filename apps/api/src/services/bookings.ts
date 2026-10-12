@@ -1,16 +1,15 @@
-import { and, eq, gte, lte, ne, sql } from 'drizzle-orm'
-import { samePlace, type ParsedBooking } from '@cue/shared'
+import { and, eq, ne, sql } from 'drizzle-orm'
+import { type ParsedBooking } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { sendToUser } from '../push.ts'
 import { scheduleFirstReminder } from './reminders.ts'
+import { tripForBooking, wishesFor } from './tripAssembly.ts'
 
 /**
  * Bookings as plans: a train, a flight, a hotel, a show. Reminded ahead of
  * time rather than at it — a reminder as the train leaves is no use — and
  * never chased once passed.
  */
-
-const ymd = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 /**
  * When a booking's reminders go: its lead time before (or the nearest still
@@ -66,27 +65,15 @@ export async function saveFoundBooking(
   if (b.startsAt.getTime() < now.getTime()) return null
   if (await known(userId, b)) return null
 
-  const [user] = await db.select({ home: schema.users.homeCity }).from(schema.users).where(eq(schema.users.id, userId))
-  const day = ymd(b.startsAt)
-
-  return db.transaction(async (tx) => {
-    let tripId: string | null = null
-    if (city && !samePlace(city, user?.home)) {
-      const t = schema.trips
-      const [trip] = await tx
-        .select({ id: t.id })
-        .from(t)
-        .where(and(eq(t.userId, userId), sql`lower(btrim(${t.placeLabel})) = lower(${city})`, lte(t.startsOn, day), gte(t.endsOn, day)))
-        .limit(1)
-      tripId =
-        trip?.id ??
-        (
-          await tx
-            .insert(t)
-            .values({ orgId, userId, placeLabel: city, startsOn: day, endsOn: b.endsOn && b.endsOn > day ? b.endsOn : day })
-            .returning({ id: t.id })
-        )[0]!.id
-    }
+  const saved = await db.transaction(async (tx) => {
+    // The trip it is part of: the way out, the stay and the way home, as one.
+    const trip = await tripForBooking(
+      orgId,
+      userId,
+      { type: b.type, startsAt: b.startsAt, endsOn: b.endsOn, city, fromCity: b.fromCity ?? null },
+      tx,
+    )
+    const tripId = trip?.tripId ?? null
 
     const [row] = await tx
       .insert(schema.commitments)
@@ -108,6 +95,8 @@ export async function saveFoundBooking(
           city,
           provider: b.provider,
           remindBeforeMinutes: b.remindBeforeMinutes,
+          fromCity: b.fromCity ?? null,
+          endsOn: b.endsOn,
         },
       })
       .returning({ id: schema.commitments.id })
@@ -133,6 +122,21 @@ export async function saveFoundBooking(
         .returning({ id: schema.commitments.id })
       await scheduleFirstReminder({ orgId, commitmentId: checkIn!.id, fireAt: opens }, tx)
     }
-    return { id: row!.id, title: b.title }
+    return { id: row!.id, title: b.title, trip }
   })
+
+  // A trip started from an email is the moment saved wishes for there matter:
+  // the person never saw it being made, so they are told once.
+  if (saved.trip?.created) {
+    const wishes = await wishesFor(userId, saved.trip.placeLabel)
+    if (wishes.length > 0) {
+      await sendToUser(userId, {
+        title: `Trip to ${saved.trip.placeLabel}`,
+        body: `Found in your email: ${b.title}. You saved ${wishes.length === 1 ? 'something' : `${wishes.length} things`} for ${saved.trip.placeLabel}: ${wishes.slice(0, 3).join(', ')}${wishes.length > 3 ? '…' : ''}.`,
+        tag: `trip-${saved.trip.tripId}`,
+        url: '/trips',
+      }).catch(() => 0)
+    }
+  }
+  return { id: saved.id, title: saved.title }
 }

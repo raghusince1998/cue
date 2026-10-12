@@ -34,7 +34,7 @@ export {
 } from './expenses.ts'
 import { CLAIM_STATUSES as CLAIMS, EXPENSE_CATEGORY_KEYS as EXPENSE_KEYS } from './expenses.ts'
 export { owedMessage, parseOwed, splitEqually, type OwedLine, type ParsedOwed } from './owed.ts'
-export { leadLabel, parseBooking, cityIn, type BookingType, type ParsedBooking } from './bookings.ts'
+export { leadLabel, parseBooking, cityIn, sameCity, isAbroad, type BookingType, type ParsedBooking } from './bookings.ts'
 export { parseDueNotice, type DueNotice } from './dueNotices.ts'
 export { parseInsurance, type InsuranceNotice } from './insurance.ts'
 export {
@@ -474,6 +474,36 @@ export interface TripDTO {
   plannedCount?: number
   /** Saved wishes for this place that are not yet scheduled. */
   waitingCount?: number
+  /** The "Pack for …" plan whose checklist is this trip's packing list. */
+  packingId?: string | null
+}
+
+/** One thing on a trip's day-by-day plan. */
+export interface TripItemDTO {
+  id: string
+  title: string
+  kind: string
+  dueAt: string
+  durationMinutes: number
+  flexibility: string
+  preferredWindow: TimeWindow | null
+  allDay: boolean
+  endsAt: string | null
+  status: string
+  priority: string
+  notes: string | null
+  /** A journey or a stay: what it is, its reference, and when to leave for it. */
+  booking: {
+    type: string
+    ref: string | null
+    provider: string | null
+    from: string | null
+    city: string | null
+    endsOn: string | null
+    leaveAt: string | null
+  } | null
+  checklistCount: number
+  checklistDone: number
 }
 
 /**
@@ -1208,3 +1238,4 @@ export interface VisitDTO {
   commitments?: CommitmentDTO[]
 }
 export { sphereOf, isWorkTime, nextWorkBoundary, describeWorkHours, DEFAULT_WORK_HOURS, SPHERES, type Sphere, type SphereHints, type WorkHours } from './sphere.ts'
+export { packingList, packingItems, type PackingInput, type PackingSection, type TripPurpose, type TravelMode } from './packing.ts'

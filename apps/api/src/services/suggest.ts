@@ -92,7 +92,7 @@ export async function recentPeople(orgId: string, limit = 4) {
 // -------------------------------------------------------------- suggesting
 
 export interface Suggestion {
-  id: 'start-early' | 'gift' | 'prepare' | 'move-after-trip'
+  id: 'start-early' | 'gift' | 'prepare' | 'move-after-trip' | 'book-cab'
   /** Why, in a sentence: "Passport appointments can take weeks." */
   text: string
   /** The button: "Remind me Sun 1 Nov", "Move to Fri 6 Nov". */
@@ -115,7 +115,7 @@ export interface PlanShape {
   commitmentKind: CommitmentKind
   placeLabel: string | null
   deadline: boolean
-  booking: unknown
+  booking: { type: string; remindBeforeMinutes: number } | null
   trip: unknown
   startsOn: string | null
   rule: { freq: string } | null
@@ -207,6 +207,25 @@ export async function suggestionsFor(userId: string, plan: PlanShape, line: stri
           extra: { title: `Prepare: ${plan.title}`, dueAt: at.toISOString(), kind: 'focus', durationMinutes: 60, flexible: false },
         })
       }
+    }
+  }
+
+  // A flight or a train: the cab to get there, booked the evening before so
+  // an early start is not a scramble for one at the door.
+  if (plan.kind === 'commitment' && plan.dueAt && plan.booking && ['flight', 'train'].includes(plan.booking.type)) {
+    const departs = new Date(plan.dueAt)
+    const leave = new Date(departs.getTime() - plan.booking.remindBeforeMinutes * 60_000)
+    const eve = new Date(departs.getFullYear(), departs.getMonth(), departs.getDate() - 1, 20, 0)
+    const bookAt = eve.getTime() > now.getTime() + 30 * 60_000 ? eve : null
+    if (bookAt && leave.getTime() > now.getTime() + 6 * 3_600_000) {
+      const to = plan.booking.type === 'flight' ? 'the airport' : 'the station'
+      const leaving = clockLabel(leave.getHours(), leave.getMinutes())
+      out.push({
+        id: 'book-cab',
+        text: `You need to leave by ${leaving}. Book a cab to ${to} the evening before?`,
+        action: `Remind me ${dayName(bookAt)}, 8 pm`,
+        extra: { title: `Book a cab to ${to} for ${leaving}`, dueAt: bookAt.toISOString(), kind: 'task', durationMinutes: 10, flexible: false },
+      })
     }
   }
 

@@ -22,6 +22,11 @@ export interface ParsedBooking {
   city: string | null
   /** Where it starts, said plainly: "Mumbai Central", "Bengaluru". */
   from: string | null
+  /**
+   * The city it leaves from, when the station or airport says: what tells a
+   * journey home from a journey out, so the way back joins the same trip.
+   */
+  fromCity?: string | null
   /** PNR or booking ID, to show at the counter. */
   ref: string | null
   /** Notes worth having to hand: class, coach and seat, waitlist, screen. */
@@ -218,6 +223,7 @@ function train(text: string, now: Date): ParsedBooking | null {
     endsOn: null,
     city: toCode ? (STATIONS[toCode]?.[1] ?? null) : null,
     from,
+    fromCity: fromCode ? (STATIONS[fromCode]?.[1] ?? null) : null,
     ref: pnr,
     notes,
     provider: 'IRCTC',
@@ -252,6 +258,7 @@ function flight(text: string, now: Date): ParsedBooking | null {
     endsOn: null,
     city: toCode ? AIRPORTS[toCode]![1] : null,
     from,
+    fromCity: fromCode ? AIRPORTS[fromCode]![1] : null,
     ref: pnr,
     notes: [pnr ? `PNR ${pnr}` : null, airline].filter(Boolean).join(' · ') || null,
     provider: airline,
@@ -283,6 +290,7 @@ function bus(text: string, now: Date): ParsedBooking | null {
     endsOn: null,
     city: route?.to ?? null,
     from: route?.from ?? null,
+    fromCity: route?.from ?? null,
     ref,
     notes: [ref ? `Ticket ${ref}` : null, seat ? `Seat ${seat}` : null, boarding ? `Boarding: ${boarding}` : null].filter(Boolean).join(' · ') || null,
     provider: provider(text),
@@ -422,6 +430,31 @@ export function cityIn(text: string): string | null {
   return CITIES.find((city) => new RegExp(`\\b${city.replace(/ /g, '\\s+')}\\b`, 'i').test(text)) ?? null
 }
 
+/** Cities outside India the airport list knows: a trip there wants a passport. */
+const ABROAD = new Set(
+  ['DXB', 'AUH', 'DOH', 'SIN', 'BKK', 'KUL', 'LHR', 'CDG', 'JFK', 'SFO', 'CMB', 'KTM', 'DPS', 'MLE'].map((code) =>
+    AIRPORTS[code]![1].toLowerCase(),
+  ),
+)
+
+export function isAbroad(city: string | null | undefined): boolean {
+  return Boolean(city && ABROAD.has(city.trim().toLowerCase()))
+}
+
+/**
+ * The same city, under either name: "Bangalore" is Bengaluru, "Bombay" is
+ * Mumbai. A home city typed one way and a ticket printed the other must not
+ * make a trip to where someone lives.
+ */
+export function sameCity(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false
+  const canon = (s: string) => {
+    const said = s.trim().replace(/\s+/g, ' ').toLowerCase()
+    return (CITY_ALIASES[said] ?? said).toLowerCase()
+  }
+  return canon(a) === canon(b)
+}
+
 /** A place as typed, under the name the lists use when they know it. */
 function cityName(raw: string): string {
   const said = raw.trim().replace(/\s+/g, ' ')
@@ -473,6 +506,7 @@ function typed(text: string, now: Date): ParsedBooking | null {
     endsOn: null,
     city: to,
     from,
+    fromCity: from,
     ref: pnr,
     notes: [pnr ? `PNR ${pnr}` : null, type === 'flight' && number ? AIRLINES[number.slice(0, 2)] ?? null : null]
       .filter(Boolean)

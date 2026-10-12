@@ -564,6 +564,10 @@ export const commitments = pgTable(
       city: string | null
       provider: string | null
       remindBeforeMinutes: number
+      /** The city a journey leaves from: how the way home joins its trip. */
+      fromCity?: string | null
+      /** A stay's last day: check-out. */
+      endsOn?: string | null
     }>(),
     /** The tracked item this is the next step of: an interview, a follow-up. */
     trackerItemId: uuid('tracker_item_id').references((): AnyPgColumn => trackerItems.id, { onDelete: 'set null' }),
@@ -697,6 +701,8 @@ export const trips = pgTable(
     notes: text('notes'),
     status: text('status').notNull().default('planned'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** The "Pack for …" plan whose checklist is this trip's packing list. */
+    packingId: uuid('packing_id').references((): AnyPgColumn => commitments.id, { onDelete: 'set null' }),
   },
   (t) => [index('trips_user_dates_idx').on(t.userId, t.startsOn, t.endsOn)],
 )

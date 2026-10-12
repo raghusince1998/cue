@@ -79,6 +79,7 @@ import { createBill } from '../services/bills.ts'
 import { recordDelivery } from '../services/deliveries.ts'
 import { bookingReminderTimes, webCheckInAt } from '../services/bookings.ts'
 import { cachedReading, captureAiEnabled, readWithAi, type AiPart, type AiReading } from '../services/captureAi.ts'
+import { isWayHome, tripForBooking } from '../services/tripAssembly.ts'
 import {
   APPOINTMENT_WORD,
   CONTACT_VERB,
@@ -137,7 +138,7 @@ const quickInput = z.object({
    */
   careful: z.boolean().optional(),
   /** The suggestions the person accepted, by id. */
-  accept: z.array(z.enum(['start-early', 'gift', 'prepare', 'move-after-trip'])).max(4).optional(),
+  accept: z.array(z.enum(['start-early', 'gift', 'prepare', 'move-after-trip', 'book-cab'])).max(5).optional(),
   /** Work or personal, flipped by the person from what the preview read. */
   sphere: z.enum(['work', 'personal']).optional(),
 })
@@ -403,9 +404,26 @@ export async function quickAddRoutes(app: FastifyInstance) {
     const tripLink = plan.trip
     const makeTrip = tripLink && !tripLink.existing && body.trip === 'add'
 
+    let bookingTrip: Awaited<ReturnType<typeof tripForBooking>> = null
     const row = await db.transaction(async (tx) => {
       let tripId = tripLink?.existing?.id ?? null
-      if (makeTrip) {
+      if (plan.booking && body.trip !== 'skip') {
+        // A journey or a stay: the trip it is part of, found or started and
+        // stretched to hold it — the way out, the hotel and the way home as one.
+        bookingTrip = await tripForBooking(
+          orgId,
+          userId,
+          {
+            type: plan.booking.type,
+            startsAt: dueAt,
+            endsOn: plan.booking.endsOn,
+            city: plan.booking.city,
+            fromCity: plan.booking.fromCity,
+          },
+          tx,
+        )
+        tripId = bookingTrip?.tripId ?? null
+      } else if (makeTrip) {
         const trip = takeFirst(
           await tx
             .insert(schema.trips)
@@ -450,6 +468,8 @@ export async function quickAddRoutes(app: FastifyInstance) {
                   city: plan.booking.city,
                   provider: plan.booking.provider,
                   remindBeforeMinutes: plan.booking.remindBeforeMinutes,
+                  fromCity: plan.booking.fromCity,
+                  endsOn: plan.booking.endsOn,
                 }
               : null,
           })
@@ -512,6 +532,15 @@ export async function quickAddRoutes(app: FastifyInstance) {
     // What the person accepted alongside: a start reminder, an hour to prepare.
     const extras = await addExtras(orgId, userId, accepted)
 
+    // The trip as it stands now: a booking may have stretched it.
+    const found = bookingTrip as Awaited<ReturnType<typeof tripForBooking>>
+    const [tripNow] = row.tripId
+      ? await db
+          .select({ placeLabel: schema.trips.placeLabel, startsOn: schema.trips.startsOn, endsOn: schema.trips.endsOn })
+          .from(schema.trips)
+          .where(eq(schema.trips.id, row.tripId))
+      : []
+
     return reply.code(201).send({
       ...plan,
       id: row.id,
@@ -519,16 +548,16 @@ export async function quickAddRoutes(app: FastifyInstance) {
       ...(checkInId ? { ids: [row.id, checkInId] } : {}),
       extras,
       savedTrip:
-        tripLink && row.tripId
+        tripNow && row.tripId
           ? {
               id: row.tripId,
-              placeLabel: tripLink.placeLabel,
-              startsOn: tripLink.existing?.startsOn ?? tripLink.day,
-              endsOn: tripLink.existing?.endsOn ?? tripLink.day,
-              created: Boolean(makeTrip),
+              placeLabel: tripNow.placeLabel,
+              startsOn: tripNow.startsOn,
+              endsOn: tripNow.endsOn,
+              created: found ? found.created : Boolean(makeTrip),
             }
           : null,
-      waiting: tripLink && row.tripId ? tripLink.waiting : [],
+      waiting: tripNow ? (found ? await waitingFor(userId, tripNow.placeLabel) : (tripLink?.waiting ?? [])) : [],
     })
   })
 
@@ -639,6 +668,8 @@ export interface QuickPlan {
     provider: string | null
     remindBeforeMinutes: number
     endsOn: string | null
+    /** Where a journey leaves from: how the way home joins its trip. */
+    fromCity: string | null
   } | null
   /** A new job application, candidate or deal, read from the line. */
   tracker: { board: BoardKey; stage: string; title: string; detail: string | null } | null
@@ -848,7 +879,11 @@ async function enrich(userId: string, orgId: string, raw: string, plan: QuickPla
   // takes you to is the trip.
   if (plan.booking) {
     const next: QuickPlan = { ...plan, links: { people: [], places: [], accounts: [] } }
-    if (plan.booking.city && plan.dueAt) {
+    // The way home is part of the trip it ends, not a trip to home.
+    const home =
+      plan.dueAt !== null &&
+      (await isWayHome(userId, { city: plan.booking.city, fromCity: plan.booking.fromCity, startsAt: new Date(plan.dueAt) }))
+    if (plan.booking.city && plan.dueAt && !home) {
       const trip = await tripLinkFor(userId, plan.booking.city, plan.booking.city, new Date(plan.dueAt))
       if (trip) next.trip = trip
     }
@@ -1275,6 +1310,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
         provider: booked.provider,
         remindBeforeMinutes: booked.remindBeforeMinutes,
         endsOn: booked.endsOn,
+        fromCity: booked.fromCity ?? null,
       },
       assumptions: [
         firstReminder,
