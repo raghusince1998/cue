@@ -45,6 +45,27 @@ jobs:
           mkdir -p ~/.bubblewrap
           printf '{"jdkPath":"%s","androidSdkPath":"%s"}' "$JAVA_HOME" "$ANDROID_HOME" > ~/.bubblewrap/config.json
 
+      # Bubblewrap expects the SDK in the layout its own installer makes: the
+      # command-line tools' bin/ at the top, and the build-tools version it
+      # signs with. The runner keeps the tools under cmdline-tools/latest, so
+      # point bin/ there, and install the build-tools here, licences accepted,
+      # rather than leave Bubblewrap to try.
+      - name: Give Bubblewrap the SDK layout it expects
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          [ -e "$ANDROID_HOME/bin" ] || ln -s "$ANDROID_HOME/cmdline-tools/latest/bin" "$ANDROID_HOME/bin" || sudo ln -s "$ANDROID_HOME/cmdline-tools/latest/bin" "$ANDROID_HOME/bin"
+          # Whichever build-tools this Bubblewrap release signs with, asked of Bubblewrap itself.
+          BUILD_TOOLS=$(node -e "
+            const path = require('path')
+            const core = require.resolve('@bubblewrap/core', { paths: [path.join('$(npm root -g)', '@bubblewrap/cli')] })
+            console.log(require(path.join(path.dirname(core), 'lib/androidSdk/AndroidSdkTools.js')).BUILD_TOOLS_VERSION)
+          " 2>/dev/null || echo 36.1.0)
+          echo "Bubblewrap signs with build-tools $BUILD_TOOLS"
+          yes | "$SDKMANAGER" --install "build-tools;$BUILD_TOOLS" > /dev/null
+          ls "$ANDROID_HOME/build-tools"
+
       - name: The signing key
         env:
           RELEASE: ${{ inputs.release }}
