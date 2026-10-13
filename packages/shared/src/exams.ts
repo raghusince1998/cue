@@ -92,7 +92,7 @@ const NTA_CARRY = ['The self-declaration (undertaking) on the admit card, filled
 export const EXAMS: CatalogExam[] = [
   // Railways
   { key: 'rrb-ntpc', name: 'RRB NTPC', ...RRB, aliases: ['rrb\\s*ntpc', 'railway\\s*ntpc', 'ntpc\\s+(?:cbt|graduate|under\\s*graduate|ug)'], rounds: [R.cbt1, R.cbt2, as(R.skill, 'Typing / skill test'), R.dv, R.medical] },
-  { key: 'rrb-group-d', name: 'RRB Group D', ...RRB, aliases: ['(?:rrb|rrc|railway)\\s*group[\\s-]*d', 'group[\\s-]*d\\s+(?:railway|rrb)'], rounds: [R.cbt, R.pet, R.dv, R.medical] },
+  { key: 'rrb-group-d', name: 'RRB Group D', ...RRB, aliases: ['(?:rrb|rrc|railway)\\s*group[\\s-]*d', 'group[\\s-]*d\\s+(?:railway|rrb)', 'level[\\s-]*1\\s+posts'], rounds: [R.cbt, R.pet, R.dv, R.medical] },
   { key: 'rrb-alp', name: 'RRB ALP (Assistant Loco Pilot)', ...RRB, aliases: ['(?:rrb|railway)\\s*alp', 'assistant\\s+loco\\s+pilot'], rounds: [R.cbt1, R.cbt2, as(R.skill, 'CBAT (aptitude test)'), R.dv, R.medical] },
   { key: 'rrb-je', name: 'RRB JE', ...RRB, aliases: ['(?:rrb|railway)\\s*je', 'rrb\\s+junior\\s+engineer'], rounds: [R.cbt1, R.cbt2, R.dv, R.medical] },
   { key: 'rrb-technician', name: 'RRB Technician', ...RRB, aliases: ['(?:rrb|railway)\\s*technician'], rounds: [R.cbt, R.dv, R.medical] },
@@ -109,30 +109,30 @@ export const EXAMS: CatalogExam[] = [
   { key: 'ssc-selection-post', name: 'SSC Selection Post', ...SSC, aliases: ['ssc\\s+selection\\s+posts?', 'ssc\\s+phase[\\s-]*(?:[ivx]+|\\d+)'], rounds: [R.cbt, R.dv] },
 
   // Union Public Service Commission
-  { key: 'upsc-cse', name: 'UPSC Civil Services', ...UPSC, aliases: ['upsc\\s*cse', 'upsc\\s+civil\\s+services?', 'civil\\s+services?\\s+(?:exam|prelims|mains)', 'ias\\s+(?:exam|prelims|mains)', 'upsc'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview (personality test)')] },
+  { key: 'upsc-cse', name: 'UPSC Civil Services', ...UPSC, aliases: ['upsc\\s*cse', 'upsc\\s+civil\\s+services?', 'civil\\s+services?\\s+(?:exam|prelims|mains)', 'civil\\s+services\\s*\\(\\s*(?:preliminary|main)\\s*\\)', 'civil\\s+services\\s+examination', 'ias\\s+(?:exam|prelims|mains)', 'upsc'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview (personality test)')] },
   { key: 'upsc-nda', name: 'UPSC NDA & NA', ...UPSC, aliases: ['upsc\\s+nda', 'nda\\s*(?:&|and)\\s*na', 'nda\\s+(?:exam|[12]|i{1,2}|20\\d\\d)'], rounds: [R.written, R.ssb, R.medical] },
   { key: 'upsc-cds', name: 'UPSC CDS', ...UPSC, aliases: ['upsc\\s+cds', 'cds\\s+(?:exam|[12]|i{1,2}|20\\d\\d)'], rounds: [R.written, R.ssb, R.medical] },
   { key: 'upsc-capf', name: 'UPSC CAPF (Assistant Commandant)', ...UPSC, aliases: ['upsc\\s+capf', 'capf\\s*\\(?ac\\)?', 'capf\\s+assistant\\s+commandant'], rounds: [R.written, as(R.pet, 'Physical & medical tests'), R.interview] },
   { key: 'upsc-ese', name: 'UPSC Engineering Services (ESE)', ...UPSC, aliases: ['upsc\\s+ese', 'ies\\s*/\\s*ese', '(?:upsc\\s+)?engineering\\s+services(?:\\s+exam)?'], rounds: [R.prelims, R.mains, R.interview] },
 
   // Banks and insurers
-  { key: 'ibps-po', name: 'IBPS PO', ...IBPS, aliases: ['ibps\\s*po'], rounds: [R.prelims, R.mains, R.interview] },
-  { key: 'ibps-clerk', name: 'IBPS Clerk', ...IBPS, aliases: ['ibps\\s*clerk'], rounds: [R.prelims, R.mains] },
-  { key: 'ibps-rrb', name: 'IBPS RRB (Gramin Bank)', ...IBPS, aliases: ['ibps\\s*rrb', 'rrb\\s*(?:po|clerk|officer\\s+scale|office\\s+assistant)', 'gramin\\s+bank'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview (officers)')] },
-  { key: 'ibps-so', name: 'IBPS SO', ...IBPS, aliases: ['ibps\\s*so'], rounds: [R.prelims, R.mains, R.interview] },
-  { key: 'sbi-po', name: 'SBI PO', ...SBI, aliases: ['sbi\\s*po'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview & group exercise')] },
+  { key: 'ibps-po', name: 'IBPS PO', ...IBPS, aliases: ['ibps\\s*po', 'crp[\\s-]*po(?:\\s*/\\s*mt)?'], rounds: [R.prelims, R.mains, R.interview] },
+  { key: 'ibps-clerk', name: 'IBPS Clerk', ...IBPS, aliases: ['ibps\\s*clerk', 'crp[\\s-]*clerks?'], rounds: [R.prelims, R.mains] },
+  { key: 'ibps-rrb', name: 'IBPS RRB (Gramin Bank)', ...IBPS, aliases: ['ibps\\s*rrb', 'crp[\\s-]*rrbs?','rrb\\s*(?:po|clerk|officer\\s+scale|office\\s+assistant)', 'gramin\\s+bank'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview (officers)')] },
+  { key: 'ibps-so', name: 'IBPS SO', ...IBPS, aliases: ['ibps\\s*so', 'crp[\\s-]*spl'], rounds: [R.prelims, R.mains, R.interview] },
+  { key: 'sbi-po', name: 'SBI PO', ...SBI, aliases: ['sbi\\s*po', 'sbi\\s+probationary\\s+officers?'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview & group exercise')] },
   { key: 'sbi-clerk', name: 'SBI Clerk (Junior Associate)', ...SBI, aliases: ['sbi\\s*clerk', 'sbi\\s+junior\\s+associates?'], rounds: [R.prelims, R.mains, { key: 'language', label: 'Language test' }] },
   { key: 'rbi-grade-b', name: 'RBI Grade B', ...RBI, aliases: ['rbi\\s*grade[\\s-]*b'], rounds: [R.phase1, R.phase2, R.interview] },
   { key: 'rbi-assistant', name: 'RBI Assistant', ...RBI, aliases: ['rbi\\s*assistant'], rounds: [R.prelims, R.mains, { key: 'language', label: 'Language test (LPT)' }] },
   { key: 'lic-aao', name: 'LIC AAO', body: 'Life Insurance Corporation', site: 'https://licindia.in', scope: 'national', aliases: ['lic\\s*aao'], rounds: [R.prelims, R.mains, R.interview] },
 
   // Entrance and eligibility tests
-  { key: 'jee-main', name: 'JEE Main', ...NTA, site: 'https://jeemain.nta.nic.in', aliases: ['jee\\s*mains?'], rounds: [R.session1, R.session2], carry: NTA_CARRY },
+  { key: 'jee-main', name: 'JEE Main', ...NTA, site: 'https://jeemain.nta.nic.in', aliases: ['jee\\s*mains?', 'jee\\s*\\(\\s*main\\s*\\)'], rounds: [R.session1, R.session2], carry: NTA_CARRY },
   { key: 'jee-advanced', name: 'JEE Advanced', body: 'IITs', site: 'https://jeeadv.ac.in', scope: 'national', aliases: ['jee\\s*adv(?:anced)?'], rounds: [R.exam] },
   { key: 'neet-ug', name: 'NEET UG', ...NTA, site: 'https://neet.nta.nic.in', aliases: ['neet(?!\\s*pg)(?:\\s*ug)?'], rounds: [R.exam, R.counselling], carry: [...NTA_CARRY, 'A postcard-size photo (4" × 6"), as the admit card asks'] },
   { key: 'cuet-ug', name: 'CUET UG', ...NTA, site: 'https://cuet.nta.nic.in', aliases: ['cuet(?:\\s*ug)?'], rounds: [R.exam], carry: NTA_CARRY },
-  { key: 'ugc-net', name: 'UGC NET', ...NTA, site: 'https://ugcnet.nta.ac.in', aliases: ['ugc\\s*net'], rounds: [R.exam], carry: NTA_CARRY },
-  { key: 'csir-net', name: 'CSIR NET', ...NTA, site: 'https://csirnet.nta.ac.in', aliases: ['csir\\s*net'], rounds: [R.exam], carry: NTA_CARRY },
+  { key: 'ugc-net', name: 'UGC NET', ...NTA, site: 'https://ugcnet.nta.ac.in', aliases: ['ugc[\\s-]*net'], rounds: [R.exam], carry: NTA_CARRY },
+  { key: 'csir-net', name: 'CSIR NET', ...NTA, site: 'https://csirnet.nta.ac.in', aliases: ['csir[\\s-]*(?:ugc[\\s-]*)?net'], rounds: [R.exam], carry: NTA_CARRY },
   { key: 'gate', name: 'GATE', body: 'IISc and the IITs (a different one each year)', site: null, scope: 'national', aliases: ['gate\\s+(?:exam|20\\d\\d)'], capitals: ['GATE'], rounds: [R.exam] },
   { key: 'cat', name: 'CAT', body: 'IIMs', site: 'https://iimcat.ac.in', scope: 'national', aliases: ['iim\\s+cat', 'cat\\s+(?:exam|20\\d\\d)'], capitals: ['CAT'], rounds: [R.exam, as(R.interview, 'WAT & interview')] },
   { key: 'clat', name: 'CLAT', body: 'Consortium of NLUs', site: 'https://consortiumofnlus.ac.in', scope: 'national', aliases: ['clat'], rounds: [R.exam, R.counselling] },
@@ -143,7 +143,7 @@ export const EXAMS: CatalogExam[] = [
   { key: 'afcat', name: 'AFCAT', body: 'Indian Air Force', site: 'https://careerindianairforce.cdac.in', scope: 'national', aliases: ['afcat'], rounds: [as(R.exam, 'Online exam'), as(R.ssb, 'AFSB interview'), R.medical] },
 
   // Rajasthan
-  { key: 'ras', name: 'RAS/RTS', ...RPSC, capitals: ['RAS'], aliases: ['rpsc\\s+ras', 'ras(?:\\s*/\\s*rts)?\\s+(?:exam|pre(?:lims)?|mains|20\\d\\d)'], rounds: [R.prelims, R.mains, R.interview] },
+  { key: 'ras', name: 'RAS/RTS', ...RPSC, capitals: ['RAS'], aliases: ['rpsc\\s+ras', 'ras(?:\\s*/\\s*rts)?\\s+(?:exam|pre(?:lims)?|mains|20\\d\\d)', 'ras\\s*/\\s*rts\\s+combined', 'rajasthan\\s+state\\s+and\\s+subordinate\\s+services'], rounds: [R.prelims, R.mains, R.interview] },
   { key: 'rpsc-school-lecturer', name: 'RPSC School Lecturer', ...RPSC, aliases: ['(?:rpsc\\s+)?school\\s+lecturer', '(?:1st|first)\\s+grade\\s+(?:teacher|lecturer)'], rounds: [R.written, R.dv] },
   { key: 'rpsc-senior-teacher', name: 'RPSC Senior Teacher (2nd Grade)', ...RPSC, aliases: ['(?:rpsc\\s+)?senior\\s+teacher', '(?:2nd|second)\\s+grade\\s+teacher'], rounds: [R.written, R.dv] },
   { key: 'raj-police-si', name: 'Rajasthan Police SI', ...RPSC, aliases: ['raj(?:asthan)?\\s+police\\s+si', 'rajasthan\\s+si', 'rpsc\\s+si'], rounds: [R.written, as(R.pet, 'PET'), R.interview] },
@@ -295,7 +295,7 @@ const ROUND_WORDS: Record<string, RegExp> = {
   paper1: /\bpaper[\s-]*(?:1|i)\b/i,
   paper2: /\bpaper[\s-]*(?:2|ii)\b/i,
   prelims: /\bprelims?\b|\bpreliminary\b|\bpre\s+exam\b/i,
-  mains: /\bmains\b|\bmain\s+exam\b/i,
+  mains: /\bmains\b|\bmain\s+exam(?:ination)?\b|\(\s*main\s*\)/i,
   phase1: /\bphase[\s-]*(?:1|i)\b/i,
   phase2: /\bphase[\s-]*(?:2|ii)\b/i,
   session1: /\bsession[\s-]*(?:1|i)\b|\bjanuary\s+session\b/i,
@@ -353,7 +353,27 @@ const NUMBER = String.raw`((?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{4,24})\b`
 const REG_NO = new RegExp(String.raw`\b(?:reg(?:istration)?\b\.?\s*(?:no\.?|number|id)?|application\s*(?:no\.?|number|id))\s*(?:is\s*)?[:#-]?\s*` + NUMBER, 'i')
 const ROLL_NO = new RegExp(String.raw`\broll\s*(?:no\.?|number)\s*(?:is\s*)?[:#-]?\s*` + NUMBER, 'i')
 
+export const registrationNoIn = (text: string): string | null => REG_NO.exec(text)?.[1] ?? null
+export const rollNoIn = (text: string): string | null => ROLL_NO.exec(text)?.[1] ?? null
+
+/**
+ * Which year or notice of an exam a text means: "CEN 05/2024" anywhere, or
+ * a year just after the exam's name — "RRB NTPC 2026", "Combined Graduate
+ * Level Examination, 2026", "NEET (UG) – 2027".
+ */
+export function cycleIn(text: string, found: { at: number; length: number }): { cycle: string | null; cen: RegExpExecArray | null; year: string | null } {
+  const after = text.slice(found.at + found.length)
+  const cen = /\bcen\s*(?:no\.?\s*)?(\d{1,2}\s*\/\s*20\d\d)\b/i.exec(text)
+  const year =
+    /^[\s,(\-–)]*(?:\((?:ug|pg|main|mains|preliminary)\)\s*)?(?:(?:level\s+)?exam(?:ination)?s?)?[\s,(\-–]*(20\d\d)(?:\s*[-–/]\s*(?:20)?\d\d)?\b/i.exec(after)?.[1] ?? null
+  return { cycle: cen ? `CEN ${cen[1]!.replace(/\s+/g, '')}` : year, cen, year }
+}
+
 /** Which date a stretch of a line is about. */
+export function examStepOf(part: string): ExamStep | null {
+  return stepOf(part)
+}
+
 function stepOf(part: string): ExamStep | null {
   if (/\b(?:last\s+date|apply\s+(?:by|before|till)|form\s+(?:by|till|closes)|fill\s+(?:the\s+)?form|registration\s+(?:closes|ends)|last\s+day)\b/i.test(part) && !/\bfee\b/i.test(part)) return 'apply_by'
   if (/\bfee\b/i.test(part)) return 'fee_by'
@@ -385,13 +405,10 @@ export function parseExamLine(text: string, now = new Date()): ParsedExamLine | 
     return null
   }
 
-  const after = text.slice(found.at + found.length)
-  const cen = /\bcen\s*(?:no\.?\s*)?(\d{1,2}\s*\/\s*20\d\d)\b/i.exec(text)
-  const year = /^\s*[-(]?\s*(20\d\d)(?:\s*[-–/]\s*(?:20)?\d\d)?\b/.exec(after)
-  const cycle = cen ? `CEN ${cen[1]!.replace(/\s+/g, '')}` : (year?.[1] ?? null)
+  const { cycle, cen, year } = cycleIn(text, found)
   const region = exam.regions?.find((r) => new RegExp(`\\b${r.replace(/\s+/g, '\\s*').replace('-', '[\\s-]*')}\\b`, 'i').test(text)) ?? null
-  const registrationNo = REG_NO.exec(text)?.[1] ?? null
-  const rollNo = ROLL_NO.exec(text)?.[1] ?? null
+  const registrationNo = registrationNoIn(text)
+  const rollNo = rollNoIn(text)
 
   // Where it stands, when the line says.
   let stage: string | null = null
@@ -408,7 +425,7 @@ export function parseExamLine(text: string, now = new Date()): ParsedExamLine | 
   // feb". The name and the numbers go first: "CEN 05/2026", a year and a
   // registration number all look like dates.
   let rest = text.slice(0, found.at) + ' '.repeat(found.length) + text.slice(found.at + found.length)
-  for (const n of [registrationNo, rollNo, cen?.[0], year?.[1]]) if (n) rest = rest.replace(n, ' '.repeat(n.length))
+  for (const n of [registrationNo, rollNo, cen?.[0], year]) if (n) rest = rest.replace(n, ' '.repeat(n.length))
   // So do the rounds and shifts: the 1 of "tier 1" is not one o'clock.
   for (const re of [...Object.values(ROUND_WORDS), /\b(?:shift|level)[\s-]*(?:\d|i{1,3})\b/i]) {
     rest = rest.replace(new RegExp(re.source, 'gi'), (m) => ' '.repeat(m.length))
@@ -492,7 +509,7 @@ export function timesIn(s: string): string[] {
  * label alone with its value on the line below. The label must end there —
  * "Centre Code: 1234" is not the centre.
  */
-function valueOf(lines: string[], label: RegExp): { value: string; index: number } | null {
+export function valueOf(lines: string[], label: RegExp): { value: string; index: number } | null {
   // A cell starts a line, follows a "|", or follows the Hindi label it
   // translates: "रोल नंबर / Roll No.: 1050123456".
   const re = new RegExp(`(?:^|[|/]\\s*)(?:${label.source})\\.?\\s*(?:\\([^)]*\\))?\\s*(?:[:：\\-–|]\\s*(.*)|$)`, 'iu')

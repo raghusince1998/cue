@@ -9,8 +9,11 @@ import {
   isOpenExamStage,
   sameCity,
   splitExamStep,
+  examStage,
+  type AdmitCard,
   type ExamDTO,
   type ExamDateInput,
+  type ExamMail,
   type ExamDayInput,
   type ExamStep,
   type ParsedExamLine,
@@ -555,4 +558,177 @@ export async function saveExamDay(orgId: string, userId: string, card: ExamDayIn
 export async function trackedExam(userId: string, examKey: string, cycle: string | null): Promise<{ id: string; cycle: string | null } | null> {
   const row = await openExamFor(userId, examKey, cycle)
   return row ? { id: row.id, cycle: row.cycle } : null
+}
+
+const dayWords = (day: string) => localAt(day, null).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+
+/** When a "go and look" plan is for: shortly, or tomorrow morning if it is late. */
+function shortly(now: Date): { on: string; at: string } {
+  const at = new Date(Math.ceil((now.getTime() + 15 * 60_000) / (15 * 60_000)) * 15 * 60_000)
+  if (at.getHours() >= 21 || at.getDate() !== now.getDate()) {
+    const morning = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0)
+    return { on: ymd(morning), at: '09:00' }
+  }
+  return { on: ymd(at), at: `${pad(at.getHours())}:${pad(at.getMinutes())}` }
+}
+
+/** A step this exam already has a plan for, done or not: news is told once. */
+async function hasStep(examId: string, step: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: c.id })
+    .from(c)
+    .where(and(eq(c.examId, examId), like(c.examStep, `${step}%`), ne(c.status, 'deleted')))
+    .limit(1)
+  return Boolean(row)
+}
+
+/** Kinds of news anyone may pass on about an exam already tracked; the rest only the board can say. */
+const NEWS = new Set(['admit_card', 'answer_key', 'result'])
+
+/**
+ * An exam board's email, made into what it means for the exam it is about:
+ * a registration starts it (or fills in its number), a fee still to pay is
+ * a date, a city slip gives the exam's day and city, an admit card out is a
+ * plan to download it — or, attached in full, the exam day itself — and a
+ * result or a shortlist moves it on.
+ *
+ * Only the board itself can start an exam or set its dates; a coaching
+ * site's "admit card out!" can only add that news to an exam already
+ * tracked. Returns what was done, in words, or null when nothing was.
+ */
+export async function examFromEmail(
+  orgId: string,
+  userId: string,
+  m: ExamMail,
+  opts: { official: boolean; card: AdmitCard | null; receivedAt: Date },
+  now = new Date(),
+): Promise<string | null> {
+  let exam = await openExamFor(userId, m.examKey, m.cycle)
+  if (!exam && (!opts.official || m.kind === 'result' || m.kind === 'answer_key')) return null
+  if (!opts.official && !NEWS.has(m.kind)) return null
+  const label = examLabel({ name: m.name, cycle: exam?.cycle ?? m.cycle })
+
+  // The admit card itself, attached by the board: the day, planned from it.
+  const card = opts.card
+  if (opts.official && card?.date && (card.reportingAt || card.startsAt) && card.date >= ymd(now)) {
+    const saved = await saveExamDay(
+      orgId,
+      userId,
+      {
+        examId: exam?.id ?? null,
+        examKey: m.examKey,
+        examName: m.name,
+        round: card.round ?? m.round,
+        date: card.date,
+        reportingAt: card.reportingAt,
+        gateClosesAt: card.gateClosesAt,
+        startsAt: card.startsAt,
+        endsAt: card.endsAt,
+        rollNo: card.rollNo ?? m.rollNo,
+        registrationNo: card.registrationNo ?? m.registrationNo,
+        centreName: card.centreName,
+        centreAddress: card.centreAddress,
+        centreCity: card.centreCity,
+      },
+      now,
+    )
+    if (saved !== 'not_found') {
+      const report = card.reportingAt ?? card.startsAt!
+      return `${label}: exam day planned from the admit card — ${dayWords(card.date)}, report by ${clock(report)}${card.centreName ? ` · ${card.centreName}` : ''}. Check it in Exams.`
+    }
+  }
+
+  // Where it stands now, as the board says.
+  const said =
+    m.kind === 'selected'
+      ? 'selected'
+      : m.kind === 'shortlisted'
+        ? m.nextRound
+        : m.kind === 'registered' || m.kind === 'fee_paid'
+          ? 'applied'
+          : (m.kind === 'admit_card' || m.kind === 'city_slip') && m.round
+            ? m.round
+            : null
+  let changed = false
+  if (!exam) {
+    const made = await createExam(
+      orgId,
+      userId,
+      {
+        examKey: m.examKey,
+        name: m.name,
+        cycle: m.cycle,
+        registrationNo: m.registrationNo,
+        rollNo: m.rollNo,
+        stage: m.kind === 'fee_due' ? 'to_apply' : (said ?? 'applied'),
+      },
+      now,
+    )
+    if (made === 'unknown_stage') return null
+    exam = await owned(userId, made.exam.id)
+    changed = true
+  } else if (opts.official) {
+    const stage = said && (isLaterExamStage(exam.examKey, said, exam.stage) || !isOpenExamStage(exam.examKey, said)) ? said : null
+    const patch = {
+      ...(stage ? { stage } : {}),
+      ...(m.registrationNo && !exam.registrationNo ? { registrationNo: m.registrationNo } : {}),
+      ...(m.rollNo && m.rollNo !== exam.rollNo ? { rollNo: m.rollNo } : {}),
+      ...(m.cycle && !exam.cycle ? { cycle: m.cycle } : {}),
+    }
+    if (Object.keys(patch).length > 0) {
+      await updateExam(userId, exam.id, patch, now)
+      changed = true
+    }
+  }
+  if (!exam) return null
+  if (opts.official && m.city && !exam.centreCity) {
+    await db.update(e).set({ centreCity: m.city }).where(eq(e.id, exam.id))
+    changed = true
+  }
+
+  // Its dates, from the board; and news to act on, once and while it is news.
+  const dates: ExamDateInput[] = opts.official ? m.dates.map((d) => ({ ...d })) : []
+  const fresh = now.getTime() - opts.receivedAt.getTime() < 3 * 86_400_000
+  const soon = shortly(now)
+  if (m.kind === 'admit_card' && !dates.some((d) => d.step === 'admit_card') && fresh && !(await hasStep(exam.id, 'admit_card'))) {
+    dates.push({ step: 'admit_card', on: soon.on, at: soon.at, round: m.round })
+  }
+  if (m.kind === 'result' && fresh && !(await hasStep(exam.id, m.round ? `result:${m.round}` : 'result'))) {
+    dates.push({ step: 'result', on: soon.on, at: soon.at, round: m.round })
+  }
+  if (m.kind === 'answer_key' && dates.length === 0 && fresh && !(await hasStep(exam.id, 'answer_key'))) {
+    dates.push({ step: 'answer_key', on: soon.on, at: soon.at, round: m.round })
+  }
+  const added: ExamDateInput[] = []
+  const row = exam
+  await db.transaction(async (tx) => {
+    for (const d of dates) if (await addDate(tx, row, d, now)) added.push(d)
+  })
+  if (!changed && added.length === 0) return null
+
+  const examDay = added.find((d) => d.step === 'exam') ?? m.dates.find((d) => d.step === 'exam')
+  const by = (step: string) => added.find((d) => d.step === step)
+  const mask = (n: string) => `…${n.slice(-4)}`
+  const objectBy = by('answer_key')
+  const what =
+    m.kind === 'registered'
+      ? `registered${m.registrationNo ? ` · reg no ${mask(m.registrationNo)}` : ''}`
+      : m.kind === 'fee_due'
+        ? `fee still to pay${by('fee_by') ? ` by ${dayWords(by('fee_by')!.on)}` : ''}`
+        : m.kind === 'fee_paid'
+          ? 'fee paid'
+          : m.kind === 'city_slip'
+            ? `exam city ${m.city ?? 'out'}${examDay ? `, exam ${dayWords(examDay.on)}` : ''}`
+            : m.kind === 'admit_card'
+              ? `admit card out${examDay ? ` — exam ${dayWords(examDay.on)}` : ''}. Download it and print it`
+              : m.kind === 'answer_key'
+                ? `answer key out${objectBy && objectBy.on !== soon.on ? ` — objections till ${dayWords(objectBy.on)}` : ''}`
+                : m.kind === 'result'
+                  ? 'result declared. Check it'
+                  : m.kind === 'shortlisted'
+                    ? `shortlisted${m.nextRound ? ` for ${examStage(m.examKey, m.nextRound)?.label ?? m.nextRound}` : ''}`
+                    : m.kind === 'selected'
+                      ? 'selected'
+                      : `exam ${examDay ? dayWords(examDay.on) : 'scheduled'}`
+  return `${label}: ${what}`
 }

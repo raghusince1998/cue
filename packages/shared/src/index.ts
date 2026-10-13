@@ -1366,3 +1366,4 @@ export interface ExamDTO {
   /** Its dates' plans, soonest first. */
   dates: ExamDateDTO[]
 }
+export { isExamBody, parseExamEmail, type ExamMail, type ExamMailKind } from './examMail.ts'

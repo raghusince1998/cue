@@ -27,10 +27,11 @@ security assessment (CASA). Calendar access (`calendar.readonly`) is
 > Cue is a personal planner. With the user's permission, it reads emails from
 > the kinds of senders that send bookings and bills — railways, airlines,
 > hotels, online shops and couriers, banks and card issuers, insurers,
-> utilities, the transport department and FASTag issuers — and turns each
-> into a reminder: a train or flight with a reminder to leave, a parcel
-> arriving, a credit card or electricity bill before its due date, an
-> insurance or PUC renewal. Messages are read on the server in memory; Cue
+> utilities, the transport department and FASTag issuers, and government exam
+> boards and testing agencies — and turns each into a reminder: a train or
+> flight with a reminder to leave, a parcel arriving, a credit card or
+> electricity bill before its due date, an insurance or PUC renewal, an exam's
+> last date to pay the fee or the exam day from its admit card. Messages are read on the server in memory; Cue
 > stores only the message ID (so it is not read twice) and a one-line
 > description of what it found, which the user can see in Settings. Cue never
 > sends, modifies or deletes email. Narrower scopes do not work: gmail.metadata

@@ -2,6 +2,9 @@ import { and, desc, eq, inArray } from 'drizzle-orm'
 import {
   findCity,
   formatRupees,
+  isExamBody,
+  parseExamEmail,
+  readAdmitCard,
   parseBookings,
   type ParsedBooking,
   parseDelivery,
@@ -24,6 +27,7 @@ import { challanFromNotice, fastagFromNotice } from './vehicles.ts'
 import { knownPlaces } from './captureLinks.ts'
 import { rowsToText } from './layout.ts'
 import { pdfText } from './pdfText.ts'
+import { examFromEmail } from './exams.ts'
 
 /**
  * Reading email for what Cue can act on: a train or flight booked, a parcel
@@ -40,6 +44,8 @@ export interface MailMessage {
   text: string
   /** The text of a PDF ticket attached to it, when there is one that can be read. */
   pdf?: string
+  /** When it arrived: news weeks old is not news. */
+  receivedAt?: Date
 }
 
 /** A PDF worth reading: a ticket or a statement, not a 40-page brochure. */
@@ -75,10 +81,14 @@ export const SENDERS = [
   // FASTag and traffic challans
   'ihmcl', 'nhai', 'paytmbank', 'paytm', 'airtelbank', 'onlinesbi', 'sbi.co.in', 'echallan',
   'trafficpolice', 'delhitrafficpolice', 'mumbaitrafficpolice', 'btp.gov', 'bangaloretrafficpolice',
+  // Exam boards and testing agencies
+  'ssc.gov.in', 'ssc.nic.in', 'upsc', 'rrbapply', 'rrbcdg', 'rrbajmer', 'ibps', 'nta.ac.in', 'nta.nic.in', 'rbi.org.in',
+  'sbi.bank.in', 'rpsc', 'rssb', 'rsmssb', 'recruitment.rajasthan', 'police.rajasthan', 'rajeduboard', 'hcraj',
+  'jeeadv', 'iimcat', 'consortiumofnlus', 'ctet', 'cbse', 'joinindianarmy', 'cdac',
 ]
 
 /** Subjects worth opening even from a sender not on the list: a travel agent, a small bank. */
-const SUBJECTS = /\b(?:credit card statement|e-?statement|payment due|bill (?:is )?generated|electricity bill|pnr|booking confirm|e-?ticket|out for delivery|has (?:been )?shipped|order (?:has been )?delivered|insurance|policy (?:is )?(?:issued|renewal|expir\w*)|premium due|renewal reminder|puc|pollution|service (?:due|reminder)|free service|fas ?tag|e-?challan|challan|low balance|traffic violation)\b/i
+const SUBJECTS = /\b(?:credit card statement|e-?statement|payment due|bill (?:is )?generated|electricity bill|pnr|booking confirm|e-?ticket|out for delivery|has (?:been )?shipped|order (?:has been )?delivered|insurance|policy (?:is )?(?:issued|renewal|expir\w*)|premium due|renewal reminder|puc|pollution|service (?:due|reminder)|free service|fas ?tag|e-?challan|challan|low balance|traffic violation|admit card|hall ticket|call letter|answer keys?|city intimation|exam(?:ination)? city)\b/i
 
 export function worthOpening(from: string, subject: string): boolean {
   const f = from.toLowerCase()
@@ -91,6 +101,7 @@ const GMAIL_SUBJECTS = [
   'insurance', '"policy issued"', '"policy renewal"', '"premium due"', '"renewal reminder"',
   'PUC', 'pollution', '"service due"', '"service reminder"', '"free service"',
   'FASTag', 'challan', '"low balance"', '"traffic violation"',
+  '"admit card"', '"hall ticket"', '"call letter"', '"answer key"', '"city intimation"', '"exam city"',
 ]
 
 /**
@@ -219,7 +230,7 @@ async function fromGmail(token: string, days: number, seen: (ids: string[]) => P
   const already = await seen(ids)
   const out: MailMessage[] = []
   for (const id of ids.filter((x) => !already.has(x)).slice(0, 25)) {
-    const msg = await getJson<{ id: string; payload: GmailPart }>(
+    const msg = await getJson<{ id: string; internalDate?: string; payload: GmailPart }>(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
       token,
     )
@@ -235,7 +246,14 @@ async function fromGmail(token: string, days: number, seen: (ids: string[]) => P
         console.warn('[mail] could not read an attached PDF', (err as Error).message)
       }
     }
-    out.push({ id, from: header('from'), subject: header('subject'), text: gmailText(msg.payload), ...(pdfs.length ? { pdf: pdfs.join('\n') } : {}) })
+    out.push({
+      id,
+      from: header('from'),
+      subject: header('subject'),
+      text: gmailText(msg.payload),
+      ...(pdfs.length ? { pdf: pdfs.join('\n') } : {}),
+      ...(msg.internalDate ? { receivedAt: new Date(Number(msg.internalDate)) } : {}),
+    })
   }
   return out
 }
@@ -243,9 +261,9 @@ async function fromGmail(token: string, days: number, seen: (ids: string[]) => P
 /** New messages worth opening, from Outlook: their senders first, and only theirs opened. */
 async function fromOutlook(token: string, since: Date, seen: (ids: string[]) => Promise<Set<string>>): Promise<MailMessage[]> {
   const heads = await getJson<{
-    value?: { id: string; subject?: string; hasAttachments?: boolean; from?: { emailAddress?: { name?: string; address?: string } } }[]
+    value?: { id: string; subject?: string; hasAttachments?: boolean; receivedDateTime?: string; from?: { emailAddress?: { name?: string; address?: string } } }[]
   }>(
-    `https://graph.microsoft.com/v1.0/me/messages?$top=50&$orderby=receivedDateTime desc&$select=id,subject,from,hasAttachments&$filter=receivedDateTime ge ${since.toISOString()}`,
+    `https://graph.microsoft.com/v1.0/me/messages?$top=50&$orderby=receivedDateTime desc&$select=id,subject,from,hasAttachments,receivedDateTime&$filter=receivedDateTime ge ${since.toISOString()}`,
     token,
   )
   const wanted = (heads.value ?? [])
@@ -254,11 +272,12 @@ async function fromOutlook(token: string, since: Date, seen: (ids: string[]) => 
       subject: m.subject ?? '',
       from: `${m.from?.emailAddress?.name ?? ''} <${m.from?.emailAddress?.address ?? ''}>`,
       attached: Boolean(m.hasAttachments),
+      receivedAt: m.receivedDateTime ? new Date(m.receivedDateTime) : undefined,
     }))
     .filter((m) => worthOpening(m.from, m.subject))
   const already = await seen(wanted.map((m) => m.id))
   const out: MailMessage[] = []
-  for (const { attached, ...m } of wanted.filter((x) => !already.has(x.id)).slice(0, 25)) {
+  for (const { attached, receivedAt, ...m } of wanted.filter((x) => !already.has(x.id)).slice(0, 25)) {
     const full = await getJson<{ body?: { content?: string; contentType?: string } }>(
       `https://graph.microsoft.com/v1.0/me/messages/${m.id}?$select=body`,
       token,
@@ -280,7 +299,12 @@ async function fromOutlook(token: string, since: Date, seen: (ids: string[]) => 
         console.warn('[mail] could not read an attached PDF', (err as Error).message)
       }
     }
-    out.push({ ...m, text: full.body?.contentType === 'html' ? htmlToText(body) : body, ...(pdfs.length ? { pdf: pdfs.join('\n') } : {}) })
+    out.push({
+      ...m,
+      text: full.body?.contentType === 'html' ? htmlToText(body) : body,
+      ...(pdfs.length ? { pdf: pdfs.join('\n') } : {}),
+      ...(receivedAt ? { receivedAt } : {}),
+    })
   }
   return out
 }
@@ -303,6 +327,15 @@ export async function actOn(orgId: string, userId: string, msg: MailMessage, now
   // The sender too: an insurer or a shop is often named only there.
   const body = `${msg.subject}\n${msg.from}\n${msg.text}`.slice(0, 15_000)
   const pdf = msg.pdf ? `${msg.subject}\n${msg.from}\n${msg.pdf}`.slice(0, 15_000) : null
+
+  // An exam board's email: the exam it is about, moved along. Who sent it
+  // decides what it may do — only the board can start an exam or set dates.
+  const exam = parseExamEmail(body, now) ?? (pdf ? parseExamEmail(pdf, now) : null)
+  if (exam) {
+    const card = pdf ? readAdmitCard(pdf) : exam.kind === 'admit_card' ? readAdmitCard(body) : null
+    const done = await examFromEmail(orgId, userId, exam, { official: isExamBody(msg.from), card, receivedAt: msg.receivedAt ?? now }, now)
+    if (done) return done
+  }
 
   // Bookings from the email and from its PDF ticket, whichever says more: a
   // PDF often carries the whole itinerary, both ways, where the email has
@@ -401,7 +434,7 @@ function lookBack(account: AccountRow, now: Date): Date {
  * reads its last month again, correcting what was saved from it. Never
  * lower it.
  */
-export const READER_VERSION = 3
+export const READER_VERSION = 4
 
 /**
  * Reads one account's new mail and acts on it. Each message is marked read

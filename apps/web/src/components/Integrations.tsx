@@ -206,8 +206,8 @@ export function Integrations({ onChanged }: { onChanged?: () => void }) {
     <div className="stack tight integrations" ref={root}>
       <p className="muted small">
         One step: your calendar comes in, and Cue finds train and flight tickets, parcels, card and
-        electricity bills, insurance, PUC, service dues, FASTag top-ups and traffic challans in your
-        email, with reminders. Email is read-only, only from the senders that send these, and no
+        electricity bills, insurance, PUC, service dues, FASTag top-ups, traffic challans, and exam
+        registrations, admit cards and results in your email, with reminders. Email is read-only, only from the senders that send these, and no
         email is kept.
       </p>
 

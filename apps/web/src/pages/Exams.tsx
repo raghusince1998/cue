@@ -110,8 +110,8 @@ export default function Exams() {
       </div>
       <p className="muted small">
         Every exam you have applied for, or mean to: where it stands, and each date — the last day to apply, the
-        fee, the exam, the result — as a reminder. Cue never signs in to an exam portal; dates come from you and
-        from your admit cards.
+        fee, the exam, the result — as a reminder. Cue never signs in to an exam portal; dates come from you, from
+        your admit cards, and, with your email connected, from the boards' own emails.
       </p>
 
       {exams && (
