@@ -28,6 +28,7 @@ export const USES = [
     label: 'Home & personal life',
     hint: 'Bills, birthdays, errands, money lent',
     example: 'pay the electricity bill on the 5th',
+    exampleHi: 'बिजली का बिल 5 तारीख को',
   },
   {
     key: 'office',
@@ -35,6 +36,7 @@ export const USES = [
     label: 'Office work',
     hint: 'Meetings, follow-ups, reports',
     example: 'send the report to Anita by friday',
+    exampleHi: 'शुक्रवार तक अनीता को रिपोर्ट भेजनी है',
   },
   {
     key: 'sales',
@@ -42,6 +44,7 @@ export const USES = [
     label: 'Sales & clients',
     hint: 'Clients, calls, visits, targets, deals',
     example: 'call Ravi tomorrow 4pm about the order',
+    exampleHi: 'कल शाम 4 बजे रवि को कॉल करना',
   },
   {
     key: 'hiring',
@@ -49,6 +52,7 @@ export const USES = [
     label: 'Hiring & HR',
     hint: 'Candidates, interviews, your people',
     example: 'interview Priya for the designer role tomorrow 3pm',
+    exampleHi: 'कल दोपहर 3 बजे प्रिया का इंटरव्यू',
   },
   {
     key: 'freelance',
@@ -56,6 +60,7 @@ export const USES = [
     label: 'Freelance or own business',
     hint: 'Clients, deals, payments due, expenses',
     example: 'invoice Sharma & Co on the 1st',
+    exampleHi: 'शर्मा एंड कंपनी को 1 तारीख को इनवॉइस भेजना',
   },
   {
     key: 'job_search',
@@ -63,6 +68,7 @@ export const USES = [
     label: 'Looking for a job',
     hint: 'Applications, interviews, follow-ups',
     example: 'interview at Infosys friday 11am',
+    exampleHi: 'शुक्रवार सुबह 11 बजे Infosys में इंटरव्यू',
   },
   {
     key: 'student',
@@ -70,6 +76,7 @@ export const USES = [
     label: 'Studies',
     hint: 'Classes, assignments, exams',
     example: 'maths assignment due monday 9am',
+    exampleHi: 'सोमवार सुबह 9 बजे गणित का असाइनमेंट जमा करना',
   },
   {
     key: 'exams',
@@ -77,8 +84,9 @@ export const USES = [
     label: 'Competitive exams',
     hint: 'Forms, admit cards, exam days, results',
     example: 'applied for RRB NTPC, RRB Ajmer, reg no 241051234567',
+    exampleHi: 'RRB NTPC का फॉर्म भर दिया',
   },
-] as const satisfies readonly { key: string; group: UseGroup; label: string; hint: string; example: string }[]
+] as const satisfies readonly { key: string; group: UseGroup; label: string; hint: string; example: string; exampleHi: string }[]
 
 export type Use = (typeof USES)[number]['key']
 export const USE_KEYS = USES.map((u) => u.key) as [Use, ...Use[]]
@@ -173,11 +181,13 @@ export function groupSections(sections: readonly Section[]): { label: string; se
   )
 }
 
-/** Lines to show as examples of what can be typed, for these uses. */
-export function examplesFor(uses: readonly string[]): string[] {
+/** Lines to show as examples of what can be typed, for these uses — in Hindi for someone who reads Hindi. */
+export function examplesFor(uses: readonly string[], lang: 'en' | 'hi' = 'en'): string[] {
   // In the order they were picked: the first is what they came for.
   const chosen = uses.map((k) => USES.find((u) => u.key === k)).filter((u) => u !== undefined)
-  const list = (chosen.length ? chosen : USES.filter((u) => u.key === 'office' || u.key === 'personal')).map((u) => u.example)
+  const list = (chosen.length ? chosen : USES.filter((u) => u.key === 'office' || u.key === 'personal')).map((u) =>
+    lang === 'hi' ? u.exampleHi : u.example,
+  )
   return list.slice(0, 3)
 }
 

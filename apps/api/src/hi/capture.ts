@@ -1,5 +1,6 @@
 /** Hindi for quick add: what it understood, what it assumed, what it asks. Same rules as the web app's apps/web/src/lib/hi/common.ts. */
 export const capture: Record<string, string> = {
+  '{name} owes you {amount}': '{name} पर {amount} बाकी',
   // A plan read back
   '{title} — {when}, whenever suits': '{title} — {when}, जब सुविधा हो',
   '{title} — {repeat}, from {date}': '{title} — {repeat}, {date} से',

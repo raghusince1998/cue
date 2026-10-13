@@ -7,19 +7,19 @@
 import type { Lang } from './examHindi.ts'
 
 export const BILL_CATEGORIES = [
-  { key: 'rent', label: 'Rent', mark: '🏠', words: /\b(?:rent|lease)\b/i },
-  { key: 'electricity', label: 'Electricity', mark: '💡', words: /\b(?:electricity|power|light bill|bescom|msedcl|tneb|tata power|adani)\b/i },
-  { key: 'water', label: 'Water', mark: '🚰', words: /\bwater\b/i },
-  { key: 'gas', label: 'Gas', mark: '🔥', words: /\b(?:gas|lpg|cylinder|png)\b/i },
-  { key: 'phone', label: 'Phone', mark: '📱', words: /\b(?:phone|mobile|postpaid|prepaid|recharge|jio|airtel)\b/i },
-  { key: 'internet', label: 'Internet & TV', mark: '🌐', words: /\b(?:internet|broadband|wifi|wi-fi|fibre|fiber|dth|cable|tata play)\b/i },
-  { key: 'emi', label: 'Loan & EMI', mark: '🏦', words: /\b(?:emi|loan|mortgage)\b/i },
+  { key: 'rent', label: 'Rent', mark: '🏠', words: /\b(?:rent|lease)\b|(?<![\p{L}\p{M}])(?:किराया|किराए|किराये|kiraya|kiraaya|kiraye)(?![\p{L}\p{M}])/iu },
+  { key: 'electricity', label: 'Electricity', mark: '💡', words: /\b(?:electricity|power|light bill|bescom|msedcl|tneb|tata power|adani)\b|(?<![\p{L}\p{M}])(?:बिजली|bijli|bijlee)(?![\p{L}\p{M}])/iu },
+  { key: 'water', label: 'Water', mark: '🚰', words: /\bwater\b|(?<![\p{L}\p{M}])(?:पानी|paani|pani)(?![\p{L}\p{M}])/iu },
+  { key: 'gas', label: 'Gas', mark: '🔥', words: /\b(?:gas|lpg|cylinder|png)\b|(?<![\p{L}\p{M}])(?:गैस|सिलेंडर|सिलिंडर)(?![\p{L}\p{M}])/iu },
+  { key: 'phone', label: 'Phone', mark: '📱', words: /\b(?:phone|mobile|postpaid|prepaid|recharge|jio|airtel)\b|(?<![\p{L}\p{M}])(?:फ़ोन|फोन|मोबाइल|रिचार्ज)(?![\p{L}\p{M}])/iu },
+  { key: 'internet', label: 'Internet & TV', mark: '🌐', words: /\b(?:internet|broadband|wifi|wi-fi|fibre|fiber|dth|cable|tata play)\b|(?<![\p{L}\p{M}])(?:इंटरनेट|वाईफ़ाई|वाईफाई|ब्रॉडबैंड)(?![\p{L}\p{M}])/iu },
+  { key: 'emi', label: 'Loan & EMI', mark: '🏦', words: /\b(?:emi|loan|mortgage)\b|(?<![\p{L}\p{M}])(?:ईएमआई|लोन|किश्त|किस्त|kisht|kist)(?![\p{L}\p{M}])/iu },
   { key: 'card', label: 'Credit card', mark: '💳', words: /\b(?:credit ?card|card bill|card payment)\b/i },
-  { key: 'insurance', label: 'Insurance', mark: '🛡', words: /\b(?:insurance|premium|policy|lic|mediclaim)\b/i },
+  { key: 'insurance', label: 'Insurance', mark: '🛡', words: /\b(?:insurance|premium|policy|lic|mediclaim)\b|(?<![\p{L}\p{M}])(?:बीमा|प्रीमियम|पॉलिसी|bima|beema)(?![\p{L}\p{M}])/iu },
   { key: 'subscription', label: 'Subscription', mark: '📺', words: /\b(?:subscription|netflix|prime|hotstar|spotify|youtube|membership|gym|icloud|google one)\b/i },
-  { key: 'education', label: 'School & fees', mark: '🎓', words: /\b(?:school|tuition|fees?|college|coaching)\b/i },
-  { key: 'tax', label: 'Tax', mark: '🧾', words: /\b(?:tax|gst|itr|tds)\b/i },
-  { key: 'maintenance', label: 'Maintenance', mark: '🔧', words: /\b(?:maintenance|society)\b/i },
+  { key: 'education', label: 'School & fees', mark: '🎓', words: /\b(?:school|tuition|fees?|college|coaching)\b|(?<![\p{L}\p{M}])(?:फ़ीस|फीस|स्कूल|ट्यूशन|कोचिंग|कॉलेज)(?![\p{L}\p{M}])/iu },
+  { key: 'tax', label: 'Tax', mark: '🧾', words: /\b(?:tax|gst|itr|tds)\b|(?<![\p{L}\p{M}])(?:टैक्स)(?![\p{L}\p{M}])/iu },
+  { key: 'maintenance', label: 'Maintenance', mark: '🔧', words: /\b(?:maintenance|society)\b|(?<![\p{L}\p{M}])(?:मेंटेनेंस|सोसाइटी)(?![\p{L}\p{M}])/iu },
   { key: 'vehicle', label: 'Vehicle', mark: '🚗', words: /\b(?:puc|pollution|service due|vehicle service|fastag)\b/i },
   { key: 'document', label: 'Document', mark: '🪪', words: /\b(?:passport|licen[cs]e|aadhaar|pan card|visa|puc|pollution|registration|rc book)\b/i },
   { key: 'other', label: 'Other', mark: '📌', words: null },
@@ -111,7 +111,8 @@ const MONTH_INDEX = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'se
 
 // "renews" is a subscription charging again, not something expiring, so it
 // starts a bill without making it a renewal.
-const TRIGGER = /\b(?:bill|rent|emi|premium|subscription|fees?|renewal|renew|renews|renewing|auto-?renews?|expires?|expiry|expiring|valid (?:till|until|upto)|insurance|maintenance|loan|netflix|spotify|hotstar|jiohotstar|youtube premium|amazon prime|icloud|google one|zee5|sonyliv)\b/i
+const TRIGGER =
+  /\b(?:bill|rent|emi|premium|subscription|fees?|renewal|renew|renews|renewing|auto-?renews?|expires?|expiry|expiring|valid (?:till|until|upto)|insurance|maintenance|loan|netflix|spotify|hotstar|jiohotstar|youtube premium|amazon prime|icloud|google one|zee5|sonyliv|kiraya|kiraaya)\b|(?<![\p{L}\p{M}])(?:बिल|किराया|किराए|किराये|ईएमआई|किश्त|किस्त|प्रीमियम|फ़ीस|फीस|बीमा|मेंटेनेंस)(?![\p{L}\p{M}])/iu
 const RENEWAL = /\b(?:renewal|renew|expires?|expiry|expiring|valid (?:till|until|upto))\b/i
 
 const REPEAT_WORDS: [RegExp, Repeat][] = [
@@ -195,6 +196,8 @@ function findDate(text: string, now: Date): { day: string; at: [number, number];
 export function parseBill(input: string, now = new Date()): ParsedBill | null {
   const text = input.trim().replace(/[.!]+$/, '')
   if (!TRIGGER.test(text)) return null
+  // "बिल भेजना" is sending someone a bill — an invoice to raise, not one to pay.
+  if (/(?:बिल|bill)\s+(?:भेज|bhej)/iu.test(text)) return null
   const renewal = RENEWAL.test(text)
 
   let repeat: Repeat | null = null
@@ -219,6 +222,7 @@ export function parseBill(input: string, now = new Date()): ParsedBill | null {
 
   const name = rest
     .replace(/\b(?:pay|paying|payment|due|is|are|on|of|by|before|the|my|for|amount|expires?|expiry|expiring|renewal|renew|renews|renewing|auto-?renews?|valid (?:till|until|upto)|every|each)\b/gi, ' ')
+    .replace(/(?<![\p{L}\p{M}])(?:भरना|भरनी|भरने|भरें|भर|जमा|करना|करनी|करने|करें|देना|देनी|देने|है|हैं|तक|को|हर|bharna|bharni|jama|karna|karni|dena|deni|hai|hain|tak|ko)(?![\p{L}\p{M}])/giu, ' ')
     .replace(/[,:;-]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim()

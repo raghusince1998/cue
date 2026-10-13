@@ -288,6 +288,14 @@ export default function App() {
     )
   }, [me])
 
+  // The tab says Cue, in any language — not the website's English headline,
+  // which index.html carries for link previews. The pages with a title of
+  // their own (the website, the policies) set it themselves.
+  useEffect(() => {
+    const own = ['/privacy', '/terms'].includes(location.pathname) || (!me && ['/', '/exams-app', '/exams'].includes(location.pathname))
+    if (!own) document.title = appMode() === 'exams' ? 'Cue Exams' : 'Cue'
+  }, [me, location.pathname])
+
   if (loading) {
     return (
       <div className="boot">

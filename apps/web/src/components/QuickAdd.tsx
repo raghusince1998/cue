@@ -5,7 +5,7 @@ import { DictateButton } from './DictateButton.tsx'
 import { announceChange } from '../lib/changes.ts'
 import { examplesFor, hasWork, type Sphere } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
-import { locale, msg, t } from '../lib/i18n.tsx'
+import { language, locale, msg, t } from '../lib/i18n.tsx'
 import {
   NO_CHOICES,
   QuickLinks,
@@ -167,7 +167,7 @@ export function QuickAdd({
 }) {
   const { me } = useAuth()
   const navigate = useNavigate()
-  const examples = examplesFor(me?.uses ?? [])
+  const examples = examplesFor(me?.uses ?? [], language())
   const [text, setText] = useState(initialText)
   const [focused, setFocused] = useState(false)
   const [plan, setPlan] = useState<Plan | null>(null)

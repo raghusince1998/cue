@@ -343,7 +343,7 @@ export const settings: Record<string, string> = {
   'New here? Create an account': 'नए हैं? खाता बनाएँ',
   'Already have an account? Sign in': 'पहले से खाता है? साइन इन करें',
   'By creating an account you agree to the <terms>terms</terms> and the <privacy>privacy policy</privacy>.':
-    'खाता बनाकर आप <terms>शर्तों</terms> और <privacy>प्राइवेसी पॉलिसी</privacy> से सहमत होते हैं।',
+    'खाता बनाकर आप <terms>सेवा की शर्तों</terms> और <privacy>गोपनीयता नीति</privacy> से सहमत होते हैं।',
   '← About Cue': '← Cue के बारे में',
 
   // ResetPassword

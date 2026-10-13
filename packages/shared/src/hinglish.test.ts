@@ -2,6 +2,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { HINDI_LEFTOVER, normalizeHinglish } from './hinglish.ts'
 import { parseWhen, titleFrom } from './parseWhen.ts'
+import { parseBill } from './bills.ts'
+import { parseOwed } from './owed.ts'
+import { parseExamLine } from './exams.ts'
+import { USES } from './uses.ts'
 
 /**
  * Hindi time words, end to end through the real parser.
@@ -107,7 +111,7 @@ test('how often, said in Hindi', () => {
   assert.equal(normalizeHinglish('sabzi lana har sunday'), 'sabzi lana every sunday')
   assert.equal(normalizeHinglish('roz subah 7 baje walk'), 'every day 7am walk')
   assert.equal(normalizeHinglish('dawai har din raat 9 baje'), 'dawai every day 9pm')
-  assert.equal(normalizeHinglish('kiraya har mahine 1 tarikh'), 'kiraya every month 1 tarikh')
+  assert.equal(normalizeHinglish('kiraya har mahine 1 tarikh'), 'kiraya every month on the 1st')
   assert.equal(normalizeHinglish('mandir har somvar'), 'mandir every monday')
   assert.equal(normalizeHinglish('Har Gobind birthday on 5 Jan'), 'Har Gobind birthday on 5 Jan', 'a name, not "every"')
 })
@@ -117,4 +121,64 @@ test('Hindi left in a title is spotted', () => {
   assert.ok(HINDI_LEFTOVER.test('mom ko call karna hai'))
   assert.ok(!HINDI_LEFTOVER.test('call mom'))
   assert.ok(!HINDI_LEFTOVER.test('Har Gobind birthday'))
+})
+
+test('dates said in Hindi: a month, or a day of the month', () => {
+  assert.equal(normalizeHinglish('15 नवंबर को जयपुर जाना'), '15 november जयपुर जाना')
+  const r = parseWhen(normalizeHinglish('15 नवंबर को जयपुर जाना'), NOW)
+  assert.equal(r?.date.getMonth(), 10)
+  assert.equal(r?.date.getDate(), 15)
+  assert.equal(normalizeHinglish('बिजली का बिल 5 तारीख को'), 'बिजली का बिल on the 5th')
+  assert.equal(normalizeHinglish('rent 21 tarikh'), 'rent on the 21st')
+})
+
+test('from now: दिन बाद, घंटे में', () => {
+  assert.equal(normalizeHinglish('2 दिन बाद डॉक्टर'), 'in 2 days डॉक्टर')
+  assert.equal(normalizeHinglish('do din baad doctor'), 'in 2 days doctor')
+  assert.equal(normalizeHinglish('ek hafte baad dentist'), 'in 1 week dentist')
+  assert.equal(normalizeHinglish('आधे घंटे में कॉल'), 'in 30 minutes कॉल')
+  assert.equal(plan('3 घंटे बाद मम्मी को कॉल').time, '13:00')
+  assert.equal(normalizeHinglish('do it in 2 days'), 'do it in 2 days', 'English stays English')
+})
+
+test('next, this and by', () => {
+  const r = plan('अगले सोमवार को मीटिंग 10 बजे')
+  assert.equal(r.day, 12, 'the coming Monday')
+  assert.equal(r.title, 'मीटिंग', 'no stray अगले in the title')
+  assert.equal(normalizeHinglish('शुक्रवार तक रिपोर्ट भेजनी है'), 'रिपोर्ट भेजनी है by friday')
+  assert.equal(normalizeHinglish('शुक्रवार शाम 5 बजे तक रिपोर्ट'), 'रिपोर्ट by friday 5pm')
+  assert.equal(normalizeHinglish('agle hafte meeting'), 'next week meeting')
+  assert.equal(normalizeHinglish('is monday free?'), 'is monday free?')
+})
+
+test('money owed, said the Hindi way', () => {
+  assert.equal(normalizeHinglish('रवि को 500 रुपये उधार दिए'), 'lent रवि ₹500')
+  assert.deepEqual(parseOwed(normalizeHinglish('रवि को 500 रुपये उधार दिए')), { name: 'रवि', amountPaise: 50000, note: null })
+  assert.deepEqual(parseOwed(normalizeHinglish('Ravi se 500 wapas lene hain')), { name: 'Ravi', amountPaise: 50000, note: null })
+  assert.deepEqual(parseOwed(normalizeHinglish('रवि पर 1,200 रुपये बाकी हैं')), { name: 'रवि', amountPaise: 120000, note: null })
+  assert.deepEqual(parseOwed(normalizeHinglish('प्रिया ने 2000 उधार लिए')), { name: 'प्रिया', amountPaise: 200000, note: null })
+  // Paid, not lent: an expense, never money to chase.
+  assert.equal(parseOwed(normalizeHinglish('दुकानदार को 500 रुपये दिए')), null)
+})
+
+test('bills said in Hindi', () => {
+  const light = parseBill(normalizeHinglish('बिजली का बिल 5 तारीख को भरना है'), NOW)
+  assert.equal(light?.name, 'बिजली का बिल')
+  assert.equal(light?.category, 'electricity')
+  assert.equal(light?.repeat, 'monthly')
+  assert.equal(light?.dueOn, '2026-11-05')
+  const rent = parseBill(normalizeHinglish('किराया 15000 रुपये हर महीने 1 तारीख को'), NOW)
+  assert.equal(rent?.name, 'किराया')
+  assert.equal(rent?.category, 'rent')
+  assert.equal(rent?.amountPaise, 1500000)
+  assert.equal(rent?.dueOn, '2026-11-01')
+  assert.equal(parseBill(normalizeHinglish('शर्मा जी को 1 तारीख को बिल भेजना'), NOW), null, 'a bill to send is not one to pay')
+})
+
+test('every example offered in Hindi is one Cue understands', () => {
+  for (const use of USES) {
+    const text = normalizeHinglish(use.exampleHi)
+    const read = parseWhen(text, NOW) ?? parseBill(text, NOW) ?? parseExamLine(use.exampleHi, NOW)
+    assert.ok(read, `${use.key}: "${use.exampleHi}"`)
+  }
 })

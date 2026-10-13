@@ -17,20 +17,21 @@ export interface ParsedOwed {
 
 /** An amount, with or without a rupee sign: "owes me 500" is plainly money. */
 const MONEY = String.raw`(?:₹|rs\.?|inr)?\s*(\d{1,3}(?:,\d{2,3})+|\d+)(?:\.(\d{1,2}))?(?:\s*(?:rs\b\.?|rupees?\b|inr\b|\/-))?`
-const NAME = String.raw`([a-z][a-z.' ]{0,40}?)`
+/** A name in either script: "Ravi", "रवि" — Devanagari vowel signs are marks, not letters. */
+const NAME = String.raw`(\p{L}[\p{L}\p{M}.' ]{0,40}?)`
 const FOR = String.raw`(?:\s+(?:for|towards)\s+(.+?))?`
 /** Date words after the name, which are about when, not who. */
 const TRAILING_WHEN = /\s+(?:today|tomorrow|yesterday|tonight|this week|next week|(?:on|by|before)\s+.+)$/i
 
 const PATTERNS: { re: RegExp; amount: number; name: number; note: number }[] = [
   // "Ravi owes me 500 for the tickets", "Ravi has to give me ₹500"
-  { re: new RegExp(String.raw`^${NAME}\s+(?:owes|has to (?:pay|give|return))\s+me\s+${MONEY}${FOR}$`, 'i'), name: 1, amount: 2, note: 4 },
+  { re: new RegExp(String.raw`^${NAME}\s+(?:owes|has to (?:pay|give|return))\s+me\s+${MONEY}${FOR}$`, 'iu'), name: 1, amount: 2, note: 4 },
   // "lent ₹2,000 to Priya for rent", "gave 500 to Ravi as a loan"
-  { re: new RegExp(String.raw`^(?:i\s+)?lent\s+${MONEY}\s+to\s+${NAME}${FOR}$`, 'i'), amount: 1, name: 3, note: 4 },
+  { re: new RegExp(String.raw`^(?:i\s+)?lent\s+${MONEY}\s+to\s+${NAME}${FOR}$`, 'iu'), amount: 1, name: 3, note: 4 },
   // "lent Priya 2000 rs"
-  { re: new RegExp(String.raw`^(?:i\s+)?lent\s+${NAME}\s+${MONEY}${FOR}$`, 'i'), name: 1, amount: 2, note: 4 },
+  { re: new RegExp(String.raw`^(?:i\s+)?lent\s+${NAME}\s+${MONEY}${FOR}$`, 'iu'), name: 1, amount: 2, note: 4 },
   // "collect ₹500 from Ravi", "get 300 back from Priya for lunch"
-  { re: new RegExp(String.raw`^(?:collect|get|take|recover)\s+${MONEY}\s+(?:back\s+)?from\s+${NAME}${FOR}$`, 'i'), amount: 1, name: 3, note: 4 },
+  { re: new RegExp(String.raw`^(?:collect|get|take|recover)\s+${MONEY}\s+(?:back\s+)?from\s+${NAME}${FOR}$`, 'iu'), amount: 1, name: 3, note: 4 },
 ]
 
 function toPaise(whole: string, fraction?: string): number {

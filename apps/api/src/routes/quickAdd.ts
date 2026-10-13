@@ -883,7 +883,7 @@ export function planFromAi(rules: QuickPlan, r: AiReading, now: Date, line: stri
         summary: t(lang, '{title} — {repeat}, from {date}', {
           title: r.title,
           repeat: describeRecurrence(rule, { startsOn: first, hour, minute }, lang),
-          date: first.toLocaleDateString(inLocale(lang)),
+          date: startDay(first, lang),
         }),
       }
     }
@@ -963,7 +963,7 @@ async function enrich(userId: string, orgId: string, raw: string, plan: QuickPla
     const who = next.contactId && next.personName ? next.personName : plan.owed.name
     return {
       ...next,
-      title: `${who} owes you ${formatRupees(plan.owed.amountPaise)}`,
+      title: t(lang, '{name} owes you {amount}', { name: who, amount: formatRupees(plan.owed.amountPaise) }),
       summary: `${t(lang, '{amount} from {name}', { amount: formatRupees(plan.owed.amountPaise), name: who })}${plan.owed.note ? ` · ${plan.owed.note}` : ''}`,
       links: { ...links, places: [], accounts: [] },
     }
@@ -1120,6 +1120,11 @@ const WHEN: Intl.DateTimeFormatOptions = { weekday: 'short', day: 'numeric', mon
 /** The locale a date is written in: the one it always was, or Hindi's day and month names. */
 function inLocale(lang: Lang, en?: string | string[]): string | string[] | undefined {
   return lang === 'hi' ? 'hi-IN' : en
+}
+
+/** When a series starts: "18 अक्तू॰" in Hindi; English as it always was. */
+function startDay(d: Date, lang: Lang): string {
+  return lang === 'hi' ? d.toLocaleDateString('hi-IN', { day: 'numeric', month: 'short' }) : d.toLocaleDateString()
 }
 
 /** " and " between times, in the person's language. */
@@ -1663,7 +1668,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     return {
       ...base,
       kind: 'owed',
-      title: `${lent.name} owes you ${formatRupees(lent.amountPaise)}`,
+      title: t(lang, '{name} owes you {amount}', { name: lent.name, amount: formatRupees(lent.amountPaise) }),
       personName: lent.name,
       owed: lent,
       summary: `${t(lang, '{amount} from {name}', { amount: formatRupees(lent.amountPaise), name: lent.name })}${lent.note ? ` · ${lent.note}` : ''}`,
@@ -1797,7 +1802,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
 
     const at = [{ hour, minute }, ...alsoAt].map((x) => clockLabel(x.hour, x.minute)).join(andWord(lang))
     const repeatWords = describeRecurrence(asRepeat.rule, { startsOn: firstAt, hour, minute }, lang)
-    const from = firstAt.toLocaleDateString(inLocale(lang))
+    const from = startDay(firstAt, lang)
     return {
       ...base,
       kind: 'recurrence',
