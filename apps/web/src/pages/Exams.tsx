@@ -3,7 +3,9 @@ import { useSearchParams } from 'react-router-dom'
 import {
   CATEGORIES,
   EXAMS,
+  EXAM_GROUPS,
   EXAM_STEPS,
+  examGroup,
   examByKey,
   examLabel,
   examStages,
@@ -87,6 +89,16 @@ export default function Exams() {
   const [reading, setReading] = useState<{ examId: string } | null>(null)
   const [fitting, setFitting] = useState(false)
   const openId = params.get('exam')
+  // The app icon's shortcuts: straight to reading an admit card, or adding an exam.
+  const [adding, setAdding] = useState(() => params.get('add') === '1')
+  useEffect(() => {
+    if (params.get('card') === '1') setReading({ examId: '' })
+    if (params.has('card') || params.has('add')) {
+      params.delete('card')
+      params.delete('add')
+      setParams(params, { replace: true })
+    }
+  }, [params, setParams])
 
   const load = useCallback(async () => {
     try {
@@ -122,10 +134,12 @@ export default function Exams() {
       </div>
       <p className="muted small">{w.intro}</p>
 
-      {exams && (
+      {exams && exams.length === 0 && !adding && <ExamsPicker onAdded={() => void load()} onOther={() => setAdding(true)} />}
+
+      {exams && (exams.length > 0 || adding) && (
         <AddExam
-          key={exams.length === 0 ? 'first' : 'more'}
-          startOpen={exams.length === 0}
+          key={adding ? 'adding' : 'folded'}
+          startOpen={adding}
           onAdded={() => void load()}
           onReadCard={() => setReading({ examId: '' })}
           onFitPhoto={() => setFitting(true)}
@@ -138,16 +152,10 @@ export default function Exams() {
           <span className="spinner" />
         </div>
       ) : exams.length === 0 ? (
-        <div className="blank">
-          <span className="blank-mark" aria-hidden>
-            &#128221;
-          </span>
-          <h3>{w.noExams}</h3>
-          <p>
-            {w.noExamsHow} <strong>applied for RRB NTPC 2026, RRB Ajmer, reg no …</strong> ·{' '}
-            <strong>REET ka form bharna hai, last date 20 nov</strong>
-          </p>
-        </div>
+        <p className="muted small">
+          {w.noExamsHow} <strong>applied for RRB NTPC 2026, RRB Ajmer, reg no …</strong> ·{' '}
+          <strong>REET ka form bharna hai, last date 20 nov</strong>
+        </p>
       ) : (
         <>
           <div className="exam-list">
@@ -202,7 +210,80 @@ export default function Exams() {
           <PhotoFitter />
         </Modal>
       )}
+
+      <p className="exam-disclaimer">{w.disclaimer}</p>
     </div>
+  )
+}
+
+/**
+ * The first time: which exams they are preparing for, chosen from the list
+ * by group, each added with its stages and its board's site — the form
+ * still to fill, or already applied.
+ */
+function ExamsPicker({ onAdded, onOther }: { onAdded: () => void; onOther: () => void }) {
+  const w = useExamWords()
+  const [picked, setPicked] = useState<string[]>([])
+  const [applied, setApplied] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function add() {
+    setBusy(true)
+    setError(null)
+    try {
+      for (const key of picked) {
+        const exam = EXAMS.find((x) => x.key === key)!
+        await api('/exams', { method: 'POST', body: { examKey: key, name: exam.name, stage: applied ? 'applied' : 'to_apply' } })
+      }
+      announceChange()
+      onAdded()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="card stack tight exams-picker" lang={w.lang}>
+      <h2 className="section-title">{w.pickTitle}</h2>
+      <p className="muted small">{w.pickHow}</p>
+      {EXAM_GROUPS.map((g) => (
+        <div key={g.key} className="exams-pick-group">
+          <span className="label-text">{w.lang === 'hi' ? g.hi : g.en}</span>
+          <div className="chips">
+            {EXAMS.filter((x) => examGroup(x) === g.key).map((x) => (
+              <button
+                key={x.key}
+                className={`chip${picked.includes(x.key) ? ' selected' : ''}`}
+                aria-pressed={picked.includes(x.key)}
+                onClick={() => setPicked((list) => (list.includes(x.key) ? list.filter((k) => k !== x.key) : [...list, x.key]))}
+              >
+                {x.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="chips" role="group">
+        <button className={`chip${!applied ? ' selected' : ''}`} onClick={() => setApplied(false)}>
+          {w.pickToApply}
+        </button>
+        <button className={`chip${applied ? ' selected' : ''}`} onClick={() => setApplied(true)}>
+          {w.pickApplied}
+        </button>
+      </div>
+      <div className="row">
+        <button className="primary" onClick={() => void add()} disabled={busy || picked.length === 0}>
+          {w.pickAdd(Math.max(1, picked.length))}
+        </button>
+        <button className="link small" onClick={onOther}>
+          {w.pickOther}
+        </button>
+      </div>
+      {error && <p className="error small">{error}</p>}
+    </section>
   )
 }
 

@@ -26,8 +26,38 @@ import { PrivacyPage, TermsPage } from './pages/Legal.tsx'
 import Bills from './pages/Bills.tsx'
 import Exams from './pages/Exams.tsx'
 import NoticeReview from './pages/NoticeReview.tsx'
+import ExamsHome from './pages/ExamsHome.tsx'
+import { appMode } from './lib/appMode.ts'
 import { groupSections, tabsFor, type Section } from '@cue/shared'
 import { UsesPicker } from './components/UsesPicker.tsx'
+
+/** The app's own words in Hindi: tabs, the menu, the header. The pages themselves come in turn. */
+const NAV_HI: Record<string, string> = {
+  Today: 'आज',
+  People: 'लोग',
+  History: 'इतिहास',
+  Trips: 'यात्राएँ',
+  Repeating: 'दोहराने वाले',
+  Expenses: 'खर्च',
+  Jobs: 'नौकरियाँ',
+  Hiring: 'भर्ती',
+  Deals: 'डील',
+  Bills: 'बिल',
+  Exams: 'परीक्षाएँ',
+  More: 'और',
+  Add: 'जोड़ें',
+  Search: 'खोजें',
+  Settings: 'सेटिंग्स',
+  'Sign out': 'साइन आउट',
+  'What I use Cue for…': 'Cue किस काम के लिए…',
+  'Review exam notices': 'परीक्षा सूचनाएँ जाँचें',
+}
+
+/** A word of the app's own, in the person's language. */
+function useNavWord() {
+  const { me } = useAuth()
+  return (word: string) => (me?.language === 'hi' ? (NAV_HI[word] ?? word) : word)
+}
 
 /** Every section that has a page, and where it lives. */
 const SECTION_LINKS: Partial<Record<Section, { to: string; label: string }>> = {
@@ -49,6 +79,7 @@ const AVAILABLE = Object.keys(SECTION_LINKS) as Section[]
  * what is on the bar, and whether Jobs, Hiring and Deals are here at all.
  */
 function MoreMenu({ sections, onChangeUses, admin }: { sections: Section[]; onChangeUses: () => void; admin: boolean }) {
+  const say = useNavWord()
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const ref = useRef<HTMLDivElement>(null)
@@ -72,7 +103,7 @@ function MoreMenu({ sections, onChangeUses, admin }: { sections: Section[]; onCh
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        More
+        {say('More')}
       </button>
       {open && (
         <div className="tabs-menu" role="menu">
@@ -82,14 +113,14 @@ function MoreMenu({ sections, onChangeUses, admin }: { sections: Section[]; onCh
               {groups.length > 1 && <span className="tabs-menu-heading">{g.label}</span>}
               {g.sections.map((s) => (
                 <NavLink key={s} to={SECTION_LINKS[s]!.to} role="menuitem">
-                  {SECTION_LINKS[s]!.label}
+                  {say(SECTION_LINKS[s]!.label)}
                 </NavLink>
               ))}
             </div>
           ))}
           {admin && (
             <NavLink to="/admin/notices" role="menuitem" className="tabs-menu-admin">
-              Review exam notices
+              {say('Review exam notices')}
             </NavLink>
           )}
           <button
@@ -100,7 +131,7 @@ function MoreMenu({ sections, onChangeUses, admin }: { sections: Section[]; onCh
               onChangeUses()
             }}
           >
-            What I use Cue for…
+            {say('What I use Cue for…')}
           </button>
         </div>
       )}
@@ -118,15 +149,18 @@ function Nav({
   onOpenAdd: () => void
 }) {
   const { logout, me } = useAuth()
+  const say = useNavWord()
   const [choosingUses, setChoosingUses] = useState(false)
   const { main, more } = tabsFor(me?.uses ?? [], AVAILABLE, me?.filled ?? [])
 
   return (
     <>
       <header className="topbar">
+        {/* Cue Exams, when that is the door they came in by. */}
         <div className="brand">
-          <img className="brand-mark" src="/brand/cue-mark.svg" alt="" />
-          Cue
+          <img className="brand-mark" src={appMode() === 'exams' ? '/brand/cue-exams-mark.svg' : '/brand/cue-mark.svg'} alt="" />
+          {/* The longer name gives way to its mark on a small phone. */}
+          <span className={`brand-name${appMode() === 'exams' ? ' is-long' : ''}`}>{appMode() === 'exams' ? 'Cue Exams' : 'Cue'}</span>
         </div>
         <div className="topbar-right">
           {/* The one thing this app is for, so the one button that is always
@@ -138,7 +172,7 @@ function Nav({
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            <span>Add</span>
+            <span>{say('Add')}</span>
           </button>
           {/* A bordered control rather than a fourth text link. Search was
               there all along and nobody could find it, because next to
@@ -148,14 +182,14 @@ function Nav({
               <circle cx="11" cy="11" r="7" />
               <line x1="16.5" y1="16.5" x2="21" y2="21" />
             </svg>
-            <span>Search</span>
+            <span>{say('Search')}</span>
             <kbd>Ctrl K</kbd>
           </button>
           <button className="link" onClick={onOpenSettings}>
-            Settings
+            {say('Settings')}
           </button>
           <button className="link" onClick={logout}>
-            Sign out
+            {say('Sign out')}
           </button>
         </div>
       </header>
@@ -164,11 +198,11 @@ function Nav({
         {/* No Add tab: it went to the same place as the Add button beside
             the logo, so it was one destination taking two slots. */}
         <NavLink to="/" end>
-          Today
+          {say('Today')}
         </NavLink>
         {main.map((s) => (
           <NavLink key={s} to={SECTION_LINKS[s]!.to}>
-            {SECTION_LINKS[s]!.label}
+            {say(SECTION_LINKS[s]!.label)}
           </NavLink>
         ))}
         <MoreMenu sections={more} onChangeUses={() => setChoosingUses(true)} admin={Boolean(me?.isAdmin)} />
@@ -296,13 +330,15 @@ export default function App() {
     // which by definition is clicked by somebody who cannot sign in.
     return (
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={appMode() === 'exams' ? <ExamsHome /> : <Home />} />
+        <Route path="/exams-app" element={<ExamsHome />} />
+        <Route path="/exams" element={<ExamsHome />} />
         <Route path="/login" element={<Login initialMode="login" />} />
         <Route path="/register" element={<Login initialMode="register" />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/reset" element={<ResetPassword />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to={appMode() === 'exams' ? '/exams-app' : '/login'} replace />} />
       </Routes>
     )
   }
@@ -350,6 +386,10 @@ export default function App() {
           <Route path="/bills" element={<Bills />} />
           <Route path="/exams" element={<Exams />} />
           <Route path="/admin/notices" element={me?.isAdmin ? <NoticeReview /> : <Navigate to="/" replace />} />
+          {/* Just signed in or up: Cue Exams opens on the exams. */}
+          <Route path="/login" element={<Navigate to={appMode() === 'exams' ? '/exams' : '/'} replace />} />
+          <Route path="/register" element={<Navigate to={appMode() === 'exams' ? '/exams' : '/'} replace />} />
+          <Route path="/exams-app" element={<Navigate to="/exams" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

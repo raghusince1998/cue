@@ -22,6 +22,14 @@ function num(key: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+/** SHA-256 certificate fingerprints, comma-separated: only well-formed ones are vouched for. */
+function fingerprints(raw: string | undefined): string[] {
+  return (raw ?? '')
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
+    .filter((s) => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(s))
+}
+
 export const env = {
   databaseUrl: required('DATABASE_URL'),
   port: num('PORT', 3002),
@@ -128,10 +136,10 @@ export const env = {
    */
   androidPackage: process.env.ANDROID_PACKAGE ?? 'in.vitelio.cue',
   /** SHA-256 fingerprints, comma-separated: Play's app signing key, and the upload key. */
-  androidCertSha256: (process.env.ANDROID_CERT_SHA256 ?? '')
-    .split(',')
-    .map((s) => s.trim().toUpperCase())
-    .filter((s) => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(s)),
+  androidCertSha256: fingerprints(process.env.ANDROID_CERT_SHA256),
+  /** Cue Exams, the second Play Store app on the same site: its package and its keys' fingerprints. */
+  androidExamsPackage: process.env.ANDROID_EXAMS_PACKAGE ?? 'in.vitelio.cue.exams',
+  androidExamsCertSha256: fingerprints(process.env.ANDROID_EXAMS_CERT_SHA256),
 
   /** Average door-to-door speed for travel estimates. Indian roads, not motorways. */
   travelSpeedKmh: num('TRAVEL_SPEED_KMH', 45),

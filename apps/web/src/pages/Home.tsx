@@ -274,6 +274,14 @@ export default function Home() {
                 </article>
               ))}
             </div>
+            {/* Its own app, for aspirants: the same Cue, exams first, Hindi first. */}
+            <Link to="/exams-app" className="site-card exams-callout">
+              <img src="/brand/cue-exams-mark.svg" alt="" width={44} height={44} />
+              <span>
+                <strong>Preparing for an exam? Try Cue Exams.</strong>
+                <span className="muted"> Every exam from the form to the result — last dates, admit cards, results — in Hindi too. परीक्षा की हर तारीख याद।</span>
+              </span>
+            </Link>
           </div>
         </section>
 

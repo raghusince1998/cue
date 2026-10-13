@@ -128,6 +128,15 @@ const EN = {
     'Planned, with what to carry. Add your home city in Settings, and a centre in another city becomes a trip with a reminder to book the journey.',
   planned: 'Planned, with what to carry and reminders the evening before and that morning.',
   doneButton: 'Done',
+  // Choosing exams, the first time
+  pickTitle: 'Which exams are you preparing for?',
+  pickHow: 'Tap each one. Its stages, official site and dates come with it; you can add your registration number later.',
+  pickApplied: 'Already applied',
+  pickToApply: 'Form still to fill',
+  pickAdd: (n: number) => (n === 1 ? 'Add this exam' : `Add these ${n} exams`),
+  pickOther: 'Not in the list? Add an exam',
+  disclaimer:
+    'Cue is not affiliated with any government body or exam board. Dates and notices come from the boards’ official websites, linked beside them — the official notice has the final word.',
 }
 
 type Words = typeof EN
@@ -249,6 +258,14 @@ const HI: Words = {
   plannedNoHome: 'तय हो गया, साथ ले जाने की सूची के साथ। Settings में अपना शहर जोड़ें, तो दूसरे शहर का केंद्र यात्रा और टिकट रिमाइंडर बन जाएगा।',
   planned: 'तय हो गया, साथ ले जाने की सूची और एक शाम पहले व उसी सुबह के रिमाइंडर के साथ।',
   doneButton: 'ठीक है',
+  pickTitle: 'आप किन परीक्षाओं की तैयारी कर रहे हैं?',
+  pickHow: 'हर परीक्षा पर टैप करें। उसके चरण, आधिकारिक वेबसाइट और तारीखें साथ आएँगी; रजिस्ट्रेशन नंबर बाद में जोड़ सकते हैं।',
+  pickApplied: 'आवेदन कर दिया',
+  pickToApply: 'फॉर्म भरना बाकी',
+  pickAdd: (n) => (n === 1 ? 'यह परीक्षा जोड़ें' : `ये ${n} परीक्षाएँ जोड़ें`),
+  pickOther: 'सूची में नहीं है? परीक्षा जोड़ें',
+  disclaimer:
+    'Cue किसी भी सरकारी संस्था या परीक्षा बोर्ड से जुड़ा नहीं है। तारीखें और सूचनाएँ बोर्ड की आधिकारिक वेबसाइटों से हैं, जिनका लिंक साथ है — अंतिम जानकारी के लिए आधिकारिक सूचना देखें।',
 }
 
 export interface ExamWords extends Words {

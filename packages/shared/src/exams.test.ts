@@ -193,3 +193,9 @@ test('what is not an admit card is nothing', () => {
   assert.equal(readAdmitCard('Your order has shipped. Track it here.'), null)
   assert.equal(readAdmitCard('Exam Date: 12/12/2026'), null, 'a date alone is not a card')
 })
+
+test('every exam falls in a group to choose it from', async () => {
+  const { examGroup, EXAM_GROUPS } = await import('./exams.ts')
+  const counts = Object.fromEntries(EXAM_GROUPS.map((g) => [g.key, EXAMS.filter((e) => examGroup(e) === g.key).length]))
+  assert.deepEqual(counts, { railways: 6, ssc: 8, upsc: 7, banks: 9, entrance: 10, rajasthan: 13 })
+})

@@ -91,3 +91,51 @@ from Play, the app then opens full-screen.
 Raise `appVersionCode` by one (and `appVersionName`, e.g. `1.0.1`) in
 `twa-manifest.json`, commit, run the release build, and upload. Changes to
 the website itself need none of this.
+
+# Cue Exams: the second app
+
+Cue Exams is the same website again, for aspirants: its Android shell opens
+`https://cue.vitelio.in/exams?app=exams`, which puts the site in exams mode —
+its own welcome page (Hindi first), "Cue Exams" in the header, and new
+accounts that start with exams and the language picked. Everything else —
+accounts, data, the server — is Cue's. Someone with both apps signs in to
+the same account in each.
+
+- `exams/twa-manifest.json` — package `in.vitelio.cue.exams`, its own icon
+  (`apps/web/public/exams-icon-*.png`), name and shortcuts (read an admit
+  card, add an exam).
+- `apps/web/public/exams.webmanifest` — its web manifest.
+- `exams/store/` — its listing, in English and Hindi, and its Data safety and
+  app content answers. The listing's last paragraph is the "not a
+  government app" disclosure Play requires of apps with government
+  information: keep it.
+
+## Build it
+
+GitHub → Actions → **Android app** → Run workflow, **Which app: exams**.
+Without *release*: a test APK to install (artifact **cue-exams-test-build**).
+With *release*: the bundle for Play (artifact **cue-exams-release**), signed
+with the same upload key as Cue unless you add `ANDROID_EXAMS_KEYSTORE_BASE64`
+and `ANDROID_EXAMS_KEYSTORE_PASSWORD` (and `ANDROID_EXAMS_KEY_PASSWORD`) for a
+key of its own. One upload key for both is allowed; Play gives each app its
+own app signing key either way.
+
+## Publish it
+
+1. Play Console → **Create app**: name **Cue Exams**, default language
+   **Hindi – hi-IN** (or English), app, free. Category **Education**.
+2. Store listing: `exams/store/listing.md` (add the English translation too),
+   the icon, the feature graphic and the screenshots listed there.
+3. Privacy policy `https://cue.vitelio.in/privacy`; account deletion
+   `https://cue.vitelio.in/privacy#delete`; Data safety and app content from
+   `exams/store/data-safety.md`.
+4. Upload `app-release-bundle.aab` to **Internal testing** first.
+5. App integrity → App signing: copy its SHA-256 fingerprints (app signing
+   key, and upload key) into `/srv/cue/.env` — Cue Exams has its own line:
+
+   ```
+   ANDROID_EXAMS_CERT_SHA256=AA:BB:…,CC:DD:…
+   ```
+
+   Restart (`sudo systemctl restart cue`); `/.well-known/assetlinks.json`
+   then lists both apps, and Cue Exams opens full-screen.

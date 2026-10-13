@@ -1248,6 +1248,9 @@ export { sphereOf, isWorkTime, nextWorkBoundary, describeWorkHours, DEFAULT_WORK
 export { packingList, packingItems, type PackingInput, type PackingSection, type TripPurpose, type TravelMode } from './packing.ts'
 export {
   EXAMS,
+  EXAM_GROUPS,
+  examGroup,
+  type ExamGroup,
   EXAM_STEPS,
   RRB_REGIONS,
   dateIn,

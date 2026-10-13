@@ -640,3 +640,25 @@ export function readAdmitCard(text: string): AdmitCard | null {
     centreCity: cityOf(centreAddress, centreName),
   }
 }
+
+// ── Groups, for choosing ─────────────────────────────────────────────────
+
+export const EXAM_GROUPS = [
+  { key: 'railways', en: 'Railways', hi: 'रेलवे' },
+  { key: 'ssc', en: 'SSC', hi: 'SSC' },
+  { key: 'upsc', en: 'UPSC & defence', hi: 'UPSC और रक्षा' },
+  { key: 'banks', en: 'Banks & insurance', hi: 'बैंक और बीमा' },
+  { key: 'entrance', en: 'Entrance & eligibility', hi: 'प्रवेश और पात्रता परीक्षाएँ' },
+  { key: 'rajasthan', en: 'Rajasthan', hi: 'राजस्थान' },
+] as const
+export type ExamGroup = (typeof EXAM_GROUPS)[number]['key']
+
+/** Which group an exam is chosen from. */
+export function examGroup(e: CatalogExam): ExamGroup {
+  if (e.scope === 'rajasthan') return 'rajasthan'
+  if (/^(?:rrb|rpf)/.test(e.key)) return 'railways'
+  if (e.key.startsWith('ssc')) return 'ssc'
+  if (e.key.startsWith('upsc') || e.key === 'agniveer-army' || e.key === 'afcat') return 'upsc'
+  if (/^(?:ibps|sbi|rbi|lic)/.test(e.key)) return 'banks'
+  return 'entrance'
+}

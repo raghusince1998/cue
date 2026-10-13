@@ -26,11 +26,15 @@ interface AuthValue {
   me: Me | null
   loading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (input: {
-    name: string
-    email: string
-    password: string
-  }) => Promise<void>
+  register: (
+    input: {
+      name: string
+      email: string
+      password: string
+    },
+    /** What the account starts with: Cue Exams starts with exams, in the language picked. */
+    start?: { uses?: string[]; language?: 'en' | 'hi' },
+  ) => Promise<void>
   logout: () => void
   /** What they use Cue for, saved and reflected everywhere at once. */
   saveUses: (uses: string[]) => Promise<void>
@@ -81,12 +85,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const register = useCallback(
-    async (input: { name: string; email: string; password: string }) => {
+    async (input: { name: string; email: string; password: string }, start?: { uses?: string[]; language?: 'en' | 'hi' }) => {
       const res = await api<{ token: string }>('/auth/register', {
         method: 'POST',
         body: input,
       })
       setToken(res.token)
+      // Set before the first screen, so it opens as what it is for.
+      if (start && (start.uses || start.language)) {
+        await api('/me/preferences', { method: 'PATCH', body: start }).catch(() => undefined)
+      }
       await refresh()
     },
     [refresh],

@@ -23,6 +23,7 @@ import { owedRoutes } from './routes/owed.ts'
 import { trackerRoutes } from './routes/trackers.ts'
 import { examRoutes } from './routes/exams.ts'
 import { noticeRoutes } from './routes/notices.ts'
+import { assetLinks } from './assetLinks.ts'
 import { billRoutes } from './routes/bills.ts'
 import { deliveryRoutes } from './routes/deliveries.ts'
 import { mailRoutes } from './routes/mail.ts'
@@ -128,17 +129,12 @@ await app.register(intentionRoutes, { prefix: '/api' })
  * an address bar. Only once there is a key to vouch for.
  */
 app.get('/.well-known/assetlinks.json', async (_req, reply) => {
-  if (env.androidCertSha256.length === 0) return reply.code(404).send({ error: 'not_found' })
-  return reply.header('cache-control', 'public, max-age=3600').send([
-    {
-      relation: ['delegate_permission/common.handle_all_urls'],
-      target: {
-        namespace: 'android_app',
-        package_name: env.androidPackage,
-        sha256_cert_fingerprints: env.androidCertSha256,
-      },
-    },
+  const links = assetLinks([
+    { package: env.androidPackage, fingerprints: env.androidCertSha256 },
+    { package: env.androidExamsPackage, fingerprints: env.androidExamsCertSha256 },
   ])
+  if (links.length === 0) return reply.code(404).send({ error: 'not_found' })
+  return reply.header('cache-control', 'public, max-age=3600').send(links)
 })
 
 /**

@@ -69,7 +69,8 @@ export function PrivacyPage() {
       <p>
         Cue ({SITE.url}) is a personal planner: plans and reminders, people, trips, bills, expenses and
         parcels, and — if you connect an account — what your calendar and email already say about them.
-        This policy explains what Cue collects, what it does with it, and the choices you have.
+        This policy explains what Cue collects, what it does with it, and the choices you have. It covers Cue
+        Exams too — Cue’s app for exam aspirants — which is the same service and the same account.
       </p>
 
       <h2>What Cue keeps</h2>

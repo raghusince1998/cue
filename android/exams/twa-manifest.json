@@ -1,0 +1,74 @@
+{
+  "packageId": "in.vitelio.cue.exams",
+  "host": "cue.vitelio.in",
+  "name": "Cue Exams — फॉर्म से परिणाम तक",
+  "launcherName": "Cue Exams",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#EA580C",
+  "themeColorDark": "#0A0D14",
+  "navigationColor": "#0F172A",
+  "navigationColorDark": "#0A0D14",
+  "navigationDividerColor": "#0F172A",
+  "navigationDividerColorDark": "#0A0D14",
+  "backgroundColor": "#0F172A",
+  "enableNotifications": true,
+  "startUrl": "/exams?app=exams",
+  "iconUrl": "https://cue.vitelio.in/exams-icon-512.png",
+  "maskableIconUrl": "https://cue.vitelio.in/exams-icon-maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "cue"
+  },
+  "appVersionName": "1.0.0",
+  "appVersion": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Read an admit card",
+      "shortName": "Admit card",
+      "url": "https://cue.vitelio.in/exams?app=exams&card=1",
+      "chosenIconUrl": "https://cue.vitelio.in/exams-icon-192.png"
+    },
+    {
+      "name": "Add an exam",
+      "shortName": "Add exam",
+      "url": "https://cue.vitelio.in/exams?app=exams&add=1",
+      "chosenIconUrl": "https://cue.vitelio.in/exams-icon-192.png"
+    },
+    {
+      "name": "Today",
+      "shortName": "Today",
+      "url": "https://cue.vitelio.in/?app=exams",
+      "chosenIconUrl": "https://cue.vitelio.in/exams-icon-192.png"
+    }
+  ],
+  "shareTarget": {
+    "action": "/share",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://cue.vitelio.in/exams.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://cue.vitelio.in/",
+  "minSdkVersion": 24,
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": []
+}

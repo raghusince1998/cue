@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth.tsx'
 import { ApiError, api } from '../lib/api.ts'
+import { appMode, signupLanguage } from '../lib/appMode.ts'
 
 export default function Login({ initialMode = 'login' }: { initialMode?: 'login' | 'register' }) {
   const { login, register } = useAuth()
@@ -15,6 +16,9 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Came in by Cue Exams: its name, its mark, and an account that starts with exams.
+  const exams = appMode() === 'exams'
+  const hindi = exams && signupLanguage() === 'hi'
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -29,7 +33,7 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
         return
       }
       if (mode === 'login') await login(email, password)
-      else await register({ name, email, password })
+      else await register({ name, email, password }, exams ? { uses: ['exams'], language: signupLanguage() } : undefined)
     } catch (err) {
       const messages: Record<string, string> = {
         invalid_credentials: 'That email and password do not match.',
@@ -57,13 +61,21 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
     <div className="auth">
       <form className="card auth-card" onSubmit={submit}>
         <div className="brand big">
-          <img className="brand-mark" src="/brand/cue-mark.svg" alt="" />
-          Cue
+          <img className="brand-mark" src={exams ? '/brand/cue-exams-mark.svg' : '/brand/cue-mark.svg'} alt="" />
+          {exams ? 'Cue Exams' : 'Cue'}
         </div>
-        <p className="muted">
-          {mode === 'register'
-            ? 'Free to use. Plans, reminders, bills and bookings — say it once, Cue remembers the rest.'
-            : 'Welcome back. Your plans, reminders and everything Cue found for you are waiting.'}
+        <p className="muted" lang={hindi ? 'hi' : 'en'}>
+          {exams
+            ? hindi
+              ? mode === 'register'
+                ? 'मुफ़्त। हर परीक्षा, फॉर्म से परिणाम तक — हर तारीख समय पर याद।'
+                : 'फिर से स्वागत है। आपकी परीक्षाएँ और उनकी तारीखें यहीं हैं।'
+              : mode === 'register'
+                ? 'Free. Every exam, from the form to the result — every date on time.'
+                : 'Welcome back. Your exams and their dates are waiting.'
+            : mode === 'register'
+              ? 'Free to use. Plans, reminders, bills and bookings — say it once, Cue remembers the rest.'
+              : 'Welcome back. Your plans, reminders and everything Cue found for you are waiting.'}
         </p>
 
         {mode === 'register' && (

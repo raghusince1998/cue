@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs><linearGradient id="cue-exams-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ea580c"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs>
+  <rect width="512" height="512" fill="url(#cue-exams-bg)"/>
+  <g transform="translate(256 256) scale(0.78) translate(-256 -256)">
+    <path d="M 346.5 165.5 A 128 128 0 1 0 346.5 346.5" fill="none" stroke="#ffffff" stroke-width="56" stroke-linecap="round"/>
+    <path d="M 222 258 L 248 284 L 296 230" fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
