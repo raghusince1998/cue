@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseBooking, parseDelivery, parseDueNotice } from '@cue/shared'
+import { parseBooking, parseBookings, parseDelivery, parseDueNotice } from '@cue/shared'
 import { CORPUS } from './mailCorpus.ts'
 import { htmlToText } from './mailReader.ts'
 
@@ -153,4 +153,30 @@ test('an email table becomes label: value lines, and money keeps its commas', ()
   assert.match(text, /^Current Status: CNF\/B2\/45\/LOWER$/m)
   assert.match(text, /₹ 4,230\.80/)
   assert.ok(!/td\{|font-size/.test(text), 'no styles')
+})
+
+test('a round trip is two journeys, each with its own day, time and the airline PNR', () => {
+  const legs = parseBookings(read('makemytrip-round-trip'), NOW)
+  assert.deepEqual(
+    legs.map((b) => [b.title, local(b.startsAt), b.city, b.ref]),
+    [
+      ['Flight 6E 512 · Bengaluru → Goa', '2026-11-01 07:00', 'Goa', 'K9LM2P'],
+      ['Flight 6E 513 · Goa → Bengaluru', '2026-11-05 19:30', 'Bengaluru', 'K9LM2P'],
+    ],
+  )
+  assert.ok(!/Terminal/.test(legs[1]!.notes ?? ''), 'the way back leaves Goa, not Terminal 1 at Bengaluru')
+})
+
+test('a change of plane is one journey, landing where the last leg lands', () => {
+  const [journey, ...rest] = parseBookings(read('air-india-connection'), NOW)
+  assert.equal(rest.length, 0)
+  assert.equal(journey!.title, 'Flight AI 504 + AI 887 · Bengaluru → Delhi via Mumbai')
+  assert.equal(local(journey!.startsAt), '2026-10-25 06:00')
+  assert.equal(journey!.city, 'Delhi', 'the trip is to Delhi, not Mumbai')
+  assert.match(journey!.notes!, /Change at Mumbai: AI 887 at 9:30 am · Lands in Delhi 11:40 am/)
+})
+
+test('one flight is still one booking', () => {
+  assert.equal(parseBookings(read('indigo'), NOW).length, 1)
+  assert.equal(parseBookings(read('irctc-ers'), NOW).length, 1)
 })

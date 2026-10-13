@@ -24,6 +24,7 @@
     "drizzle-orm": "^0.38.3",
     "fastify": "^5.2.1",
     "nodemailer": "^10.0.15",
+    "pdfjs-dist": "6.3.289",
     "postgres": "^3.4.5",
     "tsx": "^4.19.2",
     "web-push": "^3.6.7",

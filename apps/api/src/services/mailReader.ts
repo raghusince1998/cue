@@ -2,7 +2,8 @@ import { and, desc, eq, inArray } from 'drizzle-orm'
 import {
   findCity,
   formatRupees,
-  parseBooking,
+  parseBookings,
+  type ParsedBooking,
   parseDelivery,
   parseDueNotice,
   parseInsurance,
@@ -21,6 +22,8 @@ import { saveFoundBooking } from './bookings.ts'
 import { recordDelivery } from './deliveries.ts'
 import { challanFromNotice, fastagFromNotice } from './vehicles.ts'
 import { knownPlaces } from './captureLinks.ts'
+import { rowsToText } from './layout.ts'
+import { pdfText } from './pdfText.ts'
 
 /**
  * Reading email for what Cue can act on: a train or flight booked, a parcel
@@ -35,7 +38,14 @@ export interface MailMessage {
   from: string
   subject: string
   text: string
+  /** The text of a PDF ticket attached to it, when there is one that can be read. */
+  pdf?: string
 }
+
+/** A PDF worth reading: a ticket or a statement, not a 40-page brochure. */
+const MAX_PDF_BYTES = 3 * 1024 * 1024
+const MAX_PDFS = 2
+const isPdf = (name: string | undefined, type: string | undefined) => /pdf/i.test(type ?? '') || /\.pdf$/i.test(name ?? '')
 
 /** Who sends what Cue can act on, as it appears in their address or name. */
 export const SENDERS = [
@@ -121,52 +131,15 @@ function cellText(html: string): string {
 }
 
 /**
- * A row of labels: short, wordy cells such as "PNR | Train No./Name | Class".
- * Not a row of station or airport names: "MUMBAI CENTRAL (MMCT)" is a value.
- */
-function isLabelRow(cells: string[]): boolean {
-  return (
-    cells.length >= 2 &&
-    cells.every(
-      (c) => c.length > 0 && c.length <= 32 && !/\d{3,}/.test(c) && !/[₹$]/.test(c) && /^[A-Za-z#]/.test(c) && !/\([A-Z0-9]{2,5}\)/.test(c),
-    )
-  )
-}
-
-/**
- * One table as text. A row of labels over rows of values — how IRCTC lays out
- * a ticket and banks a statement — becomes "Label: value" pairs, so a value
- * stays next to what it is; flattened, "PNR Train No./Name Class" and
- * "2345678901 12951/MUMBAI RAJDHANI 3A" came apart and read as nothing. Any
- * other row keeps its cells apart with a bar.
+ * One table as text, its rows laid out by rowsToText (layout.ts): labels over
+ * values become "Label: value", so a value stays next to what it is.
  */
 function tableText(table: string): string {
-  const rows = [...table.matchAll(/<tr\b[\s\S]*?(?=<tr\b|$)/gi)].map((r) =>
-    [...r[0].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)(?=<t[dh]\b|<\/tr>|$)/gi)].map((c) => cellText(c[1]!)).filter((c) => c !== ''),
+  return rowsToText(
+    [...table.matchAll(/<tr\b[\s\S]*?(?=<tr\b|$)/gi)].map((r) =>
+      [...r[0].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)(?=<t[dh]\b|<\/tr>|$)/gi)].map((c) => cellText(c[1]!)),
+    ),
   )
-  const out: string[] = []
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]!
-    if (row.length === 0) continue
-    const next = rows[i + 1]
-    if (next && isLabelRow(row) && next.length === row.length && !isLabelRow(next)) {
-      // Every value row under the same labels: a passenger list has several.
-      let j = i + 1
-      while (rows[j] && rows[j]!.length === row.length && !isLabelRow(rows[j]!)) {
-        out.push(row.map((label, k) => `${label.replace(/[:*\s]+$/, '')}: ${rows[j]![k]}`).join('\n'))
-        j++
-      }
-      i = j - 1
-      continue
-    }
-    // A key and its value side by side: "Credit Card ending | 1234".
-    if (row.length === 2 && isLabelRow([row[0]!, 'x']) && !isLabelRow([row[1]!, 'x'])) {
-      out.push(`${row[0]!.replace(/[:*\s]+$/, '')}: ${row[1]}`)
-      continue
-    }
-    out.push(row.join(' | '))
-  }
-  return out.join('\n')
 }
 
 /** Readable text from an email's HTML: what a person would see, in order. */
@@ -191,9 +164,23 @@ export function htmlToText(html: string): string {
 
 interface GmailPart {
   mimeType?: string
-  body?: { data?: string }
+  filename?: string
+  body?: { data?: string; attachmentId?: string; size?: number }
   parts?: GmailPart[]
   headers?: { name: string; value: string }[]
+}
+
+/** The PDFs attached to a Gmail message, small enough to read. */
+export function gmailPdfParts(payload: GmailPart): { attachmentId: string; filename: string }[] {
+  const out: { attachmentId: string; filename: string }[] = []
+  const walk = (p: GmailPart) => {
+    if (p.body?.attachmentId && isPdf(p.filename, p.mimeType) && (p.body.size ?? 0) <= MAX_PDF_BYTES) {
+      out.push({ attachmentId: p.body.attachmentId, filename: p.filename ?? 'attachment.pdf' })
+    }
+    for (const child of p.parts ?? []) walk(child)
+  }
+  walk(payload)
+  return out.slice(0, MAX_PDFS)
 }
 
 const decode = (data: string) => Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
@@ -237,30 +224,63 @@ async function fromGmail(token: string, days: number, seen: (ids: string[]) => P
       token,
     )
     const header = (name: string) => msg.payload.headers?.find((h) => h.name.toLowerCase() === name)?.value ?? ''
-    out.push({ id, from: header('from'), subject: header('subject'), text: gmailText(msg.payload) })
+    // A ticket attached as a PDF: read too, in memory, like the email itself.
+    const pdfs: string[] = []
+    for (const part of gmailPdfParts(msg.payload)) {
+      try {
+        const att = await getJson<{ data?: string }>(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}/attachments/${part.attachmentId}`, token)
+        const text = att.data ? await pdfText(Buffer.from(att.data, 'base64url')) : null
+        if (text) pdfs.push(text)
+      } catch (err) {
+        console.warn('[mail] could not read an attached PDF', (err as Error).message)
+      }
+    }
+    out.push({ id, from: header('from'), subject: header('subject'), text: gmailText(msg.payload), ...(pdfs.length ? { pdf: pdfs.join('\n') } : {}) })
   }
   return out
 }
 
 /** New messages worth opening, from Outlook: their senders first, and only theirs opened. */
 async function fromOutlook(token: string, since: Date, seen: (ids: string[]) => Promise<Set<string>>): Promise<MailMessage[]> {
-  const heads = await getJson<{ value?: { id: string; subject?: string; from?: { emailAddress?: { name?: string; address?: string } } }[] }>(
-    `https://graph.microsoft.com/v1.0/me/messages?$top=50&$orderby=receivedDateTime desc&$select=id,subject,from&$filter=receivedDateTime ge ${since.toISOString()}`,
+  const heads = await getJson<{
+    value?: { id: string; subject?: string; hasAttachments?: boolean; from?: { emailAddress?: { name?: string; address?: string } } }[]
+  }>(
+    `https://graph.microsoft.com/v1.0/me/messages?$top=50&$orderby=receivedDateTime desc&$select=id,subject,from,hasAttachments&$filter=receivedDateTime ge ${since.toISOString()}`,
     token,
   )
   const wanted = (heads.value ?? [])
-    .map((m) => ({ id: m.id, subject: m.subject ?? '', from: `${m.from?.emailAddress?.name ?? ''} <${m.from?.emailAddress?.address ?? ''}>` }))
+    .map((m) => ({
+      id: m.id,
+      subject: m.subject ?? '',
+      from: `${m.from?.emailAddress?.name ?? ''} <${m.from?.emailAddress?.address ?? ''}>`,
+      attached: Boolean(m.hasAttachments),
+    }))
     .filter((m) => worthOpening(m.from, m.subject))
   const already = await seen(wanted.map((m) => m.id))
   const out: MailMessage[] = []
-  for (const m of wanted.filter((x) => !already.has(x.id)).slice(0, 25)) {
+  for (const { attached, ...m } of wanted.filter((x) => !already.has(x.id)).slice(0, 25)) {
     const full = await getJson<{ body?: { content?: string; contentType?: string } }>(
       `https://graph.microsoft.com/v1.0/me/messages/${m.id}?$select=body`,
       token,
       { prefer: 'outlook.body-content-type="text"' },
     )
     const body = full.body?.content ?? ''
-    out.push({ ...m, text: full.body?.contentType === 'html' ? htmlToText(body) : body })
+    const pdfs: string[] = []
+    if (attached) {
+      try {
+        const files = await getJson<{ value?: { name?: string; contentType?: string; size?: number; contentBytes?: string }[] }>(
+          `https://graph.microsoft.com/v1.0/me/messages/${m.id}/attachments`,
+          token,
+        )
+        for (const f of (files.value ?? []).filter((f) => isPdf(f.name, f.contentType) && (f.size ?? 0) <= MAX_PDF_BYTES).slice(0, MAX_PDFS)) {
+          const text = f.contentBytes ? await pdfText(Buffer.from(f.contentBytes, 'base64')) : null
+          if (text) pdfs.push(text)
+        }
+      } catch (err) {
+        console.warn('[mail] could not read an attached PDF', (err as Error).message)
+      }
+    }
+    out.push({ ...m, text: full.body?.contentType === 'html' ? htmlToText(body) : body, ...(pdfs.length ? { pdf: pdfs.join('\n') } : {}) })
   }
   return out
 }
@@ -281,8 +301,26 @@ const dayWords = (d: Date | string) =>
  */
 export async function actOn(orgId: string, userId: string, msg: MailMessage, now = new Date()): Promise<string | null> {
   // The sender too: an insurer or a shop is often named only there.
-  const text = `${msg.subject}\n${msg.from}\n${msg.text}`.slice(0, 15_000)
+  const body = `${msg.subject}\n${msg.from}\n${msg.text}`.slice(0, 15_000)
+  const pdf = msg.pdf ? `${msg.subject}\n${msg.from}\n${msg.pdf}`.slice(0, 15_000) : null
 
+  // Bookings from the email and from its PDF ticket, whichever says more: a
+  // PDF often carries the whole itinerary, both ways, where the email has
+  // only a summary. From email, only with a reference: an airline's sale is
+  // not a flight.
+  const found = (text: string) => parseBookings(text, now).filter((b) => b.ref || b.type === 'appointment')
+  const score = (bs: ParsedBooking[]) => bs.length * 10 + bs.filter((b) => b.title.includes('→')).length
+  const fromBody = found(body)
+  const fromPdf = pdf ? found(pdf) : []
+  const bookings = score(fromPdf) > score(fromBody) ? fromPdf : fromBody
+
+  const read = await readText(orgId, userId, body, bookings, now)
+  // Nothing in the email itself: perhaps in its attachment — a bill, a parcel.
+  return read ?? (pdf && bookings.length === 0 ? readText(orgId, userId, pdf, [], now) : null)
+}
+
+/** One text read for what it is: a bill, the bookings already found in it, a notice, a parcel. */
+async function readText(orgId: string, userId: string, text: string, bookings: ParsedBooking[], now: Date): Promise<string | null> {
   // A card statement first: it can mention insurance (a card's cover plan) too.
   const notice = parseDueNotice(text)
   if (notice?.category === 'card') {
@@ -290,14 +328,16 @@ export async function actOn(orgId: string, userId: string, msg: MailMessage, now
     return r ? `${notice.name}: ${formatRupees(notice.amountPaise)} due ${dayWords(notice.dueOn)}` : null
   }
 
-  const booking = parseBooking(text, now)
-  // From email, only with its reference: an airline's sale is not a flight.
-  if (booking && (booking.ref || booking.type === 'appointment')) {
-    const city = booking.city ?? (booking.type === 'hotel' || booking.type === 'bus' ? findCity(text, await knownPlaces(userId)) : null)
-    const saved = await saveFoundBooking(orgId, userId, booking, city, now)
-    // Said in full where it is listed: which train, from where to where, when.
-    const when = `${dayWords(booking.startsAt)}${booking.timeKnown ? `, ${booking.startsAt.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}` : ''}`
-    return saved ? `${saved.title}, ${when}` : null
+  if (bookings.length > 0) {
+    const said: string[] = []
+    for (const booking of bookings) {
+      const city = booking.city ?? (booking.type === 'hotel' || booking.type === 'bus' ? findCity(text, await knownPlaces(userId)) : null)
+      const saved = await saveFoundBooking(orgId, userId, booking, city, now)
+      // Said in full where it is listed: which train, from where to where, when.
+      const when = `${dayWords(booking.startsAt)}${booking.timeKnown ? `, ${booking.startsAt.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}` : ''}`
+      if (saved) said.push(`${saved.title}, ${when}`)
+    }
+    return said.length > 0 ? said.join('; ') : null
   }
 
   // A vehicle's PUC running out, or its service due. Before insurance: some
@@ -361,7 +401,7 @@ function lookBack(account: AccountRow, now: Date): Date {
  * reads its last month again, correcting what was saved from it. Never
  * lower it.
  */
-export const READER_VERSION = 2
+export const READER_VERSION = 3
 
 /**
  * Reads one account's new mail and acts on it. Each message is marked read

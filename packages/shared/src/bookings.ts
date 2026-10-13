@@ -143,8 +143,10 @@ function datesIn(text: string, now: Date): Found[] {
     if (dt.getMonth() === m) out.push({ day: dt, at })
   }
   for (const m of text.matchAll(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2}|\d{4})\b/g)) add(Number(m[1]), Number(m[2]) - 1, m[3], m.index!)
-  for (const m of text.matchAll(new RegExp(String.raw`\b(\d{1,2})(?:st|nd|rd|th)?[\s-]*${MONTH}[\s,'-]*(\d{4}|\d{2}(?!\s*:|\d))?`, 'gi')))
-    add(Number(m[1]), MONTHS.indexOf(m[2]!.toLowerCase().slice(0, 3)), m[3], m.index!)
+  // A two-digit year only straight after the month ("17-Oct-26", "17 Oct '26"),
+  // never the next day of a range: "01 Nov - 05 Nov" is not the year 2005.
+  for (const m of text.matchAll(new RegExp(String.raw`\b(\d{1,2})(?:st|nd|rd|th)?[\s-]*${MONTH}(?:[\s,]*(\d{4})|(?:\s*'|[-\s])(\d{2})(?![\d:]|\s*[-–]?\s*${MONTH}))?`, 'gi')))
+    add(Number(m[1]), MONTHS.indexOf(m[2]!.toLowerCase().slice(0, 3)), m[3] ?? m[4], m.index!)
   for (const m of text.matchAll(new RegExp(String.raw`\b${MONTH}\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b`, 'gi')))
     add(Number(m[2]), MONTHS.indexOf(m[1]!.toLowerCase().slice(0, 3)), m[3], m.index!)
   return out.sort((a, b) => a.at - b.at)
@@ -416,6 +418,9 @@ function train(text: string, now: Date): ParsedBooking | null {
 
 const FLIGHT_NO = /\b(6E|AI|IX|SG|QP|UK|I5|G8|EK|QR|EY|SQ|TG|LH|BA|UL)\s?-?\s?(\d{2,4})\b/
 
+/** "PNR: X7K2LM", "Your PNR is X7K2LM", "Booking Reference (PNR): 8HJ2KQ", "Airline PNR K9LM2P". */
+const FLIGHT_PNR = /\b(?:airline\s+pnr|pnr|booking\s+ref(?:erence)?)\b(?:\s*(?:is|no\.?|number|code|\(pnr\)|[:#)-]))*\s*([A-Z0-9]{6})\b/i
+
 /** The airports a flight goes between: "(BLR)", or a known code on its own, in order. */
 function airportsOf(text: string): { code: string; at: number }[] {
   const out: { code: string; at: number }[] = []
@@ -460,11 +465,16 @@ function flight(text: string, now: Date): ParsedBooking | null {
   const time = dep?.time ?? (fromAp ? timeNear(text, fromAp.at) : null) ?? timeIn(text, /\b(?:boarding|at)\b/)
   const arr = afterLabel(text, /\b(?:arrival|arrives?|arr|sta)\b\*?\s*[:-]?/i, now)
   const arrTime = arr?.time ?? (toAp ? timeNear(text, toAp.at) : null)
-  const terminal = fromAp ? /\bterminal\s*[:-]?\s*(T?\d[A-Z]?|[A-Z]\d?)\b/i.exec(text.slice(fromAp.at, fromAp.at + 140))?.[1] : null
+  // The departure terminal: on the "Departure" line when there is one, else
+  // after the airport it leaves from and before the one it lands at.
+  const TERMINAL = /\bterminal\s*[:-]?\s*(T?\d[A-Z]?|[A-Z]\d?)\b/i
+  const depLine = /\b(?:departure|departs?|dep)\b[^\n]*/i.exec(text)?.[0] ?? ''
+  const terminalSpan = fromAp ? text.slice(fromAp.at, toAp && toAp.at > fromAp.at ? toAp.at : fromAp.at + 140) : ''
+  const terminal = TERMINAL.exec(depLine)?.[1] ?? TERMINAL.exec(terminalSpan)?.[1] ?? null
 
   // "PNR: X7K2LM", "Your PNR is X7K2LM", "Booking Reference (PNR): 8HJ2KQ".
   const pnr =
-    /\b(?:airline\s+pnr|pnr|booking\s+ref(?:erence)?(?:\s*\(pnr\))?)\b(?:\s*(?:is|no\.?|number|code|[:#-]))*\s*([A-Z0-9]{6})\b/i.exec(text)?.[1] ??
+    FLIGHT_PNR.exec(text)?.[1] ??
     /\bbooking\s+id\s*[:-]?\s*([A-Z0-9]{6,})\b/i.exec(text)?.[1] ??
     null
   const airline = fl ? (AIRLINES[fl[1]!] ?? null) : provider(text)
@@ -742,6 +752,115 @@ function typed(text: string, now: Date): ParsedBooking | null {
     durationMinutes: type === 'flight' ? 120 : 60,
     remindBeforeMinutes: type === 'flight' ? 180 : type === 'train' ? 120 : 90,
   }
+}
+
+/**
+ * Every flight in an itinerary: a round trip's way out and way back, each its
+ * own booking; a connection (Bengaluru → Mumbai, then Mumbai → Delhi the same
+ * day) one journey, Bengaluru → Delhi via Mumbai.
+ *
+ * The email is cut at each flight number, each part read on its own — its
+ * airports, its date, its time — so the way back no longer borrows the way
+ * out's date. A part with no date of its own takes the one before it; one
+ * with no PNR takes the itinerary's.
+ */
+function flights(text: string, now: Date): ParsedBooking[] {
+  const numbers: { key: string; at: number }[] = []
+  for (const m of text.matchAll(new RegExp(FLIGHT_NO.source, 'g'))) {
+    const key = `${m[1]} ${m[2]}`
+    if (!numbers.some((n) => n.key === key)) numbers.push({ key, at: m.index! })
+  }
+  if (numbers.length < 2) {
+    const one = flight(text, now)
+    return one ? [one] : []
+  }
+
+  // Where one leg's part ends and the next begins: the line that introduces
+  // the next leg (its date, "Return", "Onward"), else the line it is on.
+  const lineStart = (i: number) => text.lastIndexOf('\n', i - 1) + 1
+  const HEADING = /\b(?:return|onward|outbound|inbound|depart(?:ure|ing)?\s+flight|leg\s*\d|flight\s*\d|trip\s*\d)\b|\b\d{1,2}[\s-](?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i
+  const starts = numbers.map((n, i) => {
+    if (i === 0) return 0
+    let start = lineStart(n.at)
+    for (let pos = lineStart(n.at); pos > numbers[i - 1]!.at; pos = lineStart(pos - 1)) {
+      const line = text.slice(pos, text.indexOf('\n', pos) === -1 ? undefined : text.indexOf('\n', pos))
+      if (HEADING.test(line) && pos > lineStart(numbers[i - 1]!.at)) start = pos
+      if (pos === 0) break
+    }
+    return start
+  })
+  // The airline's PNR, wherever in the itinerary it is printed: it beats a
+  // travel site's booking ID for every leg that does not show its own.
+  const sharedRef = FLIGHT_PNR.exec(text)?.[1] ?? null
+
+  const legs: ParsedBooking[] = []
+  let lastDay: Date | null = null
+  for (let i = 0; i < numbers.length; i++) {
+    let part = text.slice(starts[i], starts[i + 1] ?? text.length)
+    if (datesIn(part, now).length === 0 && lastDay) part = `${part}\n${dayLabelOf(lastDay)} ${lastDay.getFullYear()}`
+    const leg = flight(part, now)
+    if (!leg) continue
+    const ref = FLIGHT_PNR.exec(part)?.[1] ?? sharedRef ?? leg.ref
+    if (ref !== leg.ref) {
+      leg.ref = ref
+      leg.notes = [ref ? `PNR ${ref}` : null, leg.notes?.replace(/^PNR \S+( · )?/, '') || null].filter(Boolean).join(' · ') || null
+    }
+    legs.push(leg)
+    lastDay = leg.startsAt
+  }
+  return joinConnections(legs.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()))
+}
+
+/** Legs that change planes the same day, as one journey from the first airport to the last. */
+function joinConnections(legs: ParsedBooking[]): ParsedBooking[] {
+  const out: ParsedBooking[] = []
+  for (const leg of legs) {
+    const prev = out[out.length - 1]
+    const changesPlanes =
+      prev && prev.city && leg.fromCity && sameCity(prev.city, leg.fromCity) && leg.startsAt.getTime() - prev.startsAt.getTime() <= 12 * 3_600_000
+    if (!prev || !changesPlanes) {
+      out.push({ ...leg })
+      continue
+    }
+    const via = prev.city!
+    const first = prev.title.split(' · ')[0]!
+    const second = leg.title.split(' · ')[0]!.replace(/^Flight\s+/, '')
+    const start = prev.title.split(' · ')[1]?.split(' → ')[0]
+    const end = leg.title.split(' · ')[1]?.split(' → ')[1]
+    out[out.length - 1] = {
+      ...prev,
+      title: `${first} + ${second}${start && end ? ` · ${start} → ${end} via ${via}` : ''}`,
+      city: leg.city,
+      // Where the journey lands is where its last leg lands.
+      notes: [
+        prev.notes?.replace(/\s*·\s*Lands in [^·]+/, '') || null,
+        `Change at ${via}: ${second} at ${clockLabelOf({ h: leg.startsAt.getHours(), m: leg.startsAt.getMinutes() })}`,
+        /Lands in [^·]+/.exec(leg.notes ?? '')?.[0]?.trim() ?? null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    }
+  }
+  return out
+}
+
+/**
+ * Every booking in a message — a round trip is two. For one confirmation of
+ * anything else, the one booking it holds; empty for none.
+ */
+export function parseBookings(input: string, now = new Date()): ParsedBooking[] {
+  const text = input.replace(/[ \t\r]+/g, ' ').replace(/ *\n[\n ]*/g, '\n').trim()
+  if (text.length >= 20 && !train(text, now)) {
+    // Two flight numbers or more: an itinerary, read leg by leg — even when
+    // its legs join into one journey with a change of plane.
+    const numbers = new Set([...text.matchAll(new RegExp(FLIGHT_NO.source, 'g'))].map((m) => `${m[1]} ${m[2]}`))
+    if (numbers.size > 1) {
+      const legs = flights(text, now)
+      if (legs.length > 0) return legs
+    }
+  }
+  const one = parseBooking(input, now)
+  return one ? [one] : []
 }
 
 /**

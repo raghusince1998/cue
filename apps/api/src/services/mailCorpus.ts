@@ -114,6 +114,33 @@ export const CORPUS: CorpusMail[] = [
     </body></html>`,
   },
   {
+    name: 'makemytrip-round-trip',
+    from: 'MakeMyTrip <noreply@makemytrip.com>',
+    subject: 'Booking Confirmed: Bengaluru - Goa - Bengaluru | 01 Nov - 05 Nov',
+    html: `<html><body>
+      <p>Booking ID: NF8C3D4E5F6G7</p>
+      <p><b>Onward</b> &middot; Bengaluru &rarr; Goa &middot; Sun, 01 Nov 2026</p>
+      <table>
+        ${ROW(['IndiGo<br>6E-512', '07:00<br>BLR<br>Kempegowda International Airport, Terminal 1', '1h 15m<br>Non-stop', '08:15<br>GOX<br>Manohar International Airport'])}
+      </table>
+      <p><b>Return</b> &middot; Goa &rarr; Bengaluru &middot; Thu, 05 Nov 2026</p>
+      <table>
+        ${ROW(['IndiGo<br>6E-513', '19:30<br>GOX<br>Manohar International Airport', '1h 20m<br>Non-stop', '20:50<br>BLR<br>Kempegowda International Airport, Terminal 1'])}
+      </table>
+      <p>Airline PNR: K9LM2P</p>
+    </body></html>`,
+  },
+  {
+    name: 'air-india-connection',
+    from: 'Air India <noreply@airindia.com>',
+    subject: 'Air India e-Ticket - Booking Reference 7HJK2L',
+    text: `Booking Reference (PNR): 7HJK2L
+Sun, 25 Oct 2026
+Flight AI 504 Bengaluru (BLR) 06:00 to Mumbai (BOM) 07:45
+Flight AI 887 Mumbai (BOM) 09:30 to Delhi (DEL) 11:40
+Passenger: Ms Asha Rao`,
+  },
+  {
     name: 'air-india',
     from: 'Air India <noreply@airindia.com>',
     subject: 'Air India e-Ticket - Booking Reference 8HJ2KQ',

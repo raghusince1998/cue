@@ -43,7 +43,14 @@ async function known(userId: string, b: ParsedBooking) {
       and(
         eq(c.userId, userId),
         ne(c.status, 'deleted'),
-        b.ref ? sql`${c.booking}->>'ref' = ${b.ref}` : and(eq(c.title, b.title), eq(c.dueAt, b.startsAt)),
+        b.ref
+          ? b.type === 'flight'
+            ? // A round trip's two flights share one PNR: the same flight is the
+              // same PNR and the same flight number ("Flight SG 401…"), or the
+              // same PNR within hours, for one saved before its number was read.
+              sql`${c.booking}->>'ref' = ${b.ref} and (${c.title} like ${`${b.title.split(' · ')[0]}%`} or abs(extract(epoch from (${c.dueAt} - ${b.startsAt.toISOString()}::timestamptz))) < ${6 * 3_600})`
+            : sql`${c.booking}->>'ref' = ${b.ref}`
+          : and(eq(c.title, b.title), eq(c.dueAt, b.startsAt)),
       ),
     )
     .limit(1)
