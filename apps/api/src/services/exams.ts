@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, isNull, like, ne } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, like, ne, sql } from 'drizzle-orm'
 import {
   examByKey,
   examDayCarry,
@@ -7,6 +7,7 @@ import {
   examStepTitle,
   isLaterExamStage,
   isOpenExamStage,
+  noticeSummary,
   sameCity,
   splitExamStep,
   examStage,
@@ -24,6 +25,7 @@ import {
   type ExamMail,
   type ExamDayInput,
   type ExamStep,
+  type NoticeProposal,
   type ParsedExamLine,
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
@@ -42,6 +44,7 @@ import { tripForBooking } from './tripAssembly.ts'
 
 const e = schema.exams
 const c = schema.commitments
+const n = schema.notices
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -202,6 +205,8 @@ async function addDate(
   now: Date,
   /** What its notes say instead of the usual: the official notice it came from. */
   notes?: string,
+  /** Said by the board itself — a notice, or its own email — so it moves a date already planned. */
+  moves = notes !== undefined,
 ): Promise<string | null> {
   const step = date.step
   const stored = date.round && (step === 'exam' || step === 'admit_card' || step === 'result') ? `${step}:${date.round}` : step
@@ -211,6 +216,19 @@ async function addDate(
     .from(c)
     .where(and(eq(c.examId, exam.id), eq(c.examStep, stored), eq(c.status, 'pending')))
   if (same && ymd(same.dueAt) === date.on) return null
+
+  // A date from an official notice that differs from the one already planned
+  // is the board moving it — postponed, extended, brought forward. The plan
+  // moves with it, reminders and all; two "last date" plans would leave the
+  // person guessing which one is true.
+  if (same && moves) {
+    await tx.update(c).set(notes ? { dueAt, notes } : { dueAt }).where(eq(c.id, same.id))
+    await cancelPendingReminders(same.id, tx)
+    for (const at of examReminderTimes(step, dueAt, now)) {
+      await scheduleFirstReminder({ orgId: exam.orgId, commitmentId: same.id, fireAt: at }, tx)
+    }
+    return same.id
+  }
 
   const lang = await langOf(exam.userId, tx)
   const [row] = await tx
@@ -256,11 +274,18 @@ export async function createExam(
     dates?: ExamDateInput[]
   },
   now = new Date(),
-): Promise<{ exam: ExamDTO; planIds: string[] } | 'unknown_stage'> {
+): Promise<{ exam: ExamDTO; planIds: string[]; officialDates: number } | 'unknown_stage'> {
   const examKey = examByKey(input.examKey) ? input.examKey! : null
   const stage = input.stage ?? (input.dates?.some((d) => d.step === 'apply_by') ? 'to_apply' : 'applied')
   if (!examStages(examKey).some((s) => s.key === stage)) return 'unknown_stage'
-  const { id, planIds } = await db.transaction(async (tx) => {
+  // A category is the person's, not the exam's: said once, it carries over.
+  const [said] = await db
+    .select({ category: e.category })
+    .from(e)
+    .where(and(eq(e.userId, userId), isNotNull(e.category)))
+    .orderBy(desc(e.createdAt))
+    .limit(1)
+  const { row, planIds } = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(e)
       .values({
@@ -273,6 +298,7 @@ export async function createExam(
         registrationNo: input.registrationNo?.trim() || null,
         rollNo: input.rollNo?.trim() || null,
         notes: input.notes?.trim() || null,
+        category: said?.category ?? null,
         stage,
         closedAt: closedAtFor(examKey, stage, now),
       })
@@ -282,9 +308,48 @@ export async function createExam(
       const planId = await addDate(tx, row!, d, now)
       if (planId) planIds.push(planId)
     }
-    return { id: row!.id, planIds }
+    return { row: row!, planIds }
   })
-  return { exam: (await examById(userId, id))!, planIds }
+  const officialDates = row.closedAt ? 0 : await catchUpExam(row, now)
+  return { exam: (await examById(userId, row.id))!, planIds, officialDates }
+}
+
+/**
+ * The dates already known for an exam, from official notices approved before
+ * it was added. Someone who adds RRB NTPC a week after its notice came out
+ * gets the same dates as those who were tracking it then — nothing to type.
+ * Only dates still to come; when no year was said, the newest round any
+ * notice speaks of. Oldest notice first, so a later one that moved a date
+ * has the last word.
+ */
+export async function catchUpExam(exam: ExamRow, now = new Date()): Promise<number> {
+  if (!exam.examKey) return 0
+  const rows = await db
+    .select({ url: n.url, proposals: n.proposals })
+    .from(n)
+    .where(and(eq(n.status, 'approved'), sql`${n.proposals} @> ${JSON.stringify([{ examKey: exam.examKey }])}::jsonb`))
+    .orderBy(asc(n.reviewedAt))
+  const found = rows.flatMap((r) => r.proposals.filter((p) => p.examKey === exam.examKey).map((p) => ({ url: r.url, p })))
+  // The newest round: the latest year a notice names — "2026" is after "CEN
+  // 05/2024", whichever came first alphabetically — and among equals, the
+  // notice approved last.
+  const yearOf = (cycle: string) => Math.max(0, ...(cycle.match(/20\d{2}/g) ?? []).map(Number))
+  let newest: string | null = null
+  for (const { p } of found) if (p.cycle && (!newest || yearOf(p.cycle) >= yearOf(newest))) newest = p.cycle
+  const cycle = exam.cycle ?? newest
+  // Each date as the newest notice gives it: a postponed exam is its new day only.
+  const latest = new Map<string, { url: string; p: NoticeProposal; date: NoticeProposal['dates'][number] }>()
+  for (const { url, p } of found) {
+    if (cycle && p.cycle && p.cycle !== cycle) continue
+    for (const date of p.dates) latest.set(`${date.step}:${date.round ?? ''}`, { url, p, date })
+  }
+  const today = ymd(now)
+  let added = 0
+  for (const { url, p, date } of latest.values()) {
+    if (date.on < today) continue
+    added += await addNoticeToExam(exam, { url, kind: p.kind, summary: noticeSummary(p), dates: [date] }, now)
+  }
+  return added
 }
 
 /**
@@ -320,6 +385,13 @@ export async function updateExam(
   if (Object.keys(values).length === 0) return examById(userId, id)
   await db.transaction(async (tx) => {
     await tx.update(e).set(values).where(eq(e.id, id))
+    // The category is the person's: said on one exam, it is said for all of them.
+    if (patch.category) {
+      await tx
+        .update(e)
+        .set({ category: patch.category })
+        .where(and(eq(e.userId, userId), isNull(e.category), ne(e.id, id)))
+    }
     if (moved && !isOpenExamStage(row.examKey, patch.stage!)) {
       await stopStudy(id, now, tx)
       const ahead = await tx
@@ -753,6 +825,8 @@ export async function examFromEmail(
 
   // Its dates, from the board; and news to act on, once and while it is news.
   const dates: ExamDateInput[] = opts.official ? m.dates.map((d) => ({ ...d })) : []
+  // The board's own dates, which move any already planned; those added below are only reminders to go and look.
+  const fromBoard = dates.length
   const fresh = now.getTime() - opts.receivedAt.getTime() < 3 * 86_400_000
   const soon = shortly(now)
   if (m.kind === 'admit_card' && !dates.some((d) => d.step === 'admit_card') && fresh && !(await hasStep(exam.id, 'admit_card'))) {
@@ -767,7 +841,7 @@ export async function examFromEmail(
   const added: ExamDateInput[] = []
   const row = exam
   await db.transaction(async (tx) => {
-    for (const d of dates) if (await addDate(tx, row, d, now)) added.push(d)
+    for (const [i, d] of dates.entries()) if (await addDate(tx, row, d, now, undefined, i < fromBoard)) added.push(d)
   })
   if (!changed && added.length === 0) return null
 

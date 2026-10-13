@@ -9,6 +9,7 @@ import {
   examByKey,
   examLabel,
   examStages,
+  watchedBoard,
   isOpenExamStage,
   subjectsFor,
   type AdmitCard,
@@ -112,6 +113,8 @@ export default function Exams() {
   }, [load])
   useOnChange(() => void load())
 
+  /** What adding just brought with it: the official dates already out, or that they will come. */
+  const [addedNote, setAddedNote] = useState<string | null>(null)
   const open = useMemo(() => (exams ?? []).filter((x) => !x.closedAt), [exams])
   const closed = useMemo(() => (exams ?? []).filter((x) => x.closedAt), [exams])
 
@@ -134,16 +137,35 @@ export default function Exams() {
       </div>
       <p className="muted small">{w.intro}</p>
 
-      {exams && exams.length === 0 && !adding && <ExamsPicker onAdded={() => void load()} onOther={() => setAdding(true)} />}
+      {exams && exams.length === 0 && !adding && (
+        <ExamsPicker
+          onAdded={(official) => {
+            setAddedNote(w.officialAdded(official))
+            void load()
+          }}
+          onOther={() => setAdding(true)}
+        />
+      )}
 
       {exams && (exams.length > 0 || adding) && (
         <AddExam
           key={adding ? 'adding' : 'folded'}
           startOpen={adding}
-          onAdded={() => void load()}
+          onAdded={(official) => {
+            setAddedNote(w.officialAdded(official))
+            void load()
+          }}
           onReadCard={() => setReading({ examId: '' })}
           onFitPhoto={() => setFitting(true)}
         />
+      )}
+      {addedNote && (
+        <p className="card small exam-added" role="status">
+          {addedNote}{' '}
+          <button className="link small" onClick={() => setAddedNote(null)}>
+            {w.doneButton}
+          </button>
+        </p>
       )}
       {error && <p className="error small">{error}</p>}
 
@@ -221,7 +243,7 @@ export default function Exams() {
  * by group, each added with its stages and its board's site — the form
  * still to fill, or already applied.
  */
-function ExamsPicker({ onAdded, onOther }: { onAdded: () => void; onOther: () => void }) {
+function ExamsPicker({ onAdded, onOther }: { onAdded: (officialDates: number) => void; onOther: () => void }) {
   const w = useExamWords()
   const [picked, setPicked] = useState<string[]>([])
   const [applied, setApplied] = useState(false)
@@ -232,12 +254,17 @@ function ExamsPicker({ onAdded, onOther }: { onAdded: () => void; onOther: () =>
     setBusy(true)
     setError(null)
     try {
+      let official = 0
       for (const key of picked) {
         const exam = EXAMS.find((x) => x.key === key)!
-        await api('/exams', { method: 'POST', body: { examKey: key, name: exam.name, stage: applied ? 'applied' : 'to_apply' } })
+        const made = await api<{ officialDates?: number }>('/exams', {
+          method: 'POST',
+          body: { examKey: key, name: exam.name, stage: applied ? 'applied' : 'to_apply' },
+        })
+        official += made.officialDates ?? 0
       }
       announceChange()
-      onAdded()
+      onAdded(official)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -324,7 +351,7 @@ function AddExam({
   onFitPhoto,
 }: {
   startOpen: boolean
-  onAdded: () => void
+  onAdded: (officialDates: number) => void
   onReadCard: () => void
   onFitPhoto: () => void
 }) {
@@ -338,6 +365,7 @@ function AddExam({
   const [stage, setStage] = useState<'applied' | 'to_apply'>('applied')
   const [applyBy, setApplyBy] = useState('')
   const [examOn, setExamOn] = useState('')
+  const [knowDate, setKnowDate] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const catalog = EXAMS.find((x) => x.name.toLowerCase() === name.trim().toLowerCase()) ?? null
@@ -352,7 +380,7 @@ function AddExam({
         stage === 'to_apply' && applyBy ? { step: 'apply_by', on: applyBy } : null,
         examOn ? { step: 'exam', on: examOn } : null,
       ].filter(Boolean)
-      await api('/exams', {
+      const made = await api<{ officialDates?: number }>('/exams', {
         method: 'POST',
         body: {
           examKey: catalog?.key ?? null,
@@ -370,7 +398,8 @@ function AddExam({
       setRegistrationNo('')
       setApplyBy('')
       setExamOn('')
-      onAdded()
+      setKnowDate(false)
+      onAdded(made.officialDates ?? 0)
       announceChange()
     } catch (err) {
       setError((err as Error).message)
@@ -429,22 +458,36 @@ function AddExam({
             <option value="to_apply">{w.stage(null, 'to_apply')}</option>
           </select>
         </label>
-        {stage === 'applied' ? (
+        {stage === 'applied' && (
           <label>
             {w.regNoOptional}
             <input value={registrationNo} onChange={(e) => setRegistrationNo(e.target.value)} maxLength={40} />
           </label>
-        ) : (
-          <label>
-            {w.lastDate}
-            <input type="date" value={applyBy} onChange={(e) => setApplyBy(e.target.value)} />
-          </label>
         )}
-        <label>
-          {w.examDateIfAnnounced}
-          <input type="date" value={examOn} onChange={(e) => setExamOn(e.target.value)} />
-        </label>
+        {/* An exam Cue knows gets its dates from the official notices; asked only of one it does not, or on request. */}
+        {(!catalog || knowDate) && (
+          <>
+            {stage === 'to_apply' && (
+              <label>
+                {w.lastDate}
+                <input type="date" value={applyBy} onChange={(e) => setApplyBy(e.target.value)} />
+              </label>
+            )}
+            <label>
+              {w.examDateIfAnnounced}
+              <input type="date" value={examOn} onChange={(e) => setExamOn(e.target.value)} />
+            </label>
+          </>
+        )}
       </div>
+      {catalog && !knowDate && (
+        <p className="muted small">
+          {w.datesFromNotices}{' '}
+          <button className="link small" type="button" onClick={() => setKnowDate(true)}>
+            {w.knowDate}
+          </button>
+        </p>
+      )}
       <datalist id="exam-catalog">
         {EXAMS.map((x) => (
           <option key={x.key} value={x.name} />
@@ -647,7 +690,7 @@ function ExamSheet({
           ))}
         </ul>
       ) : (
-        isOpen && <p className="muted small">{w.noDates}</p>
+        isOpen && <p className="muted small">{watchedBoard(exam.examKey) ? w.noDatesWatched(watchedBoard(exam.examKey)!) : w.noDates}</p>
       )}
       {isOpen && (
         <div className="exam-date-add">

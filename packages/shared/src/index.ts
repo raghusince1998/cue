@@ -1268,6 +1268,8 @@ export {
   roundIn,
   splitExamStep,
   timesIn,
+  WATCHED_BOARDS,
+  watchedBoard,
   type AdmitCard,
   type CatalogExam,
   type ExamDateSaid,

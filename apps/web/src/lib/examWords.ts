@@ -11,7 +11,7 @@ const EN = {
   open: (n: number) => `${n} open`,
   done: (n: number) => `${n} done`,
   intro:
-    'Every exam you have applied for, or mean to: where it stands, and each date — the last day to apply, the fee, the exam, the result — as a reminder. Cue never signs in to an exam portal; dates come from you, from your admit cards, and, with your email connected, from the boards’ own emails.',
+    'Every exam you have applied for, or mean to: where it stands, and each date — the last day to apply, the fee, the exam, the result — as a reminder. Cue never signs in to an exam portal; the dates come to you — from the boards’ official notices, from your admit cards and, with your email connected, from the boards’ own emails — so there is little to type.',
   noExams: 'No exams yet',
   noExamsHow: 'Add one above, or type it in the box on Today:',
   doneHeading: 'Done',
@@ -37,7 +37,16 @@ const EN = {
   officialSite: 'Official site',
   applyLogin: 'Apply / log in',
   dates: 'Dates',
-  noDates: 'No dates yet. Add one as soon as it is announced.',
+  noDates:
+    'No dates yet. They come here from the official notices as they are published, and from the board’s emails if your email is connected — nothing to type. Know one already? Add it below.',
+  noDatesWatched: (board: string) =>
+    `No dates yet. Cue reads ${board}’s official notices itself and puts each date here as soon as it is announced — nothing to type.`,
+  officialAdded: (n: number) =>
+    n === 0
+      ? 'Added. Their dates come here from the official notices as they are announced — nothing to type.'
+      : `Added, with ${n === 1 ? '1 date' : `${n} dates`} from the official notices already out. The rest come as they are announced.`,
+  knowDate: 'Already know a date?',
+  datesFromNotices: 'Dates come from the official notices. Add one here only if you already know it.',
   whichRound: 'Which round?',
   whatIsIt: 'What is it?',
   addDate: 'Add date',
@@ -48,7 +57,7 @@ const EN = {
   examDayHow:
     'When the admit card is out, read it here: the day is planned from it — when to report, what to carry, and the journey if the centre is in another city.',
   details: 'Details',
-  category: 'Category (for cut-offs)',
+  category: 'Category (for cut-offs, all your exams)',
   notSaid: 'Not said',
   notes: 'Notes',
   notesPlaceholder: 'Post preferences, anything to remember',
@@ -146,7 +155,7 @@ const HI: Words = {
   open: (n) => `${n} चालू`,
   done: (n) => `${n} पूरी`,
   intro:
-    'हर परीक्षा जिसका फॉर्म भरा है या भरना है: अभी कहाँ है, और हर तारीख — आवेदन की अंतिम तिथि, शुल्क, परीक्षा, परिणाम — एक रिमाइंडर के रूप में। Cue कभी किसी परीक्षा पोर्टल पर लॉग इन नहीं करता; तारीखें आपसे, आपके प्रवेश पत्र से, और ईमेल जुड़ा हो तो बोर्ड के ईमेल से आती हैं।',
+    'हर परीक्षा जिसका फॉर्म भरा है या भरना है: अभी कहाँ है, और हर तारीख — आवेदन की अंतिम तिथि, शुल्क, परीक्षा, परिणाम — एक रिमाइंडर के रूप में। Cue कभी किसी परीक्षा पोर्टल पर लॉग इन नहीं करता; तारीखें खुद आपके पास आती हैं — बोर्ड की आधिकारिक सूचनाओं से, आपके प्रवेश पत्र से, और ईमेल जुड़ा हो तो बोर्ड के ईमेल से — लिखना बहुत कम पड़ता है।',
   noExams: 'अभी कोई परीक्षा नहीं',
   noExamsHow: 'ऊपर जोड़ें, या "आज" पर लिखें:',
   doneHeading: 'पूरी',
@@ -172,7 +181,15 @@ const HI: Words = {
   officialSite: 'आधिकारिक वेबसाइट',
   applyLogin: 'आवेदन / लॉग इन',
   dates: 'तारीखें',
-  noDates: 'अभी कोई तारीख नहीं। घोषित होते ही जोड़ें।',
+  noDates:
+    'अभी कोई तारीख नहीं। आधिकारिक सूचनाएँ आते ही तारीखें यहाँ जुड़ जाएँगी, और ईमेल जुड़ा हो तो बोर्ड के ईमेल से भी — कुछ लिखना नहीं है। कोई तारीख पहले से पता है? नीचे जोड़ें।',
+  noDatesWatched: (board) => `अभी कोई तारीख नहीं। Cue ${board} की आधिकारिक सूचनाएँ खुद पढ़ता है और हर तारीख घोषित होते ही यहाँ जोड़ देगा — कुछ लिखना नहीं है।`,
+  officialAdded: (n) =>
+    n === 0
+      ? 'जोड़ दिया। आधिकारिक सूचनाएँ आते ही उनकी तारीखें यहाँ आ जाएँगी — कुछ लिखना नहीं है।'
+      : `जोड़ दिया, अब तक आई आधिकारिक सूचनाओं की ${n} तारीखों के साथ। बाकी घोषित होते ही आ जाएँगी।`,
+  knowDate: 'कोई तारीख पहले से पता है?',
+  datesFromNotices: 'तारीखें आधिकारिक सूचनाओं से आती हैं। पहले से पता हो तभी यहाँ जोड़ें।',
   whichRound: 'कौन-सा चरण?',
   whatIsIt: 'क्या है?',
   addDate: 'तारीख जोड़ें',
@@ -183,7 +200,7 @@ const HI: Words = {
   examDayHow:
     'प्रवेश पत्र आने पर यहाँ पढ़ें: पूरा दिन उसी से तय होगा — कब पहुँचना है, क्या साथ ले जाना है, और केंद्र दूसरे शहर में हो तो यात्रा।',
   details: 'विवरण',
-  category: 'वर्ग (कट-ऑफ के लिए)',
+  category: 'वर्ग (कट-ऑफ के लिए, आपकी सभी परीक्षाएँ)',
   notSaid: 'नहीं बताया',
   notes: 'नोट',
   notesPlaceholder: 'पद की पसंद, कुछ भी याद रखने लायक',

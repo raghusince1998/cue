@@ -163,6 +163,24 @@ export function examByKey(key: string | null | undefined): CatalogExam | null {
   return EXAMS.find((e) => e.key === key) ?? null
 }
 
+/**
+ * The boards whose official notice pages Cue reads by itself, short name to
+ * the body the catalog names: the server's NOTICE_SOURCES (a test keeps the
+ * two together). For the rest, dates come from notices added by hand and
+ * from the boards' own emails.
+ */
+export const WATCHED_BOARDS: Record<string, string> = {
+  RSSB: 'Rajasthan Staff Selection Board',
+  RPSC: 'Rajasthan Public Service Commission',
+  NTA: 'National Testing Agency',
+}
+
+/** "RSSB", when Cue reads the notices of the board that holds this exam itself. */
+export function watchedBoard(examKey: string | null | undefined): string | null {
+  const body = examByKey(examKey)?.body
+  return Object.entries(WATCHED_BOARDS).find(([, name]) => name === body)?.[0] ?? null
+}
+
 /** Every alias, longest first, so "rajasthan police si" is found before "rajasthan police". */
 const ALIASES = EXAMS.flatMap((exam) => [
   ...exam.aliases.map((source) => ({ exam, source, flags: 'iu' })),

@@ -35,7 +35,8 @@ export async function examRoutes(app: FastifyInstance) {
     const { orgId, sub } = scope(req)
     const made = await createExam(orgId, sub, createExamInput.parse(req.body))
     if (made === 'unknown_stage') return reply.code(400).send({ error: 'unknown_stage' })
-    return reply.code(201).send(made.exam)
+    // How many dates came from official notices already out: shown, so nobody types them.
+    return reply.code(201).send({ ...made.exam, officialDates: made.officialDates })
   })
 
   app.get('/exams/:id', async (req, reply) => {
