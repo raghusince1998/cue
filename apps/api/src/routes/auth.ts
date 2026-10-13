@@ -16,6 +16,7 @@ import { takeFirst } from '../db/util.ts'
 import { scope } from '../auth.ts'
 import { createDemo, demoAllowed } from '../services/demo.ts'
 import { filledSections } from '../services/sections.ts'
+import { isAdmin } from '../services/noticeWatch.ts'
 import { revokeAccount } from '../services/oauthConnect.ts'
 import { env } from '../env.ts'
 import { mailConfigured, MailError, resetEmail, sendMail } from '../services/mail.ts'
@@ -151,7 +152,7 @@ export async function authRoutes(app: FastifyInstance) {
       .limit(1)
     const user = takeFirst(rows, 'user')
     // Sections with something in them: their tabs stay, whatever was picked.
-    return { ...user, filled: await filledSections(sub) }
+    return { ...user, filled: await filledSections(sub), isAdmin: isAdmin(user.email) }
   })
 
   /**

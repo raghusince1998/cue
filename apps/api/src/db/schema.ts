@@ -422,6 +422,38 @@ export const exams = pgTable(
   (t) => [index('exams_user_idx').on(t.userId)],
 )
 
+/**
+ * Official notices from exam boards' public pages, each seen once, waiting
+ * for a person to check before anyone is told. See services/noticeWatch.ts.
+ */
+export const notices = pgTable(
+  'notices',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    source: text('source').notNull(),
+    key: text('key').notNull(),
+    url: text('url').notNull(),
+    title: text('title').notNull(),
+    status: text('status').$type<'baseline' | 'pending' | 'unmatched' | 'approved' | 'dismissed'>().notNull().default('pending'),
+    proposals: jsonb('proposals').$type<import('@cue/shared').NoticeProposal[]>().notNull().default([]),
+    hints: jsonb('hints').$type<string[]>().notNull().default([]),
+    foundAt: timestamp('found_at', { withTimezone: true }).notNull().defaultNow(),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewedBy: uuid('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+    told: integer('told').notNull().default(0),
+  },
+  (t) => [uniqueIndex('notices_source_key_unique').on(t.source, t.key), index('notices_status_idx').on(t.status, t.foundAt)],
+)
+
+/** How each watched page fared when last read. */
+export const noticeSources = pgTable('notice_sources', {
+  id: text('id').primaryKey(),
+  checkedAt: timestamp('checked_at', { withTimezone: true }),
+  ok: boolean('ok'),
+  message: text('message'),
+  baselineDone: boolean('baseline_done').notNull().default(false),
+})
+
 /** Each move between stages, so an item can show how it got where it is. */
 export const trackerEvents = pgTable(
   'tracker_events',

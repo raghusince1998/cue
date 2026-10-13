@@ -548,6 +548,23 @@ function ExamSheet({
         </div>
       )}
 
+      {(exam.notices ?? []).length > 0 && (
+        <>
+          <span className="label-text">Official notices</span>
+          <ul className="plain tracker-plans">
+            {exam.notices!.map((n) => (
+              <li key={n.id}>
+                {n.summary.split(': ').slice(1).join(': ')}{' '}
+                <span className="muted">· {dayLabel(n.reviewedAt)} · </span>
+                <a href={n.url} target="_blank" rel="noopener noreferrer">
+                  the notice
+                </a>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
       <span className="label-text">Exam day</span>
       {exam.centreName || exam.centreAddress ? (
         <p className="small">

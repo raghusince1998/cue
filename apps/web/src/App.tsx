@@ -25,6 +25,7 @@ import Home from './pages/Home.tsx'
 import { PrivacyPage, TermsPage } from './pages/Legal.tsx'
 import Bills from './pages/Bills.tsx'
 import Exams from './pages/Exams.tsx'
+import NoticeReview from './pages/NoticeReview.tsx'
 import { groupSections, tabsFor, type Section } from '@cue/shared'
 import { UsesPicker } from './components/UsesPicker.tsx'
 
@@ -47,7 +48,7 @@ const AVAILABLE = Object.keys(SECTION_LINKS) as Section[]
  * The rest of the sections, a tap away: what this person uses Cue for decides
  * what is on the bar, and whether Jobs, Hiring and Deals are here at all.
  */
-function MoreMenu({ sections, onChangeUses }: { sections: Section[]; onChangeUses: () => void }) {
+function MoreMenu({ sections, onChangeUses, admin }: { sections: Section[]; onChangeUses: () => void; admin: boolean }) {
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const ref = useRef<HTMLDivElement>(null)
@@ -86,6 +87,11 @@ function MoreMenu({ sections, onChangeUses }: { sections: Section[]; onChangeUse
               ))}
             </div>
           ))}
+          {admin && (
+            <NavLink to="/admin/notices" role="menuitem" className="tabs-menu-admin">
+              Review exam notices
+            </NavLink>
+          )}
           <button
             className="tabs-menu-uses"
             role="menuitem"
@@ -165,7 +171,7 @@ function Nav({
             {SECTION_LINKS[s]!.label}
           </NavLink>
         ))}
-        <MoreMenu sections={more} onChangeUses={() => setChoosingUses(true)} />
+        <MoreMenu sections={more} onChangeUses={() => setChoosingUses(true)} admin={Boolean(me?.isAdmin)} />
       </nav>
 
       {choosingUses && (
@@ -343,6 +349,7 @@ export default function App() {
           <Route path="/deals" element={<Tracker key="deals" board="deals" />} />
           <Route path="/bills" element={<Bills />} />
           <Route path="/exams" element={<Exams />} />
+          <Route path="/admin/notices" element={me?.isAdmin ? <NoticeReview /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

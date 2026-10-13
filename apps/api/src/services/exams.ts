@@ -158,7 +158,10 @@ export async function listExams(userId: string, now = new Date()): Promise<ExamD
 
 export async function examById(userId: string, id: string): Promise<ExamDTO | null> {
   const row = await owned(userId, id)
-  return row ? toDTO(row, await datesOf([id])) : null
+  if (!row) return null
+  // Official notices about it, as checked and approved: read here, never sent from here.
+  const { noticesForExam } = await import('./noticeWatch.ts')
+  return { ...toDTO(row, await datesOf([id])), notices: await noticesForExam(row.examKey, row.cycle) }
 }
 
 /**
@@ -170,6 +173,8 @@ async function addDate(
   exam: Pick<ExamRow, 'id' | 'orgId' | 'userId' | 'name' | 'cycle' | 'examKey'>,
   date: ExamDateInput,
   now: Date,
+  /** What its notes say instead of the usual: the official notice it came from. */
+  notes?: string,
 ): Promise<string | null> {
   const step = date.step
   const stored = date.round && (step === 'exam' || step === 'admit_card' || step === 'result') ? `${step}:${date.round}` : step
@@ -189,7 +194,7 @@ async function addDate(
       kind: 'task',
       dueAt,
       durationMinutes: step === 'exam' ? 180 : 15,
-      notes: stepNotes(step, exam),
+      notes: notes ?? stepNotes(step, exam),
       flexibility: 'fixed',
       priority: step === 'apply_by' || step === 'fee_by' || step === 'exam' ? 'high' : 'normal',
       sphere: 'personal',
@@ -731,4 +736,34 @@ export async function examFromEmail(
                       ? 'selected'
                       : `exam ${examDay ? dayWords(examDay.on) : 'scheduled'}`
   return `${label}: ${what}`
+}
+
+/**
+ * An approved official notice, made into plans on everyone's exam it is
+ * about: the open ones with that exam, of that year when both say one. Each
+ * date a plan with the notice in its notes; a notice with no date is a plan
+ * to read it. Returns the exams it went onto.
+ */
+export async function examsForNotice(examKey: string, cycle: string | null): Promise<ExamRow[]> {
+  const rows = await db.select().from(e).where(and(eq(e.examKey, examKey), isNull(e.closedAt)))
+  return rows.filter((r) => !cycle || !r.cycle || r.cycle === cycle)
+}
+
+export async function addNoticeToExam(
+  exam: ExamRow,
+  notice: { url: string; kind: string; summary: string; dates: ExamDateInput[] },
+  now = new Date(),
+): Promise<number> {
+  const notes = `From the official notice: ${notice.url}`
+  const soon = shortly(now)
+  const step = notice.kind === 'admit_card' || notice.kind === 'answer_key' || notice.kind === 'result' ? notice.kind : 'other'
+  const dates: ExamDateInput[] =
+    notice.dates.length > 0
+      ? notice.dates
+      : [{ step, on: soon.on, at: soon.at, round: null, note: step === 'other' ? `new notice — ${notice.summary.split(': ').slice(1).join(': ')}` : null }]
+  let added = 0
+  await db.transaction(async (tx) => {
+    for (const d of dates) if (await addDate(tx, exam, d, now, notes)) added++
+  })
+  return added
 }

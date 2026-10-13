@@ -16,6 +16,8 @@ export interface Me {
   filled?: string[]
   /** A one-tap demo from the website, with sample data, gone after a day. */
   isDemo?: boolean
+  /** Reviews official exam notices before they go out (ADMIN_EMAILS on the server). */
+  isAdmin?: boolean
 }
 
 interface AuthValue {

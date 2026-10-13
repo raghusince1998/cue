@@ -143,17 +143,17 @@ export const EXAMS: CatalogExam[] = [
   { key: 'afcat', name: 'AFCAT', body: 'Indian Air Force', site: 'https://careerindianairforce.cdac.in', scope: 'national', aliases: ['afcat'], rounds: [as(R.exam, 'Online exam'), as(R.ssb, 'AFSB interview'), R.medical] },
 
   // Rajasthan
-  { key: 'ras', name: 'RAS/RTS', ...RPSC, capitals: ['RAS'], aliases: ['rpsc\\s+ras', 'ras(?:\\s*/\\s*rts)?\\s+(?:exam|pre(?:lims)?|mains|20\\d\\d)', 'ras\\s*/\\s*rts\\s+combined', 'rajasthan\\s+state\\s+and\\s+subordinate\\s+services'], rounds: [R.prelims, R.mains, R.interview] },
+  { key: 'ras', name: 'RAS/RTS', ...RPSC, capitals: ['RAS'], aliases: ['rpsc\\s+ras', 'ras(?:\\s*/\\s*rts)?\\s+(?:exam|pre(?:lims)?|mains|20\\d\\d)', 'ras\\s*/\\s*rts\\s+combined', 'raj(?:asthan|\\.)?\\s+state\\s+(?:and|&)\\s+sub(?:ordinate|\\.)?\\s+services'], rounds: [R.prelims, R.mains, R.interview] },
   { key: 'rpsc-school-lecturer', name: 'RPSC School Lecturer', ...RPSC, aliases: ['(?:rpsc\\s+)?school\\s+lecturer', '(?:1st|first)\\s+grade\\s+(?:teacher|lecturer)'], rounds: [R.written, R.dv] },
   { key: 'rpsc-senior-teacher', name: 'RPSC Senior Teacher (2nd Grade)', ...RPSC, aliases: ['(?:rpsc\\s+)?senior\\s+teacher', '(?:2nd|second)\\s+grade\\s+teacher'], rounds: [R.written, R.dv] },
-  { key: 'raj-police-si', name: 'Rajasthan Police SI', ...RPSC, aliases: ['raj(?:asthan)?\\s+police\\s+si', 'rajasthan\\s+si', 'rpsc\\s+si'], rounds: [R.written, as(R.pet, 'PET'), R.interview] },
+  { key: 'raj-police-si', name: 'Rajasthan Police SI', ...RPSC, aliases: ['raj(?:asthan)?\\s+police\\s+si', 'rajasthan\\s+si', 'rpsc\\s+si', 'rpsc\\s+sub[\\s-]*inspector'], rounds: [R.written, as(R.pet, 'PET'), R.interview] },
   { key: 'raj-police-constable', name: 'Rajasthan Police Constable', body: 'Rajasthan Police', site: 'https://police.rajasthan.gov.in', applyAt: 'https://recruitment.rajasthan.gov.in', scope: 'rajasthan', aliases: ['raj(?:asthan)?\\s+police(?:\\s+constable)?', 'rajasthan\\s+constable'], rounds: [R.written, as(R.pet, 'PET/PST'), as(R.dv, 'DV & medical')] },
   { key: 'reet', name: 'REET', body: 'Board of Secondary Education, Rajasthan', site: 'https://rajeduboard.rajasthan.gov.in', scope: 'rajasthan', aliases: ['reet(?!\\s+mains)(?:\\s+level[\\s-]*(?:1|2|i{1,2}))?'], rounds: [R.exam] },
   { key: 'reet-mains', name: 'REET Mains (3rd Grade Teacher)', ...RSSB, aliases: ['reet\\s+mains', '(?:3rd|third)\\s+grade\\s+teacher'], rounds: [R.written, R.dv] },
   { key: 'rssb-cet', name: 'Rajasthan CET', ...RSSB, aliases: ['(?:rajasthan|rssb|rsmssb)\\s+cet', 'cet\\s+(?:graduate|senior\\s+secondary|12th)'], rounds: [R.exam] },
   { key: 'rssb-patwari', name: 'Rajasthan Patwari', ...RSSB, aliases: ['patwari'], rounds: [R.written, R.dv] },
-  { key: 'rssb-vdo', name: 'Rajasthan VDO (Gram Vikas Adhikari)', ...RSSB, aliases: ['vdo', 'gram\\s+vikas\\s+adhikari'], rounds: [R.written, R.dv] },
-  { key: 'rssb-ldc', name: 'Rajasthan LDC / Junior Assistant', ...RSSB, aliases: ['(?:rajasthan|rssb|rsmssb)\\s+(?:ldc|junior\\s+assistant)'], rounds: [R.written, R.typing, R.dv] },
+  { key: 'rssb-vdo', name: 'Rajasthan VDO (Gram Vikas Adhikari)', ...RSSB, aliases: ['vdo', 'gram\\s+vikas\\s+adhikari', 'village\\s+development\\s+officer'], rounds: [R.written, R.dv] },
+  { key: 'rssb-ldc', name: 'Rajasthan LDC / Junior Assistant', ...RSSB, aliases: ['(?:rajasthan|rssb|rsmssb)\\s+(?:ldc|junior\\s+assistant|clerk\\s+grade[\\s-]*(?:ii|2))'], rounds: [R.written, R.typing, R.dv] },
   { key: 'rssb-fourth-grade', name: 'Rajasthan Class IV (Fourth Grade)', ...RSSB, aliases: ['(?:rajasthan|rssb|rsmssb)\\s+(?:4th|fourth)\\s+grade', 'chaturth\\s+shreni', 'rajasthan\\s+class\\s+iv', '(?:4th|fourth)\\s+grade\\s+(?:exam|bharti|recruitment)'], rounds: [R.written, R.dv] },
   { key: 'raj-high-court', name: 'Rajasthan High Court (LDC / JJA)', body: 'Rajasthan High Court', site: 'https://hcraj.nic.in', scope: 'rajasthan', aliases: ['rajasthan\\s+high\\s+court\\s*\\(?\\s*(?:ldc|clerk|jja|junior\\s+judicial\\s+assistant|exam|recruitment)'], rounds: [R.written, R.typing, R.dv] },
 ]
@@ -294,7 +294,7 @@ const ROUND_WORDS: Record<string, RegExp> = {
   tier2: /\btier[\s-]*(?:2|ii|two)\b/i,
   paper1: /\bpaper[\s-]*(?:1|i)\b/i,
   paper2: /\bpaper[\s-]*(?:2|ii)\b/i,
-  prelims: /\bprelims?\b|\bpreliminary\b|\bpre\s+exam\b/i,
+  prelims: /\bprelims?\b|\bpreliminary\b|\bpre\b(?![\s-]*(?:board|primary|school))/i,
   mains: /\bmains\b|\bmain\s+exam(?:ination)?\b|\(\s*main\s*\)/i,
   phase1: /\bphase[\s-]*(?:1|i)\b/i,
   phase2: /\bphase[\s-]*(?:2|ii)\b/i,
@@ -366,7 +366,10 @@ export function cycleIn(text: string, found: { at: number; length: number }): { 
   const cen = /\bcen\s*(?:no\.?\s*)?(\d{1,2}\s*\/\s*20\d\d)\b/i.exec(text)
   const year =
     /^[\s,(\-–)]*(?:\((?:ug|pg|main|mains|preliminary)\)\s*)?(?:(?:level\s+)?exam(?:ination)?s?)?[\s,(\-–]*(20\d\d)(?:\s*[-–/]\s*(?:20)?\d\d)?\b/i.exec(after)?.[1] ?? null
-  return { cycle: cen ? `CEN ${cen[1]!.replace(/\s+/g, '')}` : year, cen, year }
+  // Or a little further on, with only words between: "RAJ. STATE AND SUB.
+  // SERVICES COMB. COMP EXAM 2026". Never a date's year: "20/11/2026".
+  const near = year ?? /^[^:—|\n\d]{0,40}?(?<![\d/.-])(20\d\d)\b(?![/.-]\d)/.exec(after)?.[1] ?? null
+  return { cycle: cen ? `CEN ${cen[1]!.replace(/\s+/g, '')}` : near, cen, year: near }
 }
 
 /** Which date a stretch of a line is about. */

@@ -1365,5 +1365,72 @@ export interface ExamDTO {
   createdAt: string
   /** Its dates' plans, soonest first. */
   dates: ExamDateDTO[]
+  /** Official notices about it, checked and approved; on the single-exam fetch. */
+  notices?: { id: string; title: string; url: string; summary: string; reviewedAt: string }[]
 }
 export { isExamBody, parseExamEmail, type ExamMail, type ExamMailKind } from './examMail.ts'
+export {
+  NOTICE_KINDS,
+  datesMentioned,
+  noticeKind,
+  noticeSummary,
+  proposeFromNotice,
+  type NoticeDate,
+  type NoticeKind,
+  type NoticeProposal,
+} from './notices.ts'
+import { NOTICE_KIND_KEYS } from './notices.ts'
+
+/** One exam's part of a notice, as the reviewer leaves it. */
+export const noticeProposalInput = z.object({
+  examKey: shortText(60).min(1),
+  cycle: shortText(40).nullable(),
+  kind: z.enum(NOTICE_KIND_KEYS),
+  dates: z
+    .array(
+      z.object({
+        step: z.enum(EXAM_STEP_KEYS),
+        on: ymdField,
+        at: hhmmField.nullable(),
+        round: shortText(40).nullable(),
+        note: shortText(120).nullable(),
+      }),
+    )
+    .max(12),
+})
+export const reviewNoticeInput = z.object({ proposals: z.array(noticeProposalInput).max(10) })
+
+/** A notice seen somewhere the watcher does not reach, added by hand. */
+export const addNoticeInput = z.object({
+  url: z.string().trim().url().max(600),
+  title: shortText(300).min(5),
+  board: shortText(40).nullable().optional(),
+  text: z.string().max(20_000).nullable().optional(),
+})
+
+export type NoticeStatus = 'baseline' | 'pending' | 'unmatched' | 'approved' | 'dismissed'
+
+export interface NoticeDTO {
+  id: string
+  source: string
+  sourceName: string
+  url: string
+  title: string
+  status: NoticeStatus
+  proposals: import('./notices.ts').NoticeProposal[]
+  /** Dates seen in the notice's PDF: for the reviewer to check, not proposals. */
+  hints: string[]
+  foundAt: string
+  reviewedAt: string | null
+  /** How many people tracking the exam were told. */
+  told: number
+}
+
+/** An approved notice, as an exam's page lists it. */
+export interface ExamNoticeDTO {
+  id: string
+  title: string
+  url: string
+  summary: string
+  reviewedAt: string
+}

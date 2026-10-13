@@ -136,6 +136,18 @@ export const env = {
   /** Average door-to-door speed for travel estimates. Indian roads, not motorways. */
   travelSpeedKmh: num('TRAVEL_SPEED_KMH', 45),
 
+  /**
+   * Who may review official exam notices before they are sent to everyone
+   * tracking the exam: account emails, comma-separated. Empty, nobody can,
+   * and notices wait.
+   */
+  adminEmails: (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
+  /** Whether exam boards' public notice pages are read on a timer ("off" to stop). */
+  noticeWatch: (process.env.NOTICE_WATCH ?? 'on') !== 'off',
+
   reminderPollMs: num('REMINDER_POLL_MS', 20_000),
   escalationMinutes: num('ESCALATION_MINUTES', 15),
   maxEscalations: num('MAX_ESCALATIONS', 4),
