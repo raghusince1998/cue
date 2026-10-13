@@ -1,9 +1,22 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { createExamInput, examDateInput, examDayInput, readAdmitCard, updateExamInput } from '@cue/shared'
+import { createExamInput, examDateInput, examDayInput, mockScoreInput, readAdmitCard, studyPlanInput, updateExamInput } from '@cue/shared'
 import { scope } from '../auth.ts'
 import { findNumber, numbersIn } from '@cue/shared'
-import { addExamDate, createExam, deleteExam, examById, examRowOf, listExams, saveExamDay, updateExam } from '../services/exams.ts'
+import {
+  addExamDate,
+  addMock,
+  createExam,
+  deleteExam,
+  deleteMock,
+  examById,
+  examRowOf,
+  listExams,
+  makeStudyPlan,
+  saveExamDay,
+  stopStudy,
+  updateExam,
+} from '../services/exams.ts'
 import { checkKeptLists } from '../services/noticeWatch.ts'
 import { pdfPages, pdfText } from '../services/pdfText.ts'
 
@@ -93,6 +106,31 @@ export async function examRoutes(app: FastifyInstance) {
       return reply.code(422).send({ problem: 'No roll numbers could be read from that PDF. A scanned list cannot be read: search it by eye.' })
     }
     return { page: findNumber(sets, [exam.rollNo, exam.registrationNo]), pages: sets.length }
+  })
+
+  /** A study plan: the subjects across the days chosen, and a weekly mock. Replaces the last one. */
+  app.post('/exams/:id/study-plan', async (req, reply) => {
+    const { id } = idParam.parse(req.params)
+    const study = await makeStudyPlan(scope(req).sub, id, studyPlanInput.parse(req.body))
+    return study ? reply.code(201).send({ study, exam: await examById(scope(req).sub, id) }) : reply.code(404).send({ error: 'not_found' })
+  })
+
+  /** The study plan stopped: what is to come goes, what was studied stays. */
+  app.delete('/exams/:id/study-plan', async (req, reply) => {
+    const { id } = idParam.parse(req.params)
+    if (!(await examRowOf(scope(req).sub, id))) return reply.code(404).send({ error: 'not_found' })
+    return { stopped: await stopStudy(id) }
+  })
+
+  app.post('/exams/:id/mocks', async (req, reply) => {
+    const { id } = idParam.parse(req.params)
+    const mocks = await addMock(scope(req).sub, id, mockScoreInput.parse(req.body))
+    return mocks ? reply.code(201).send({ mocks }) : reply.code(404).send({ error: 'not_found' })
+  })
+
+  app.delete('/exams/:id/mocks/:mockId', async (req, reply) => {
+    const { id, mockId } = z.object({ id: z.string().uuid(), mockId: z.string().uuid() }).parse(req.params)
+    return (await deleteMock(scope(req).sub, id, mockId)) ? { ok: true } : reply.code(404).send({ error: 'not_found' })
   })
 
   /** The day itself, from a card as checked: the plan, what to carry, and the trip if it is away. */

@@ -1,5 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm'
-import { splitExamStep } from '@cue/shared'
+import { examLineHi, splitExamStep } from '@cue/shared'
+import { langOf } from '../services/exams.ts'
 import { db, schema } from '../db/index.ts'
 import { env } from '../env.ts'
 import { sendToUser } from '../push.ts'
@@ -179,7 +180,9 @@ async function processOne(claim: ClaimedReminder) {
       : booked
       ? bookingLine(commitment.dueAt, commitment.booking!, commitment.notes)
       : exam
-      ? examLine(commitment.dueAt, commitment.examStep!, commitment.placeLabel ?? row.placeName)
+      ? (await langOf(commitment.userId)) === 'hi'
+        ? examLineHi(commitment.dueAt, examStep, commitment.placeLabel ?? row.placeName)
+        : examLine(commitment.dueAt, commitment.examStep!, commitment.placeLabel ?? row.placeName)
       : `${mirrored ? 'Starting now' : describe(commitment.dueAt, claim.attempt)}${suffix}`,
     tag: `commitment-${commitment.id}`,
     // Lets the notification offer a Call button instead of only a nag.

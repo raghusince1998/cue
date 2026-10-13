@@ -6,17 +6,18 @@ import {
   EXAM_STEPS,
   examByKey,
   examLabel,
-  examStage,
   examStages,
   isOpenExamStage,
+  subjectsFor,
   type AdmitCard,
   type ExamDTO,
   type ExamStep,
 } from '@cue/shared'
 import { ApiError, api, apiSendFile } from '../lib/api.ts'
 import { announceChange, useOnChange } from '../lib/changes.ts'
-import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
+import { useExamWords, type ExamWords } from '../lib/examWords.ts'
 import { Modal } from '../components/Modal.tsx'
+import { PhotoFitter } from '../components/PhotoFitter.tsx'
 
 /** The soonest date still to come, for a card's "Next:" line. */
 function nextDate(exam: ExamDTO) {
@@ -24,11 +25,17 @@ function nextDate(exam: ExamDTO) {
   return exam.dates.find((d) => d.status === 'pending' && new Date(d.dueAt).getTime() >= now) ?? null
 }
 
+/** Days until the exam itself, when its day is known. */
+function daysToExam(exam: ExamDTO): number | null {
+  const start = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const today = start(new Date())
+  const day = exam.dates.find((d) => d.status === 'pending' && d.step === 'exam' && start(new Date(d.dueAt)) >= today)
+  return day ? Math.round((start(new Date(day.dueAt)) - today) / 86_400_000) : null
+}
+
 /** "Applied 9 days ago", "CBT 1 since yesterday". */
-function sinceLine(exam: ExamDTO): string {
-  const stage = examStage(exam.examKey, exam.stage)?.label ?? exam.stage
-  const when = relativeDay(exam.stageChangedAt)
-  return when === 'today' ? `${stage} today` : `${stage} ${when}`
+function sinceLine(w: ExamWords, exam: ExamDTO): string {
+  return w.since(w.stage(exam.examKey, exam.stage), w.ago(exam.stageChangedAt))
 }
 
 /** What the person read off a card, or typed, before it becomes the day. */
@@ -68,14 +75,17 @@ const BLANK_CARD: CardDraft = {
 
 /**
  * Exams: each form applied for, or to fill, with where it stands and its
- * dates as reminders. Nothing here signs in to a portal; the dates come from
- * the person and from the admit cards they hand over.
+ * dates as reminders; the study plan and mock tests on the way; and the
+ * result. Nothing here signs in to a portal. In English or Hindi, as the
+ * person chose.
  */
 export default function Exams() {
+  const w = useExamWords()
   const [params, setParams] = useSearchParams()
   const [exams, setExams] = useState<ExamDTO[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reading, setReading] = useState<{ examId: string } | null>(null)
+  const [fitting, setFitting] = useState(false)
   const openId = params.get('exam')
 
   const load = useCallback(async () => {
@@ -100,23 +110,26 @@ export default function Exams() {
   }
 
   return (
-    <div className="stack exams-page">
+    <div className="stack exams-page" lang={w.lang}>
       <div className="page-head">
-        <h1 className="page-title">Exams</h1>
+        <h1 className="page-title">{w.title}</h1>
         {exams && (
           <span className="page-count">
-            {open.length} open{closed.length ? ` · ${closed.length} done` : ''}
+            {w.open(open.length)}
+            {closed.length ? ` · ${w.done(closed.length)}` : ''}
           </span>
         )}
       </div>
-      <p className="muted small">
-        Every exam you have applied for, or mean to: where it stands, and each date — the last day to apply, the
-        fee, the exam, the result — as a reminder. Cue never signs in to an exam portal; dates come from you, from
-        your admit cards, and, with your email connected, from the boards' own emails.
-      </p>
+      <p className="muted small">{w.intro}</p>
 
       {exams && (
-        <AddExam key={exams.length === 0 ? 'first' : 'more'} startOpen={exams.length === 0} onAdded={() => void load()} onReadCard={() => setReading({ examId: '' })} />
+        <AddExam
+          key={exams.length === 0 ? 'first' : 'more'}
+          startOpen={exams.length === 0}
+          onAdded={() => void load()}
+          onReadCard={() => setReading({ examId: '' })}
+          onFitPhoto={() => setFitting(true)}
+        />
       )}
       {error && <p className="error small">{error}</p>}
 
@@ -129,10 +142,10 @@ export default function Exams() {
           <span className="blank-mark" aria-hidden>
             &#128221;
           </span>
-          <h3>No exams yet</h3>
+          <h3>{w.noExams}</h3>
           <p>
-            Add one above, or type it in the box on Today: <strong>applied for RRB NTPC 2026, RRB Ajmer, reg no …</strong>{' '}
-            or <strong>REET form last date 20 nov</strong>.
+            {w.noExamsHow} <strong>applied for RRB NTPC 2026, RRB Ajmer, reg no …</strong> ·{' '}
+            <strong>REET ka form bharna hai, last date 20 nov</strong>
           </p>
         </div>
       ) : (
@@ -144,7 +157,9 @@ export default function Exams() {
           </div>
           {closed.length > 0 && (
             <details className="tracker-closed">
-              <summary>Done · {closed.length}</summary>
+              <summary>
+                {w.doneHeading} · {closed.length}
+              </summary>
               <div className="exam-list">
                 {closed.map((x) => (
                   <ExamCard key={x.id} exam={x} onOpen={() => show(x.id)} />
@@ -156,7 +171,7 @@ export default function Exams() {
       )}
 
       {openId && (
-        <Modal title="Exam" onClose={() => show(null)} closeOnBackdrop={false}>
+        <Modal title={w.exam} onClose={() => show(null)} closeOnBackdrop={false}>
           <ExamSheet
             id={openId}
             onChanged={() => void load()}
@@ -170,7 +185,7 @@ export default function Exams() {
       )}
 
       {reading && (
-        <Modal title="Read an admit card" onClose={() => setReading(null)} closeOnBackdrop={false}>
+        <Modal title={w.readCard} onClose={() => setReading(null)} closeOnBackdrop={false}>
           <AdmitCardReader
             examId={reading.examId}
             exams={open}
@@ -181,29 +196,38 @@ export default function Exams() {
           />
         </Modal>
       )}
+
+      {fitting && (
+        <Modal title={w.photoTool} onClose={() => setFitting(false)}>
+          <PhotoFitter />
+        </Modal>
+      )}
     </div>
   )
 }
 
 function ExamCard({ exam, onOpen }: { exam: ExamDTO; onOpen: () => void }) {
+  const w = useExamWords()
   const next = nextDate(exam)
-  const stage = examStage(exam.examKey, exam.stage)
+  const stage = examStages(exam.examKey).find((s) => s.key === exam.stage)
+  const days = exam.closedAt ? null : daysToExam(exam)
   return (
     <article className="tracker-card exam-card">
       <button className="tracker-card-main" onClick={onOpen}>
         <span className="tracker-card-title">{examLabel(exam)}</span>
+        {days !== null && <span className={`exam-countdown${days <= 7 ? ' is-near' : ''}`}>{w.daysToGo(days)}</span>}
         {(exam.region || exam.centreCity) && (
           <span className="tracker-card-detail">
-            {[exam.region, exam.centreCity ? `Centre: ${exam.centreName ?? exam.centreCity}` : null].filter(Boolean).join(' · ')}
+            {[exam.region, exam.centreCity ? `${w.centre}: ${exam.centreName ?? exam.centreCity}` : null].filter(Boolean).join(' · ')}
           </span>
         )}
         <span className="tracker-card-meta">
-          {stage?.closed ? `${stage.label} · ${dayLabel(exam.closedAt ?? exam.stageChangedAt)}` : sinceLine(exam)}
-          {exam.rollNo ? ` · Roll no ${exam.rollNo}` : ''}
+          {stage?.closed ? `${w.stage(exam.examKey, exam.stage)} · ${w.day(exam.closedAt ?? exam.stageChangedAt)}` : sinceLine(w, exam)}
+          {exam.rollNo ? ` · ${w.rollNo} ${exam.rollNo}` : ''}
         </span>
         {next && (
           <span className="tracker-card-next">
-            Next: {next.title} · {formatDateTime(next.dueAt)}
+            {w.next}: {next.title} · {w.when(next.dueAt)}
           </span>
         )}
       </button>
@@ -212,7 +236,18 @@ function ExamCard({ exam, onOpen }: { exam: ExamDTO; onOpen: () => void }) {
 }
 
 /** One line in: which exam, and the one or two dates that matter first. */
-function AddExam({ startOpen, onAdded, onReadCard }: { startOpen: boolean; onAdded: () => void; onReadCard: () => void }) {
+function AddExam({
+  startOpen,
+  onAdded,
+  onReadCard,
+  onFitPhoto,
+}: {
+  startOpen: boolean
+  onAdded: () => void
+  onReadCard: () => void
+  onFitPhoto: () => void
+}) {
+  const w = useExamWords()
   // Folded once there are exams to see, so on a phone the list is not below a screenful of form.
   const [open, setOpen] = useState(startOpen)
   const [name, setName] = useState('')
@@ -263,15 +298,24 @@ function AddExam({ startOpen, onAdded, onReadCard }: { startOpen: boolean; onAdd
     }
   }
 
+  const tools = (
+    <>
+      <button className="ghost" type="button" onClick={onReadCard}>
+        {w.readCard}
+      </button>
+      <button className="ghost" type="button" onClick={onFitPhoto}>
+        {w.photoTool}
+      </button>
+    </>
+  )
+
   if (!open) {
     return (
       <div className="row exam-add">
         <button className="primary" onClick={() => setOpen(true)}>
-          Add an exam
+          {w.addExam}
         </button>
-        <button className="ghost" onClick={onReadCard}>
-          Read an admit card
-        </button>
+        {tools}
       </div>
     )
   }
@@ -280,49 +324,43 @@ function AddExam({ startOpen, onAdded, onReadCard }: { startOpen: boolean; onAdd
     <form className="card stack tight exam-add" onSubmit={(e) => void add(e)}>
       <div className="tracker-fields">
         <label className="tracker-wide">
-          Exam
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            list="exam-catalog"
-            placeholder="Start typing: RRB NTPC, SSC CGL, REET, Patwari…"
-            maxLength={120}
-          />
+          {w.exam}
+          <input value={name} onChange={(e) => setName(e.target.value)} list="exam-catalog" placeholder={w.examPlaceholder} maxLength={120} />
         </label>
         <label>
-          Year or notice (optional)
-          <input value={cycle} onChange={(e) => setCycle(e.target.value)} placeholder="2026, or CEN 05/2026" maxLength={40} />
+          {w.yearOptional}
+          <input value={cycle} onChange={(e) => setCycle(e.target.value)} placeholder="2026, CEN 05/2026" maxLength={40} />
         </label>
         <label>
-          {catalog?.regions ? 'Board (optional)' : 'Region or post (optional)'}
+          {catalog?.regions ? w.boardOptional : w.regionOptional}
           <input
             value={region}
             onChange={(e) => setRegion(e.target.value)}
             list={catalog?.regions ? 'exam-regions' : undefined}
-            placeholder={catalog?.regions ? 'RRB Ajmer' : 'e.g. Northern region'}
+            placeholder={catalog?.regions ? 'RRB Ajmer' : ''}
             maxLength={80}
           />
         </label>
         <label>
-          Where it stands
+          {w.standsHeading}
           <select value={stage} onChange={(e) => setStage(e.target.value as 'applied' | 'to_apply')}>
-            <option value="applied">Applied</option>
-            <option value="to_apply">Form to fill</option>
+            <option value="applied">{w.stage(null, 'applied')}</option>
+            <option value="to_apply">{w.stage(null, 'to_apply')}</option>
           </select>
         </label>
         {stage === 'applied' ? (
           <label>
-            Registration number (optional)
+            {w.regNoOptional}
             <input value={registrationNo} onChange={(e) => setRegistrationNo(e.target.value)} maxLength={40} />
           </label>
         ) : (
           <label>
-            Last date to apply
+            {w.lastDate}
             <input type="date" value={applyBy} onChange={(e) => setApplyBy(e.target.value)} />
           </label>
         )}
         <label>
-          Exam date, if announced
+          {w.examDateIfAnnounced}
           <input type="date" value={examOn} onChange={(e) => setExamOn(e.target.value)} />
         </label>
       </div>
@@ -340,11 +378,9 @@ function AddExam({ startOpen, onAdded, onReadCard }: { startOpen: boolean; onAdd
       )}
       <div className="row">
         <button className="primary" type="submit" disabled={busy || !name.trim()}>
-          Add exam
+          {w.addExamButton}
         </button>
-        <button className="ghost" type="button" onClick={onReadCard}>
-          Read an admit card
-        </button>
+        {tools}
       </div>
       {catalog && (
         <p className="muted small">
@@ -353,7 +389,7 @@ function AddExam({ startOpen, onAdded, onReadCard }: { startOpen: boolean; onAdd
             <>
               {' · '}
               <a href={catalog.site} target="_blank" rel="noopener noreferrer">
-                official site
+                {w.officialSite}
               </a>
             </>
           )}
@@ -364,7 +400,7 @@ function AddExam({ startOpen, onAdded, onReadCard }: { startOpen: boolean; onAdd
   )
 }
 
-/** One exam: where it stands, its dates, its numbers, and its centre. */
+/** One exam: where it stands, its dates, the preparing, its result, its day, its numbers. */
 function ExamSheet({
   id,
   onChanged,
@@ -376,6 +412,7 @@ function ExamSheet({
   onReadCard: () => void
   onDeleted: () => void
 }) {
+  const w = useExamWords()
   const [exam, setExam] = useState<ExamDTO | null>(null)
   const [draft, setDraft] = useState({ cycle: '', region: '', registrationNo: '', rollNo: '', category: '', notes: '' })
   const [dirty, setDirty] = useState(false)
@@ -437,14 +474,14 @@ function ExamSheet({
   async function moveTo(stage: string) {
     if (!exam || exam.stage === stage) return
     if (!isOpenExamStage(exam.examKey, stage) && exam.dates.some((d) => d.status === 'pending' && new Date(d.dueAt) > new Date())) {
-      if (!window.confirm('Its dates still to come go too. Carry on?')) return
+      if (!window.confirm(w.confirmClose)) return
     }
     await patch({ stage })
   }
 
   async function addDate() {
     if (!on) {
-      setError('Pick the day.')
+      setError(w.pickDay)
       return
     }
     await run(() =>
@@ -459,7 +496,7 @@ function ExamSheet({
   }
 
   async function remove() {
-    if (!window.confirm('Delete this exam? Its dates still to come go with it.')) return
+    if (!window.confirm(w.confirmDelete)) return
     await api(`/exams/${id}`, { method: 'DELETE' })
     onChanged()
     announceChange()
@@ -474,18 +511,21 @@ function ExamSheet({
   const upcoming = exam.dates.filter((d) => d.status === 'pending')
   const past = exam.dates.filter((d) => d.status !== 'pending')
   const roundsMatter = step === 'exam' || step === 'admit_card' || step === 'result'
+  const isOpen = isOpenExamStage(exam.examKey, exam.stage)
+  const days = isOpen ? daysToExam(exam) : null
 
   return (
-    <div className="stack tight tracker-sheet">
+    <div className="stack tight tracker-sheet" lang={w.lang}>
       <div>
         <strong className="tracker-sheet-title">{examLabel(exam)}</strong>
+        {days !== null && <p className={`exam-countdown${days <= 7 ? ' is-near' : ''}`}>{w.daysToGo(days)}</p>}
         <p className="muted small">
           {[catalog?.body, exam.region].filter(Boolean).join(' · ')}
           {catalog?.site && (
             <>
               {' · '}
               <a href={catalog.site} target="_blank" rel="noopener noreferrer">
-                Official site
+                {w.officialSite}
               </a>
             </>
           )}
@@ -493,15 +533,15 @@ function ExamSheet({
             <>
               {' · '}
               <a href={catalog.applyAt} target="_blank" rel="noopener noreferrer">
-                Apply / log in
+                {w.applyLogin}
               </a>
             </>
           )}
         </p>
       </div>
 
-      <span className="label-text">Where it stands</span>
-      <div className="chips tracker-stages" role="group" aria-label="Stage">
+      <span className="label-text">{w.standsHeading}</span>
+      <div className="chips tracker-stages" role="group" aria-label={w.standsHeading}>
         {stages.map((s) => (
           <button
             key={s.key}
@@ -510,62 +550,64 @@ function ExamSheet({
             disabled={busy}
             aria-pressed={exam.stage === s.key}
           >
-            {s.label}
+            {w.stage(exam.examKey, s.key)}
           </button>
         ))}
       </div>
-      <p className="muted small">{sinceLine(exam)}.</p>
+      <p className="muted small">{sinceLine(w, exam)}.</p>
 
-      <span className="label-text">Dates</span>
+      <span className="label-text">{w.dates}</span>
       {upcoming.length > 0 ? (
         <ul className="plain tracker-plans">
           {upcoming.map((d) => (
             <li key={d.id}>
-              {d.title} <span className="muted">· {formatDateTime(d.dueAt)}</span>
+              {d.title} <span className="muted">· {w.when(d.dueAt)}</span>
             </li>
           ))}
         </ul>
       ) : (
-        isOpenExamStage(exam.examKey, exam.stage) && <p className="muted small">No dates yet. Add one as soon as it is announced.</p>
+        isOpen && <p className="muted small">{w.noDates}</p>
       )}
-      {isOpenExamStage(exam.examKey, exam.stage) && (
+      {isOpen && (
         <div className="exam-date-add">
-          <select value={step} onChange={(e) => setStep(e.target.value as ExamStep)} aria-label="Which date">
+          <select value={step} onChange={(e) => setStep(e.target.value as ExamStep)} aria-label={w.dates}>
             {EXAM_STEPS.map((s) => (
               <option key={s.key} value={s.key}>
-                {s.label}
+                {w.step(s.key)}
               </option>
             ))}
           </select>
           {roundsMatter && rounds.length > 1 && (
-            <select value={round} onChange={(e) => setRound(e.target.value)} aria-label="Round">
-              <option value="">Which round?</option>
+            <select value={round} onChange={(e) => setRound(e.target.value)} aria-label={w.round}>
+              <option value="">{w.whichRound}</option>
               {rounds.map((r) => (
                 <option key={r.key} value={r.key}>
-                  {r.label}
+                  {w.stage(exam.examKey, r.key)}
                 </option>
               ))}
             </select>
           )}
-          {step === 'other' && <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What is it?" maxLength={120} />}
-          <input type="date" value={on} onChange={(e) => setOn(e.target.value)} aria-label="Day" />
-          <input type="time" value={at} onChange={(e) => setAt(e.target.value)} aria-label="Time (optional)" />
+          {step === 'other' && <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={w.whatIsIt} maxLength={120} />}
+          <input type="date" value={on} onChange={(e) => setOn(e.target.value)} aria-label={w.on} />
+          <input type="time" value={at} onChange={(e) => setAt(e.target.value)} aria-label={w.at} />
           <button className="primary small-btn" onClick={() => void addDate()} disabled={busy || !on}>
-            Add date
+            {w.addDate}
           </button>
         </div>
       )}
 
+      {isOpen && <StudyPlan exam={exam} onChanged={() => void run(async () => undefined)} />}
+      <Mocks exam={exam} onChanged={() => void load()} />
+
       {(exam.notices ?? []).length > 0 && (
         <>
-          <span className="label-text">Official notices</span>
+          <span className="label-text">{w.notices}</span>
           <ul className="plain tracker-plans">
             {exam.notices!.map((n) => (
               <li key={n.id}>
-                {n.summary.split(': ').slice(1).join(': ')}{' '}
-                <span className="muted">· {dayLabel(n.reviewedAt)} · </span>
+                {n.summary.split(': ').slice(1).join(': ')} <span className="muted">· {w.day(n.reviewedAt)} · </span>
                 <a href={n.url} target="_blank" rel="noopener noreferrer">
-                  the notice
+                  {w.theNotice}
                 </a>
               </li>
             ))}
@@ -575,43 +617,48 @@ function ExamSheet({
 
       <Results exam={exam} onChecked={() => void load()} />
 
-      <span className="label-text">Exam day</span>
+      <span className="label-text">{w.examDay}</span>
       {exam.centreName || exam.centreAddress ? (
         <p className="small">
           {[exam.centreName, exam.centreAddress].filter(Boolean).join(', ')}
-          {exam.rollNo ? <span className="muted"> · Roll no {exam.rollNo}</span> : null}
+          {exam.rollNo ? (
+            <span className="muted">
+              {' '}
+              · {w.rollNo} {exam.rollNo}
+            </span>
+          ) : null}
         </p>
       ) : (
-        <p className="muted small">When the admit card is out, read it here: the day is planned from it — when to report, what to carry, and the journey if the centre is in another city.</p>
+        <p className="muted small">{w.examDayHow}</p>
       )}
       <div className="row">
         <button className="ghost small-btn" onClick={onReadCard}>
-          Read the admit card
+          {w.readTheCard}
         </button>
       </div>
 
-      <span className="label-text">Details</span>
+      <span className="label-text">{w.details}</span>
       <div className="tracker-fields">
         <label>
-          Year or notice
-          <input {...field('cycle')} placeholder="2026, or CEN 05/2026" maxLength={40} />
+          {w.year}
+          <input {...field('cycle')} placeholder="2026, CEN 05/2026" maxLength={40} />
         </label>
         <label>
-          {catalog?.regions ? 'Board' : 'Region or post'}
+          {catalog?.regions ? w.board : w.region}
           <input {...field('region')} list={catalog?.regions ? 'exam-sheet-regions' : undefined} maxLength={80} />
         </label>
         <label>
-          Registration number
+          {w.regNo}
           <input {...field('registrationNo')} maxLength={40} />
         </label>
         <label>
-          Roll number
+          {w.rollNo}
           <input {...field('rollNo')} maxLength={40} />
         </label>
         <label>
-          Category (for cut-offs)
+          {w.category}
           <select {...field('category')}>
-            <option value="">Not said</option>
+            <option value="">{w.notSaid}</option>
             {CATEGORIES.map((c) => (
               <option key={c.key} value={c.key}>
                 {c.label}
@@ -620,8 +667,8 @@ function ExamSheet({
           </select>
         </label>
         <label className="tracker-wide">
-          Notes
-          <textarea {...field('notes')} rows={2} placeholder="Post preferences, anything to remember" />
+          {w.notes}
+          <textarea {...field('notes')} rows={2} placeholder={w.notesPlaceholder} />
         </label>
       </div>
       {catalog?.regions && (
@@ -631,7 +678,7 @@ function ExamSheet({
           ))}
         </datalist>
       )}
-      <p className="muted small">Cue never asks for a portal password, OTP or date of birth. Keep those to yourself.</p>
+      <p className="muted small">{w.neverAsks}</p>
       <div className="row">
         <button
           className="primary small-btn"
@@ -647,17 +694,17 @@ function ExamSheet({
             })
           }
         >
-          Save details
+          {w.saveDetails}
         </button>
       </div>
 
       {past.length > 0 && (
         <>
-          <span className="label-text">Done</span>
+          <span className="label-text">{w.doneHeading}</span>
           <ul className="plain tracker-history">
             {past.map((d) => (
               <li key={d.id}>
-                <span className="muted">{dayLabel(d.dueAt)}</span> · {d.title}
+                <span className="muted">{w.day(d.dueAt)}</span> · {d.title}
               </li>
             ))}
           </ul>
@@ -666,11 +713,242 @@ function ExamSheet({
 
       <div className="row">
         <button className="link small danger-text" onClick={() => void remove()}>
-          Delete this exam
+          {w.deleteExam}
         </button>
       </div>
       {error && <p className="error small">{error}</p>}
     </div>
+  )
+}
+
+const MONDAY_FIRST = [1, 2, 3, 4, 5, 6, 0]
+const pad = (n: number) => String(n).padStart(2, '0')
+const clockOf = (hour: number, minute: number) => `${pad(hour)}:${pad(minute)}`
+
+/**
+ * The study plan: each subject on its days at one time, and a weekly mock
+ * test, until the day before the exam. Running, it says so and can be made
+ * again or stopped; otherwise, the form to make it.
+ */
+function StudyPlan({ exam, onChanged }: { exam: ExamDTO; onChanged: () => void }) {
+  const w = useExamWords()
+  const study = exam.study ?? []
+  const [editing, setEditing] = useState(false)
+  const [subjects, setSubjects] = useState(() => subjectsFor(exam.examKey, w.lang).join('\n'))
+  const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5, 6])
+  const [at, setAt] = useState('06:30')
+  const [minutes, setMinutes] = useState(90)
+  const [mockDay, setMockDay] = useState<number | null>(0)
+  const [mockAt, setMockAt] = useState('10:00')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function make() {
+    setBusy(true)
+    setError(null)
+    try {
+      await api(`/exams/${exam.id}/study-plan`, {
+        method: 'POST',
+        body: {
+          subjects: subjects.split('\n').map((s) => s.trim()).filter(Boolean),
+          days,
+          at,
+          minutes,
+          mock: mockDay === null ? null : { day: mockDay, at: mockAt, minutes: 120 },
+        },
+      })
+      setEditing(false)
+      onChanged()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function stop() {
+    setBusy(true)
+    try {
+      await api(`/exams/${exam.id}/study-plan`, { method: 'DELETE' })
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const running = study.length > 0 && !editing
+  return (
+    <>
+      <span className="label-text">{w.study}</span>
+      {running ? (
+        <>
+          <ul className="plain tracker-plans">
+            {study.map((s) => (
+              <li key={s.id}>
+                {s.title}{' '}
+                <span className="muted">
+                  · {MONDAY_FIRST.filter((d) => s.weekdays.includes(d)).map((d) => w.weekdays[d]).join(', ')} · {clockOf(s.hour, s.minute)} ·{' '}
+                  {s.durationMinutes}′
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="muted small">
+            {w.planRunning} {study[0]!.untilOn ? w.day(study[0]!.untilOn) : '—'}
+          </p>
+          <div className="row">
+            <button className="ghost small-btn" onClick={() => setEditing(true)} disabled={busy}>
+              {w.remakePlan}
+            </button>
+            <button className="link small" onClick={() => void stop()} disabled={busy}>
+              {w.stopPlan}
+            </button>
+          </div>
+        </>
+      ) : !editing ? (
+        <>
+          <p className="muted small">{w.studyHow}</p>
+          <div className="row">
+            <button className="ghost small-btn" onClick={() => setEditing(true)}>
+              {w.makePlan}
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="stack tight exam-study-form">
+          <label>
+            {w.subjects}
+            <textarea value={subjects} onChange={(e) => setSubjects(e.target.value)} rows={4} />
+          </label>
+          <span className="muted small">{w.days}</span>
+          <div className="chips" role="group" aria-label={w.days}>
+            {MONDAY_FIRST.map((d) => (
+              <button
+                key={d}
+                className={`chip${days.includes(d) ? ' selected' : ''}`}
+                aria-pressed={days.includes(d)}
+                onClick={() => setDays((list) => (list.includes(d) ? list.filter((x) => x !== d) : [...list, d]))}
+              >
+                {w.weekdays[d]}
+              </button>
+            ))}
+          </div>
+          <div className="tracker-fields">
+            <label>
+              {w.at}
+              <input type="time" value={at} onChange={(e) => setAt(e.target.value)} />
+            </label>
+            <label>
+              {w.forMinutes}
+              <input type="number" min={15} max={480} step={15} value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} />
+            </label>
+            <label>
+              {w.mockOn}
+              <select value={mockDay ?? ''} onChange={(e) => setMockDay(e.target.value === '' ? null : Number(e.target.value))}>
+                <option value="">{w.noMock}</option>
+                {MONDAY_FIRST.map((d) => (
+                  <option key={d} value={d}>
+                    {w.weekdays[d]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {mockDay !== null && (
+              <label>
+                {w.at}
+                <input type="time" value={mockAt} onChange={(e) => setMockAt(e.target.value)} />
+              </label>
+            )}
+          </div>
+          <div className="row">
+            <button className="primary small-btn" onClick={() => void make()} disabled={busy || days.length === 0 || !subjects.trim()}>
+              {study.length ? w.remakePlan : w.makePlan}
+            </button>
+            <button className="link small" onClick={() => setEditing(false)}>
+              ✕
+            </button>
+          </div>
+          {error && <p className="error small">{error}</p>}
+        </div>
+      )}
+    </>
+  )
+}
+
+/** Mock tests: each score kept, the trend at a glance, and a score added. */
+function Mocks({ exam, onChanged }: { exam: ExamDTO; onChanged: () => void }) {
+  const w = useExamWords()
+  const mocks = exam.mocks ?? []
+  const lastOutOf = mocks.at(-1)?.outOf ?? 100
+  const today = (() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  })()
+  const [score, setScore] = useState('')
+  const [outOf, setOutOf] = useState(String(lastOutOf))
+  const [on, setOn] = useState(today)
+  const [busy, setBusy] = useState(false)
+  const pct = (m: { score: number; outOf: number }) => Math.round((m.score / m.outOf) * 100)
+
+  async function add() {
+    if (!score) return
+    setBusy(true)
+    try {
+      await api(`/exams/${exam.id}/mocks`, { method: 'POST', body: { takenOn: on, score: Number(score), outOf: Number(outOf) } })
+      setScore('')
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove(id: string) {
+    await api(`/exams/${exam.id}/mocks/${id}`, { method: 'DELETE' })
+    onChanged()
+  }
+
+  const recent = mocks.slice(-12)
+  const best = mocks.length ? Math.max(...mocks.map(pct)) : null
+  const average = mocks.length ? Math.round(mocks.reduce((s, m) => s + pct(m), 0) / mocks.length) : null
+  return (
+    <>
+      <span className="label-text">{w.mocks}</span>
+      {mocks.length === 0 ? (
+        <p className="muted small">{w.mocksHow}</p>
+      ) : (
+        <>
+          <div className="exam-mock-bars" role="img" aria-label={recent.map((m) => `${pct(m)}%`).join(', ')}>
+            {recent.map((m) => (
+              <span key={m.id} className="exam-mock-bar" style={{ height: `${Math.max(6, pct(m))}%` }} title={`${w.day(m.takenOn)}: ${m.score}/${m.outOf}`} />
+            ))}
+          </div>
+          <p className="small">
+            {w.last}: <strong>{pct(mocks.at(-1)!)}%</strong> · {w.best}: {best}% · {w.average}: {average}%
+          </p>
+          <ul className="plain tracker-history">
+            {mocks
+              .slice(-5)
+              .reverse()
+              .map((m) => (
+                <li key={m.id}>
+                  <span className="muted">{w.day(m.takenOn)}</span> · {m.score}/{m.outOf} ({pct(m)}%){' '}
+                  <button className="link small" onClick={() => void remove(m.id)} aria-label={w.remove}>
+                    ✕
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </>
+      )}
+      <div className="exam-date-add">
+        <input type="number" min={0} step="0.25" value={score} onChange={(e) => setScore(e.target.value)} placeholder={w.score} aria-label={w.score} />
+        <input type="number" min={1} value={outOf} onChange={(e) => setOutOf(e.target.value)} placeholder={w.outOf} aria-label={w.outOf} />
+        <input type="date" value={on} onChange={(e) => setOn(e.target.value)} aria-label={w.on} />
+        <button className="ghost small-btn" onClick={() => void add()} disabled={busy || !score || Number(score) > Number(outOf)}>
+          {w.addScore}
+        </button>
+      </div>
+    </>
   )
 }
 
@@ -680,6 +958,7 @@ function ExamSheet({
  * should cost a correction here, not a missed gate.
  */
 function AdmitCardReader({ examId, exams, onDone }: { examId: string; exams: ExamDTO[]; onDone: () => void }) {
+  const w = useExamWords()
   const [draft, setDraft] = useState<CardDraft | null>(null)
   const [pasted, setPasted] = useState('')
   const [busy, setBusy] = useState(false)
@@ -727,7 +1006,7 @@ function AdmitCardReader({ examId, exams, onDone }: { examId: string; exams: Exa
 
   async function save() {
     if (!draft?.date) {
-      setError('The exam date is needed.')
+      setError(w.dateNeeded)
       return
     }
     setBusy(true)
@@ -755,13 +1034,7 @@ function AdmitCardReader({ examId, exams, onDone }: { examId: string; exams: Exa
         },
       })
       announceChange()
-      setDone(
-        res.travel === 'trip'
-          ? `Planned, with what to carry. The centre is in ${res.trip?.placeLabel}: a trip there from the day before, and a reminder to book the journey.`
-          : res.travel === 'no-home-city'
-            ? 'Planned, with what to carry. Add your home city in Settings, and a centre in another city becomes a trip with a reminder to book the journey.'
-            : 'Planned, with what to carry and reminders the evening before and that morning.',
-      )
+      setDone(res.travel === 'trip' ? w.plannedTrip(res.trip?.placeLabel ?? '') : res.travel === 'no-home-city' ? w.plannedNoHome : w.planned)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -771,11 +1044,11 @@ function AdmitCardReader({ examId, exams, onDone }: { examId: string; exams: Exa
 
   if (done) {
     return (
-      <div className="stack tight">
+      <div className="stack tight" lang={w.lang}>
         <p>{done}</p>
         <div className="row">
           <button className="primary small-btn" onClick={onDone}>
-            Done
+            {w.doneButton}
           </button>
         </div>
       </div>
@@ -784,13 +1057,10 @@ function AdmitCardReader({ examId, exams, onDone }: { examId: string; exams: Exa
 
   if (!draft) {
     return (
-      <div className="stack tight">
-        <p className="muted small">
-          Choose the admit card's PDF, or paste its text. It is read and not kept: only what you save below is.
-          A scanned or password-locked PDF cannot be read; type the details instead.
-        </p>
+      <div className="stack tight" lang={w.lang}>
+        <p className="muted small">{w.cardHow}</p>
         <label className="ghost exam-file">
-          Choose the PDF
+          {w.choosePdf}
           <input
             type="file"
             accept="application/pdf"
@@ -801,16 +1071,16 @@ function AdmitCardReader({ examId, exams, onDone }: { examId: string; exams: Exa
             disabled={busy}
           />
         </label>
-        <textarea value={pasted} onChange={(e) => setPasted(e.target.value)} rows={5} placeholder="Or paste the admit card's text here" />
+        <textarea value={pasted} onChange={(e) => setPasted(e.target.value)} rows={5} placeholder={w.pasteHere} />
         <div className="row">
           <button className="ghost small-btn" onClick={() => void read({ text: pasted })} disabled={busy || !pasted.trim()}>
-            Read the text
+            {w.readText}
           </button>
           <button className="link small" onClick={() => setDraft({ ...BLANK_CARD, examId })}>
-            Type it in instead
+            {w.typeInstead}
           </button>
         </div>
-        {busy && <p className="muted small">Reading…</p>}
+        {busy && <p className="muted small">{w.reading}</p>}
         {error && <p className="error small">{error}</p>}
       </div>
     )
@@ -824,13 +1094,15 @@ function AdmitCardReader({ examId, exams, onDone }: { examId: string; exams: Exa
   const rounds = examStages(key).filter((s) => !s.closed && s.key !== 'to_apply' && s.key !== 'applied')
 
   return (
-    <div className="stack tight">
-      <p className="muted small">Check each line against the card, and put right anything read wrong.</p>
+    <div className="stack tight" lang={w.lang}>
+      <p className="muted small">{w.checkEach}</p>
       <div className="tracker-fields">
         <label className="tracker-wide">
-          Exam
+          {w.exam}
           <select {...set('examId')}>
-            <option value="">{draft.examName || examByKey(draft.examKey)?.name || 'A new exam'} (new)</option>
+            <option value="">
+              {draft.examName || examByKey(draft.examKey)?.name || w.newExam} {w.newSuffix}
+            </option>
             {exams.map((x) => (
               <option key={x.id} value={x.id}>
                 {examLabel(x)}
@@ -840,8 +1112,8 @@ function AdmitCardReader({ examId, exams, onDone }: { examId: string; exams: Exa
         </label>
         {!draft.examId && !draft.examKey && (
           <label className="tracker-wide">
-            Its name
-            <input {...set('examName')} list="exam-catalog-card" placeholder="e.g. RRB NTPC" maxLength={120} />
+            {w.itsName}
+            <input {...set('examName')} list="exam-catalog-card" placeholder="RRB NTPC" maxLength={120} />
             <datalist id="exam-catalog-card">
               {EXAMS.map((x) => (
                 <option key={x.key} value={x.name} />
@@ -851,60 +1123,60 @@ function AdmitCardReader({ examId, exams, onDone }: { examId: string; exams: Exa
         )}
         {rounds.length > 1 && (
           <label>
-            Round
+            {w.round}
             <select {...set('round')}>
               <option value="">—</option>
               {rounds.map((r) => (
                 <option key={r.key} value={r.key}>
-                  {r.label}
+                  {w.stage(key, r.key)}
                 </option>
               ))}
             </select>
           </label>
         )}
         <label>
-          Exam date
+          {w.examDate}
           <input type="date" {...set('date')} />
         </label>
         <label>
-          Reporting time
+          {w.reportingTime}
           <input type="time" {...set('reportingAt')} />
         </label>
         <label>
-          Gate closes
+          {w.gateCloses}
           <input type="time" {...set('gateClosesAt')} />
         </label>
         <label>
-          Exam starts
+          {w.examStarts}
           <input type="time" {...set('startsAt')} />
         </label>
         <label>
-          Exam ends
+          {w.examEnds}
           <input type="time" {...set('endsAt')} />
         </label>
         <label>
-          Roll number
+          {w.rollNo}
           <input {...set('rollNo')} maxLength={40} />
         </label>
         <label>
-          Centre city
+          {w.centreCity}
           <input {...set('centreCity')} maxLength={80} />
         </label>
         <label className="tracker-wide">
-          Centre
+          {w.centre}
           <input {...set('centreName')} maxLength={200} />
         </label>
         <label className="tracker-wide">
-          Centre address
+          {w.centreAddress}
           <textarea {...set('centreAddress')} rows={2} maxLength={400} />
         </label>
       </div>
       <div className="row">
         <button className="primary small-btn" onClick={() => void save()} disabled={busy || !draft.date}>
-          Plan the exam day
+          {w.planDay}
         </button>
         <button className="ghost small-btn" onClick={() => setDraft(null)} disabled={busy}>
-          Start again
+          {w.startAgain}
         </button>
       </div>
       {error && <p className="error small">{error}</p>}
@@ -918,12 +1190,13 @@ function AdmitCardReader({ examId, exams, onDone }: { examId: string; exams: Exa
  * looked through here.
  */
 function Results({ exam, onChecked }: { exam: ExamDTO; onChecked: () => void }) {
+  const w = useExamWords()
   const [busy, setBusy] = useState(false)
   const [own, setOwn] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const checks = exam.checks ?? []
   const cutoffs = (exam.notices ?? []).filter((n) => n.cutoffs.length > 0)
-  const roundLabel = (round: string | null) => (round ? examStage(exam.examKey, round)?.label ?? round : null)
+  const roundLabel = (round: string | null) => (round ? w.stage(exam.examKey, round) : null)
 
   async function lookThrough(file: File) {
     setBusy(true)
@@ -931,11 +1204,7 @@ function Results({ exam, onChecked }: { exam: ExamDTO; onChecked: () => void }) 
     setOwn(null)
     try {
       const res = await apiSendFile<{ page: number | null; pages: number }>(`/exams/${exam.id}/check-list`, file)
-      setOwn(
-        res.page
-          ? `Found: your number is on page ${res.page} of ${res.pages}.`
-          : `Not in this list (${res.pages} page${res.pages === 1 ? '' : 's'} read). If it is split by region or category, check the right part.`,
-      )
+      setOwn(res.page ? w.foundOnPage(res.page, res.pages) : w.notInList(res.pages))
       onChecked()
     } catch (err) {
       const problem = err instanceof ApiError ? (err.data as { problem?: string } | null)?.problem : null
@@ -948,30 +1217,24 @@ function Results({ exam, onChecked }: { exam: ExamDTO; onChecked: () => void }) 
   if (checks.length === 0 && cutoffs.length === 0 && !exam.rollNo && !exam.registrationNo) {
     return (
       <>
-        <span className="label-text">Results</span>
-        <p className="muted small">Add your roll number below, and when a result list comes out Cue looks for it in the list.</p>
+        <span className="label-text">{w.results}</span>
+        <p className="muted small">{w.resultsHow}</p>
       </>
     )
   }
 
   return (
     <>
-      <span className="label-text">Results</span>
+      <span className="label-text">{w.results}</span>
       {checks.length > 0 && (
         <ul className="plain tracker-plans exam-checks">
           {checks.map((c) => (
             <li key={c.noticeId} className={c.found ? 'is-found' : 'is-missing'}>
-              {c.found
-                ? c.means === 'selected'
-                  ? 'Selected — your number is on the list'
-                  : c.means === 'shortlist'
-                    ? `In the list${roundLabel(c.round) ? ` for ${roundLabel(c.round)}` : ''}`
-                    : 'Your number is in the result list'
-                : 'Not found in this list — lists are often split by region, category or post'}
-              {c.page ? ` (page ${c.page})` : ''}
+              {c.found ? (c.means === 'selected' ? w.selectedOnList : c.means === 'shortlist' ? w.inListFor(roundLabel(c.round)) : w.inResultList) : w.notFound}
+              {c.page ? ` (${w.page(c.page)})` : ''}
               <span className="muted"> · </span>
               <a href={c.url} target="_blank" rel="noopener noreferrer">
-                the notice
+                {w.theNotice}
               </a>
             </li>
           ))}
@@ -979,7 +1242,9 @@ function Results({ exam, onChecked }: { exam: ExamDTO; onChecked: () => void }) 
       )}
       {cutoffs.map((n) => (
         <div key={n.id} className="exam-cutoffs">
-          <span className="muted small">Cut-offs · {n.summary.split(': ').slice(1).join(': ')}</span>
+          <span className="muted small">
+            {w.cutoffs} · {n.summary.split(': ').slice(1).join(': ')}
+          </span>
           <div className="chips">
             {n.cutoffs.map((c) => (
               <span key={c.category} className={`chip${c.category === exam.category ? ' selected' : ''}`}>
@@ -987,12 +1252,12 @@ function Results({ exam, onChecked }: { exam: ExamDTO; onChecked: () => void }) 
               </span>
             ))}
           </div>
-          {!exam.category && <span className="muted small">Set your category in Details to see yours picked out.</span>}
+          {!exam.category && <span className="muted small">{w.setCategory}</span>}
         </div>
       ))}
       {(exam.rollNo || exam.registrationNo) && (
         <label className="ghost exam-file">
-          {busy ? 'Looking…' : 'Look through a result list (PDF)'}
+          {busy ? w.looking : w.lookThrough}
           <input
             type="file"
             accept="application/pdf"

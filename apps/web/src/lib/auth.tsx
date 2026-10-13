@@ -18,6 +18,8 @@ export interface Me {
   isDemo?: boolean
   /** Reviews official exam notices before they go out (ADMIN_EMAILS on the server). */
   isAdmin?: boolean
+  /** The language Cue speaks in: the exam screens and their reminders first. */
+  language?: 'en' | 'hi'
 }
 
 interface AuthValue {
@@ -32,6 +34,8 @@ interface AuthValue {
   logout: () => void
   /** What they use Cue for, saved and reflected everywhere at once. */
   saveUses: (uses: string[]) => Promise<void>
+  /** English or Hindi, saved and reflected at once. */
+  saveLanguage: (language: 'en' | 'hi') => Promise<void>
   /** Into a fresh demo account, filled with a sample week. */
   enterDemo: () => Promise<void>
   /** Deletes the account and everything in it, then signs out. */
@@ -112,6 +116,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => undefined)
   })
 
+  const saveLanguage = useCallback(async (language: 'en' | 'hi') => {
+    const saved = await api<{ language: 'en' | 'hi' }>('/me/preferences', { method: 'PATCH', body: { language } })
+    setMe((m) => (m ? { ...m, language: saved.language } : m))
+  }, [])
+
   const enterDemo = useCallback(async () => {
     const res = await api<{ token: string }>('/auth/demo', { method: 'POST', body: {} })
     setToken(res.token)
@@ -125,8 +134,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ me, loading, login, register, logout, saveUses, enterDemo, deleteAccount }),
-    [me, loading, login, register, logout, saveUses, enterDemo, deleteAccount],
+    () => ({ me, loading, login, register, logout, saveUses, saveLanguage, enterDemo, deleteAccount }),
+    [me, loading, login, register, logout, saveUses, saveLanguage, enterDemo, deleteAccount],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -142,6 +142,7 @@ export async function authRoutes(app: FastifyInstance) {
         orgName: schema.orgs.name,
         role: schema.users.role,
         uses: schema.users.uses,
+        language: schema.users.language,
         isDemo: schema.users.isDemo,
         /** Null when there is none; otherwise the cache key for the image URL. */
         avatarUpdatedAt: schema.users.avatarUpdatedAt,

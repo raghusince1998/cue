@@ -9,6 +9,8 @@ import {
   examStage,
   findNumber,
   isLaterExamStage,
+  listFoundHi,
+  noticeLineHi,
   noticeSummary,
   numbersIn,
   proposeFromNotice,
@@ -19,7 +21,7 @@ import {
 import { db, schema } from '../db/index.ts'
 import { env } from '../env.ts'
 import { sendToUser } from '../push.ts'
-import { addNoticeToExam, examsForNotice, updateExam, type ExamRow } from './exams.ts'
+import { addNoticeToExam, examsForNotice, langOf, updateExam, type ExamRow } from './exams.ts'
 import { pdfPages, pdfText } from './pdfText.ts'
 
 /**
@@ -524,6 +526,7 @@ export async function approveNotice(
   let listProblem: string | null = null
   for (const p of proposals) {
     const summary = noticeSummary(p)
+    const summaryHi = noticeLineHi(p.kind, p.dates, p.list ?? null)
     const exams = await examsForNotice(p.examKey, p.cycle)
     // The list, read once, if anyone tracking it has a number to look for.
     let sets: Set<string>[] | null = null
@@ -536,12 +539,16 @@ export async function approveNotice(
     }
     for (const exam of exams) {
       const number = exam.rollNo ?? exam.registrationNo
+      const hi = (await langOf(exam.userId)) === 'hi'
       let body: string | null = null
       if (sets && p.list && number) {
         checked++
         const look = await lookIn(exam, id, p.list, sets, now)
         const roundLabel = p.list.round ? examStage(exam.examKey, p.list.round)?.label : null
-        if (look.found) {
+        if (hi) {
+          if (look.found) found++
+          body = listFoundHi(mask(number), look.found, p.list.means, p.list.round)
+        } else if (look.found) {
           found++
           body =
             p.list.means === 'selected'
@@ -553,10 +560,14 @@ export async function approveNotice(
           body = `${mask(number)} was not found in this list. Lists are often split by region, category or post, so check the notice to be sure.`
         }
         // Dates still go on; a "go and look" plan is not needed once it has been looked for.
-        if (p.dates.length > 0) await addNoticeToExam(exam, { url: row.url, kind: p.kind, summary, dates: p.dates }, now)
+        if (p.dates.length > 0) await addNoticeToExam(exam, { url: row.url, kind: p.kind, summary, summaryHi, dates: p.dates }, now)
       } else {
-        const added = await addNoticeToExam(exam, { url: row.url, kind: p.kind, summary, dates: p.dates }, now)
-        if (added > 0) body = `${summary.split(': ').slice(1).join(': ')}. From the official notice — tap to see it.`
+        const added = await addNoticeToExam(exam, { url: row.url, kind: p.kind, summary, summaryHi, dates: p.dates }, now)
+        if (added > 0) {
+          body = hi
+            ? `${summaryHi}। आधिकारिक सूचना से — देखने के लिए टैप करें।`
+            : `${summary.split(': ').slice(1).join(': ')}. From the official notice — tap to see it.`
+        }
       }
       if (!body) continue
       told.add(exam.userId)

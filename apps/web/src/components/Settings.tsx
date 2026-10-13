@@ -77,7 +77,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
   const [editingMessages, setEditingMessages] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   // Work hours only mean something to someone with a working life.
-  const { me: account } = useAuth()
+  const { me: account, saveLanguage } = useAuth()
   const working = hasWork(account?.uses ?? [])
 
   useEffect(() => {
@@ -277,6 +277,32 @@ export function Settings({ onClose }: { onClose: () => void }) {
       <hr className="rule" />
       <span className="label-text">What you use Cue for</span>
       <UsesPicker compact />
+
+      <hr className="rule" />
+      {/* Hindi first where aspirants are: the exam screens and their reminders. */}
+      <span className="label-text">Language · भाषा</span>
+      <div className="chips" role="group" aria-label="Language">
+        {(
+          [
+            ['en', 'English'],
+            ['hi', 'हिन्दी'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            className={`chip${(account?.language ?? 'en') === key ? ' selected' : ''}`}
+            aria-pressed={(account?.language ?? 'en') === key}
+            onClick={() => void saveLanguage(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="muted small">
+        {account?.language === 'hi'
+          ? 'परीक्षाओं की स्क्रीन, उनके रिमाइंडर और सूचनाएँ अब हिन्दी में। Cue का बाकी हिस्सा भी धीरे-धीरे।'
+          : 'Hindi covers the exam screens, their reminders and notices for now; the rest of Cue will follow.'}
+      </p>
 
       <hr className="rule" />
 

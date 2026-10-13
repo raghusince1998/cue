@@ -59,6 +59,8 @@ const preferencesInput = z.object({
     .optional(),
   workStartHour: z.number().int().min(0).max(23).optional(),
   workEndHour: z.number().int().min(1).max(24).optional(),
+  /** The language Cue speaks in: English, or Hindi. */
+  language: z.enum(['en', 'hi']).optional(),
 })
 
 const selection = {
@@ -78,6 +80,7 @@ const selection = {
   reportToEmail: schema.users.reportToEmail,
   reportToPhone: schema.users.reportToPhone,
   homeCity: schema.users.homeCity,
+  language: schema.users.language,
   upiId: schema.users.upiId,
   uses: schema.users.uses,
   keepApart: schema.users.keepApart,
@@ -154,6 +157,7 @@ export async function meRoutes(app: FastifyInstance) {
         ...(body.workDays !== undefined ? { workDays: body.workDays } : {}),
         ...(body.workStartHour !== undefined ? { workStartHour: body.workStartHour } : {}),
         ...(body.workEndHour !== undefined ? { workEndHour: body.workEndHour } : {}),
+        ...(body.language !== undefined ? { language: body.language } : {}),
       })
       .where(eq(schema.users.id, sub))
 

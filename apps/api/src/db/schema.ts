@@ -96,6 +96,8 @@ export const users = pgTable(
     lastBriefOn: date('last_brief_on'),
     /** Where they live: a plan in this city is not a trip. */
     homeCity: text('home_city'),
+    /** The language Cue speaks in: 'en' or 'hi' (the exam module first). */
+    language: text('language').$type<'en' | 'hi'>().notNull().default('en'),
     /**
      * Work and personal kept apart: nagging reminders for one wait while it is
      * the other's time. Only for someone with a working life (see hasWork).
@@ -445,6 +447,23 @@ export const notices = pgTable(
     told: integer('told').notNull().default(0),
   },
   (t) => [uniqueIndex('notices_source_key_unique').on(t.source, t.key), index('notices_status_idx').on(t.status, t.foundAt)],
+)
+
+/** A mock test's score, for the trend on its exam's page. */
+export const examMocks = pgTable(
+  'exam_mocks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    examId: uuid('exam_id')
+      .notNull()
+      .references(() => exams.id, { onDelete: 'cascade' }),
+    takenOn: date('taken_on').notNull(),
+    score: doublePrecision('score').notNull(),
+    outOf: doublePrecision('out_of').notNull(),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('exam_mocks_exam_idx').on(t.examId, t.takenOn)],
 )
 
 /** A result list's roll numbers, page by page, read once from its public PDF. */
@@ -1018,6 +1037,9 @@ export const recurrences = pgTable(
     exdates: date('exdates').array(),
     /** Work or personal, when the person said so: copied to each day. */
     sphere: text('sphere').$type<'work' | 'personal'>(),
+
+    /** The exam this series is a study plan for: shown, and stopped, from its page. */
+    examId: uuid('exam_id').references((): AnyPgColumn => exams.id, { onDelete: 'set null' }),
 
     /** Set when this series mirrors an event from a subscribed calendar. */
     feedId: uuid('feed_id'),

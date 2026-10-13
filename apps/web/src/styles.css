@@ -6714,3 +6714,62 @@ a.link-btn:hover {
 .primary.danger-bg {
   background: var(--danger);
 }
+
+/* ---- Exams: preparing ------------------------------------------------- */
+
+.exam-countdown {
+  align-self: flex-start;
+  margin: 2px 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.exam-countdown.is-near {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.exam-study-form textarea {
+  font-size: 14px;
+}
+
+.exam-mock-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 64px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.exam-mock-bar {
+  flex: 1 1 0;
+  max-width: 28px;
+  border-radius: 4px 4px 0 0;
+  background: var(--accent);
+  opacity: 0.85;
+}
+
+.exam-mock-bar:last-child {
+  opacity: 1;
+}
+
+.photo-fitter-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.photo-fitter-result img {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  max-width: 100%;
+  height: auto;
+}

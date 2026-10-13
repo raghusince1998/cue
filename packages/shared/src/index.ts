@@ -1370,6 +1370,10 @@ export interface ExamDTO {
   category: string | null
   /** Official notices about it, checked and approved; on the single-exam fetch. */
   notices?: { id: string; title: string; url: string; summary: string; reviewedAt: string; cutoffs: { category: string; marks: number }[] }[]
+  /** Its study plan: the series running for it. On the single-exam fetch. */
+  study?: StudySeriesDTO[]
+  /** Mock test scores, oldest first. On the single-exam fetch. */
+  mocks?: MockScoreDTO[]
   /** Result lists their roll number was looked for in, and whether it was there. */
   checks?: { noticeId: string; title: string; url: string; found: boolean; page: number | null; means: string; round: string | null; checkedAt: string }[]
 }
@@ -1461,4 +1465,53 @@ export interface ExamNoticeDTO {
   url: string
   summary: string
   reviewedAt: string
+}
+export { mockScoreIn, studyWeek, subjectsFor, type StudySeries } from './study.ts'
+export {
+  STAGE_HI,
+  STEP_HI,
+  carryHi,
+  examDayNotesHi,
+  examLineHi,
+  listFoundHi,
+  noticeLineHi,
+  stepNotesHi,
+  stepTitleHi,
+  type Lang,
+} from './examHindi.ts'
+
+/** A study plan for an exam: subjects dealt across the days chosen, and a weekly mock test. */
+export const studyPlanInput = z.object({
+  subjects: z.array(shortText(60).min(1)).min(1).max(12),
+  days: z.array(z.number().int().min(0).max(6)).min(1).max(7),
+  at: hhmmField,
+  minutes: z.number().int().min(15).max(480),
+  mock: z.object({ day: z.number().int().min(0).max(6), at: hhmmField, minutes: z.number().int().min(15).max(300) }).nullable(),
+  /** The last day; by default the day before the exam, or twelve weeks. */
+  until: ymdField.nullable().optional(),
+})
+
+export const mockScoreInput = z.object({
+  takenOn: ymdField,
+  score: z.number().min(0).max(10_000),
+  outOf: z.number().positive().max(10_000),
+  note: shortText(200).nullable().optional(),
+})
+
+export interface StudySeriesDTO {
+  id: string
+  title: string
+  weekdays: number[]
+  hour: number
+  minute: number
+  durationMinutes: number
+  untilOn: string | null
+}
+
+export interface MockScoreDTO {
+  id: string
+  takenOn: string
+  score: number
+  outOf: number
+  note: string | null
 }

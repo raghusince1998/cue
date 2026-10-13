@@ -11,6 +11,7 @@
  */
 import { findCity } from './cities.ts'
 import { parseWhen } from './parseWhen.ts'
+import { mockScoreIn } from './study.ts'
 
 export interface ExamRound {
   key: string
@@ -342,7 +343,20 @@ export interface ParsedExamLine {
   /** Where it stands now, when the line says: applied, to apply, a round cleared. */
   stage: string | null
   dates: ExamDateSaid[]
+  /** A mock test's score, when that is what the line was. */
+  mock?: { score: number; outOf: number } | null
 }
+
+/** Hindi month names, for dates written in Hindi. */
+const HINDI_MONTH_NAMES: Record<string, string> = {
+  जनवरी: 'Jan', फरवरी: 'Feb', मार्च: 'Mar', अप्रैल: 'Apr', मई: 'May', जून: 'Jun', जुलाई: 'Jul', अगस्त: 'Aug',
+  सितंबर: 'Sep', सितम्बर: 'Sep', अक्टूबर: 'Oct', अक्तूबर: 'Oct', नवंबर: 'Nov', नवम्बर: 'Nov', दिसंबर: 'Dec', दिसम्बर: 'Dec',
+}
+const HINDI_MONTHS = /जनवरी|फ़?फरवरी|फ़रवरी|मार्च|अप्रैल|मई|जून|जुलाई|अगस्त|सितंबर|सितम्बर|अक्टूबर|अक्तूबर|नवंबर|नवम्बर|दिसंबर|दिसम्बर/g
+
+/** The same, said in Hinglish or Hindi: "form bhar diya", "परीक्षा 15 नवंबर को", "admit card aa gaya". */
+const HINGLISH_ABOUT_IT =
+  /\b(?:bhar\s+(?:diya|dia|di|liya)|bharna\s+(?:hai|h)|apply\s+kar(?:na)?|aa\s+gaya|aa\s+gya|ho\s+gaya|nikal\s+gaya|pariksha|paper\s+hai)\b|फॉर्म|फार्म|आवेदन|परीक्षा|प्रवेश\s+पत्र|परिणाम|रिजल्ट|अंतिम\s+तिथि|पास\s+हो|चयन/i
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const ymdOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -378,13 +392,14 @@ export function examStepOf(part: string): ExamStep | null {
 }
 
 function stepOf(part: string): ExamStep | null {
-  if (/\b(?:last\s+date|apply\s+(?:by|before|till)|form\s+(?:by|till|closes)|fill\s+(?:the\s+)?form|registration\s+(?:closes|ends)|last\s+day)\b/i.test(part) && !/\bfee\b/i.test(part)) return 'apply_by'
-  if (/\bfee\b/i.test(part)) return 'fee_by'
-  if (/\bcorrection\b|\bedit\s+window\b/i.test(part)) return 'correction'
-  if (/\badmit\s+card\b|\bhall\s+ticket\b|\bcall\s+letter\b/i.test(part)) return 'admit_card'
-  if (/\banswer\s+key\b/i.test(part)) return 'answer_key'
-  if (/\bresult\b|\bcut[\s-]?off\b|\bmerit\s+list\b/i.test(part)) return 'result'
-  if (/\bexam\b|\bpaper\b|\btest\b/i.test(part)) return 'exam'
+  const fee = /\bfee\b|\bfees\b|शुल्क|फीस/i.test(part)
+  if (/\b(?:last\s+date|apply\s+(?:by|before|till)|form\s+(?:by|till|closes)|fill\s+(?:the\s+)?form|registration\s+(?:closes|ends)|last\s+day)\b|अंतिम\s+तिथि|आखिरी\s+तारीख/i.test(part) && !fee) return 'apply_by'
+  if (fee) return 'fee_by'
+  if (/\bcorrection\b|\bedit\s+window\b|सुधार/i.test(part)) return 'correction'
+  if (/\badmit\s+card\b|\bhall\s+ticket\b|\bcall\s+letter\b|प्रवेश\s+पत्र/i.test(part)) return 'admit_card'
+  if (/\banswer\s+key\b|उत्तर\s+कुंजी/i.test(part)) return 'answer_key'
+  if (/\bresult\b|\bcut[\s-]?off\b|\bmerit\s+list\b|परिणाम|रिजल्ट/i.test(part)) return 'result'
+  if (/\bexam\b|\bpaper\b|\btest\b|\bpariksha\b|परीक्षा|पेपर/i.test(part)) return 'exam'
   return null
 }
 
@@ -393,13 +408,20 @@ function stepOf(part: string): ExamStep | null {
  * reg no 123456", "SSC CGL tier 1 exam on 12 sep", "REET form last date 20
  * nov". Null for anything else — including studying for one, which is a plan.
  */
-export function parseExamLine(text: string, now = new Date()): ParsedExamLine | null {
+export function parseExamLine(raw: string, now = new Date()): ParsedExamLine | null {
+  // Hindi months to English, so a date in either is read: "15 नवंबर" is 15 Nov.
+  const text = raw.replace(HINDI_MONTHS, (m) => HINDI_MONTH_NAMES[m.replace('़', '')] ?? m)
   const found = findExam(text)
   if (!found) return null
   const { exam } = found
+  // A mock test's score, before anything else: practice, but worth keeping.
+  const mock = mockScoreIn(text)
+  if (mock) {
+    return { examKey: exam.key, name: exam.name, cycle: cycleIn(text, found).cycle, region: null, registrationNo: null, rollNo: null, stage: null, dates: [], mock }
+  }
   const round = roundIn(exam.key, text)
   const practice = PRACTICE.test(text)
-  if (!ABOUT_IT.test(text)) {
+  if (!ABOUT_IT.test(text) && !HINGLISH_ABOUT_IT.test(text)) {
     // "UPSC prelims 24 may": a round and a day is the exam's date. Studying
     // for it on a day is not.
     const roundNamed = round !== null || /\bexam\b|\bpaper\b/i.test(text)
@@ -416,13 +438,14 @@ export function parseExamLine(text: string, now = new Date()): ParsedExamLine | 
   // Where it stands, when the line says.
   let stage: string | null = null
   const order = examStages(exam.key)
-  if (/\b(?:not\s+selected|didn'?t\s+clear|did\s+not\s+clear|failed)\b/i.test(text)) stage = 'not_selected'
-  else if (/\b(?:finally\s+)?selected\b|\bgot\s+(?:the\s+)?(?:job|posting)\b/i.test(text)) stage = 'selected'
-  else if (/\b(?:cleared|qualified|passed|cracked)\b/i.test(text) && round) {
+  // In English, Hinglish or Hindi: "form bhar diya", "पास हो गया".
+  if (/\b(?:not\s+selected|didn'?t\s+clear|did\s+not\s+clear|failed)\b|\b(?:nahi|nhi)\s+(?:hua|hui|nikla)\b|नहीं\s+(?:हुआ|हुई|निकला)/i.test(text)) stage = 'not_selected'
+  else if (/\b(?:finally\s+)?selected\b|\bgot\s+(?:the\s+)?(?:job|posting)\b|\bselect(?:ion)?\s+ho\s+(?:gaya|gya|gayi|gyi)\b|चयन\s+हो\s+गया|सिलेक्शन\s+हो\s+गया/i.test(text)) stage = 'selected'
+  else if (/\b(?:cleared|qualified|passed|cracked)\b|\b(?:clear|pass|qualify)\s+(?:ho\s+(?:gaya|gya)|kar\s+liya|kiya)\b|\bnikal\s+(?:gaya|gya|liya)\b|(?:पास|क्लियर)\s+हो\s+गया|निकल\s+गया/i.test(text) && round) {
     const i = order.findIndex((s) => s.key === round)
     stage = order[i + 1] && !order[i + 1]!.closed ? order[i + 1]!.key : 'selected'
-  } else if (/\b(?:applied|registered|form\s+(?:filled|submitted|done)|submitted)\b/i.test(text)) stage = 'applied'
-  else if (/\b(?:to\s+apply|apply(?:ing)?\s+for|fill\s+(?:the\s+)?form|form\s+(?:is\s+)?(?:out|open|released)|notification)\b/i.test(text)) stage = 'to_apply'
+  } else if (/\b(?:applied|registered|form\s+(?:filled|submitted|done)|submitted)\b|\b(?:form\s+)?bhar\s+(?:diya|dia|di|liya)\b|\bapply\s+kar\s+(?:diya|dia|di)\b|(?:फॉर्म|फार्म)\s+भर\s+(?:दिया|दी)|आवेदन\s+कर\s+(?:दिया|दी)/i.test(text)) stage = 'applied'
+  else if (/\b(?:to\s+apply|apply(?:ing)?\s+for|fill\s+(?:the\s+)?form|form\s+(?:is\s+)?(?:out|open|released)|notification)\b|\b(?:form\s+)?bharna\s+(?:hai|h)\b|\bapply\s+karna\s+(?:hai|h)\b|(?:फॉर्म|फार्म)\s+भरना\s+है|आवेदन\s+करना\s+है/i.test(text)) stage = 'to_apply'
 
   // Each date in it, by the words beside it: "form last date 20 nov, exam 15
   // feb". The name and the numbers go first: "CEN 05/2026", a year and a

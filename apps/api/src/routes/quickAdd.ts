@@ -1263,12 +1263,14 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
         examSaid.region,
         examSaid.stage ? examStage(examSaid.examKey, examSaid.stage)?.label : null,
         examSaid.registrationNo ? `reg no ${examSaid.registrationNo}` : null,
+        examSaid.mock ? `mock ${examSaid.mock.score}/${examSaid.mock.outOf} (${Math.round((examSaid.mock.score / examSaid.mock.outOf) * 100)}%)` : null,
         ...dates,
       ]
         .filter(Boolean)
         .join(' · '),
       assumptions: [
         tracked ? `Added to the ${label} you are tracking.` : null,
+        examSaid.mock ? 'Kept with your mock scores, on the exam’s page.' : null,
         examSaid.dates.some((d) => d.step === 'apply_by' || d.step === 'fee_by')
           ? 'Reminders 3 days before the last date, the evening before, and on the day.'
           : null,
