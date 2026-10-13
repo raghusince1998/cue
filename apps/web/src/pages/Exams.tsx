@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
+  CATEGORIES,
   EXAMS,
   EXAM_STEPS,
   examByKey,
@@ -376,7 +377,7 @@ function ExamSheet({
   onDeleted: () => void
 }) {
   const [exam, setExam] = useState<ExamDTO | null>(null)
-  const [draft, setDraft] = useState({ cycle: '', region: '', registrationNo: '', rollNo: '', notes: '' })
+  const [draft, setDraft] = useState({ cycle: '', region: '', registrationNo: '', rollNo: '', category: '', notes: '' })
   const [dirty, setDirty] = useState(false)
   const [step, setStep] = useState<ExamStep>('exam')
   const [round, setRound] = useState('')
@@ -390,7 +391,14 @@ function ExamSheet({
     try {
       const x = await api<ExamDTO>(`/exams/${id}`)
       setExam(x)
-      setDraft({ cycle: x.cycle ?? '', region: x.region ?? '', registrationNo: x.registrationNo ?? '', rollNo: x.rollNo ?? '', notes: x.notes ?? '' })
+      setDraft({
+        cycle: x.cycle ?? '',
+        region: x.region ?? '',
+        registrationNo: x.registrationNo ?? '',
+        rollNo: x.rollNo ?? '',
+        category: x.category ?? '',
+        notes: x.notes ?? '',
+      })
       setDirty(false)
     } catch (err) {
       setError((err as Error).message)
@@ -565,6 +573,8 @@ function ExamSheet({
         </>
       )}
 
+      <Results exam={exam} onChecked={() => void load()} />
+
       <span className="label-text">Exam day</span>
       {exam.centreName || exam.centreAddress ? (
         <p className="small">
@@ -598,9 +608,20 @@ function ExamSheet({
           Roll number
           <input {...field('rollNo')} maxLength={40} />
         </label>
+        <label>
+          Category (for cut-offs)
+          <select {...field('category')}>
+            <option value="">Not said</option>
+            {CATEGORIES.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="tracker-wide">
           Notes
-          <textarea {...field('notes')} rows={2} placeholder="Post preferences, category, anything to remember" />
+          <textarea {...field('notes')} rows={2} placeholder="Post preferences, anything to remember" />
         </label>
       </div>
       {catalog?.regions && (
@@ -622,6 +643,7 @@ function ExamSheet({
               registrationNo: draft.registrationNo.trim() || null,
               rollNo: draft.rollNo.trim() || null,
               notes: draft.notes.trim() || null,
+              category: draft.category || null,
             })
           }
         >
@@ -887,5 +909,104 @@ function AdmitCardReader({ examId, exams, onDone }: { examId: string; exams: Exa
       </div>
       {error && <p className="error small">{error}</p>}
     </div>
+  )
+}
+
+/**
+ * Results: the lists their roll number was looked for in, the cut-offs the
+ * board published (theirs picked out), and a list they have themselves,
+ * looked through here.
+ */
+function Results({ exam, onChecked }: { exam: ExamDTO; onChecked: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [own, setOwn] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const checks = exam.checks ?? []
+  const cutoffs = (exam.notices ?? []).filter((n) => n.cutoffs.length > 0)
+  const roundLabel = (round: string | null) => (round ? examStage(exam.examKey, round)?.label ?? round : null)
+
+  async function lookThrough(file: File) {
+    setBusy(true)
+    setError(null)
+    setOwn(null)
+    try {
+      const res = await apiSendFile<{ page: number | null; pages: number }>(`/exams/${exam.id}/check-list`, file)
+      setOwn(
+        res.page
+          ? `Found: your number is on page ${res.page} of ${res.pages}.`
+          : `Not in this list (${res.pages} page${res.pages === 1 ? '' : 's'} read). If it is split by region or category, check the right part.`,
+      )
+      onChecked()
+    } catch (err) {
+      const problem = err instanceof ApiError ? (err.data as { problem?: string } | null)?.problem : null
+      setError(problem ?? (err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (checks.length === 0 && cutoffs.length === 0 && !exam.rollNo && !exam.registrationNo) {
+    return (
+      <>
+        <span className="label-text">Results</span>
+        <p className="muted small">Add your roll number below, and when a result list comes out Cue looks for it in the list.</p>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <span className="label-text">Results</span>
+      {checks.length > 0 && (
+        <ul className="plain tracker-plans exam-checks">
+          {checks.map((c) => (
+            <li key={c.noticeId} className={c.found ? 'is-found' : 'is-missing'}>
+              {c.found
+                ? c.means === 'selected'
+                  ? 'Selected — your number is on the list'
+                  : c.means === 'shortlist'
+                    ? `In the list${roundLabel(c.round) ? ` for ${roundLabel(c.round)}` : ''}`
+                    : 'Your number is in the result list'
+                : 'Not found in this list — lists are often split by region, category or post'}
+              {c.page ? ` (page ${c.page})` : ''}
+              <span className="muted"> · </span>
+              <a href={c.url} target="_blank" rel="noopener noreferrer">
+                the notice
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      {cutoffs.map((n) => (
+        <div key={n.id} className="exam-cutoffs">
+          <span className="muted small">Cut-offs · {n.summary.split(': ').slice(1).join(': ')}</span>
+          <div className="chips">
+            {n.cutoffs.map((c) => (
+              <span key={c.category} className={`chip${c.category === exam.category ? ' selected' : ''}`}>
+                {c.category} {c.marks}
+              </span>
+            ))}
+          </div>
+          {!exam.category && <span className="muted small">Set your category in Details to see yours picked out.</span>}
+        </div>
+      ))}
+      {(exam.rollNo || exam.registrationNo) && (
+        <label className="ghost exam-file">
+          {busy ? 'Looking…' : 'Look through a result list (PDF)'}
+          <input
+            type="file"
+            accept="application/pdf"
+            disabled={busy}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) void lookThrough(file)
+              e.target.value = ''
+            }}
+          />
+        </label>
+      )}
+      {own && <p className="small">{own}</p>}
+      {error && <p className="error small">{error}</p>}
+    </>
   )
 }

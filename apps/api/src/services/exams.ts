@@ -89,7 +89,7 @@ function stepNotes(step: ExamStep, exam: { examKey: string | null }): string | n
   }
 }
 
-type ExamRow = typeof e.$inferSelect
+export type ExamRow = typeof e.$inferSelect
 
 async function owned(userId: string, id: string, exec: Executor = db): Promise<ExamRow | null> {
   const [row] = await exec.select().from(e).where(and(eq(e.id, id), eq(e.userId, userId)))
@@ -121,6 +121,7 @@ function toDTO(row: ExamRow, dates: Awaited<ReturnType<typeof datesOf>>): ExamDT
     centreAddress: row.centreAddress,
     centreCity: row.centreCity,
     notes: row.notes,
+    category: row.category,
     closedAt: row.closedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     dates: dates
@@ -159,9 +160,14 @@ export async function listExams(userId: string, now = new Date()): Promise<ExamD
 export async function examById(userId: string, id: string): Promise<ExamDTO | null> {
   const row = await owned(userId, id)
   if (!row) return null
-  // Official notices about it, as checked and approved: read here, never sent from here.
-  const { noticesForExam } = await import('./noticeWatch.ts')
-  return { ...toDTO(row, await datesOf([id])), notices: await noticesForExam(row.examKey, row.cycle) }
+  // Official notices about it, as checked and approved, and the result lists
+  // its roll number was looked for in: read here, never sent from here.
+  const { noticesForExam, checksForExam } = await import('./noticeWatch.ts')
+  return {
+    ...toDTO(row, await datesOf([id])),
+    notices: await noticesForExam(row.examKey, row.cycle),
+    checks: await checksForExam(row.id, row.examKey),
+  }
 }
 
 /**
@@ -277,6 +283,7 @@ export async function updateExam(
     centreName: string | null
     centreAddress: string | null
     centreCity: string | null
+    category: string | null
   }>,
   now = new Date(),
 ): Promise<ExamDTO | null | 'unknown_stage'> {
@@ -766,4 +773,9 @@ export async function addNoticeToExam(
     for (const d of dates) if (await addDate(tx, exam, d, now, notes)) added++
   })
   return added
+}
+
+/** The row itself, for those who need more than its page: the numbers to look for. */
+export async function examRowOf(userId: string, id: string): Promise<ExamRow | null> {
+  return owned(userId, id)
 }

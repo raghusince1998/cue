@@ -133,7 +133,7 @@ test('new notices after it: proposed, and a PDF read for its dates only where al
 
   const patwari = (await svc.listNotices('pending')).find((n) => n.title.startsWith('Patwari'))!
   assert.equal(patwari.title, 'Patwari 2025 : Press Note regarding Exam Schedule (Exam Dates & Time)')
-  assert.deepEqual(patwari.proposals, [{ examKey: 'rssb-patwari', cycle: '2025', kind: 'schedule', dates: [] }])
+  assert.deepEqual(patwari.proposals, [{ examKey: 'rssb-patwari', cycle: '2025', kind: 'schedule', dates: [], list: null }])
   assert.deepEqual(patwari.hints, ['2026-11-18'], 'the dates in its PDF, for the reviewer')
   const vdo = (await svc.listNotices('pending')).find((n) => n.title.startsWith('Village'))!
   assert.deepEqual(vdo.hints, [])
@@ -185,7 +185,7 @@ test('a notice with no date is a plan to read it; one added by hand works the sa
   })
   assert.equal(added.status, 201)
   assert.equal(added.body.source, 'manual')
-  assert.deepEqual(added.body.proposals, [{ examKey: 'ssc-cgl', cycle: '2026', kind: 'admit_card', dates: [] }])
+  assert.deepEqual(added.body.proposals, [{ examKey: 'ssc-cgl', cycle: '2026', kind: 'admit_card', dates: [], list: null }])
 
   const done = await call(token, 'POST', `/admin/notices/${added.body.id}/approve`, { proposals: added.body.proposals })
   assert.equal(done.body.told, 1, 'Meera tracks SSC CGL 2026')

@@ -1310,6 +1310,7 @@ export const updateExamInput = z
   .object({
     ...examFields,
     stage: shortText(40),
+    category: z.enum(['UR', 'EWS', 'OBC', 'MBC', 'SC', 'ST']).nullable(),
     centreName: shortText(200).nullable(),
     centreAddress: shortText(400).nullable(),
     centreCity: shortText(80).nullable(),
@@ -1365,8 +1366,12 @@ export interface ExamDTO {
   createdAt: string
   /** Its dates' plans, soonest first. */
   dates: ExamDateDTO[]
+  /** Reservation category, for reading cut-offs. */
+  category: string | null
   /** Official notices about it, checked and approved; on the single-exam fetch. */
-  notices?: { id: string; title: string; url: string; summary: string; reviewedAt: string }[]
+  notices?: { id: string; title: string; url: string; summary: string; reviewedAt: string; cutoffs: { category: string; marks: number }[] }[]
+  /** Result lists their roll number was looked for in, and whether it was there. */
+  checks?: { noticeId: string; title: string; url: string; found: boolean; page: number | null; means: string; round: string | null; checkedAt: string }[]
 }
 export { isExamBody, parseExamEmail, type ExamMail, type ExamMailKind } from './examMail.ts'
 export {
@@ -1380,12 +1385,35 @@ export {
   type NoticeProposal,
 } from './notices.ts'
 import { NOTICE_KIND_KEYS } from './notices.ts'
+import { CATEGORY_KEYS } from './results.ts'
+export {
+  CATEGORIES,
+  cutOffsIn,
+  findNumber,
+  normalizeNumber,
+  numbersIn,
+  type Category,
+  type CutOff,
+  type ListMeaning,
+} from './results.ts'
 
 /** One exam's part of a notice, as the reviewer leaves it. */
 export const noticeProposalInput = z.object({
   examKey: shortText(60).min(1),
   cycle: shortText(40).nullable(),
   kind: z.enum(NOTICE_KIND_KEYS),
+  list: z
+    .object({
+      means: z.enum(['shortlist', 'selected', 'result']),
+      round: shortText(40).nullable(),
+      pdfUrl: z.string().trim().url().max(600).nullable(),
+    })
+    .nullable()
+    .optional(),
+  cutoffs: z
+    .array(z.object({ category: z.enum(CATEGORY_KEYS), marks: z.number().min(0).max(1000) }))
+    .max(12)
+    .optional(),
   dates: z
     .array(
       z.object({

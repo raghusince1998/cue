@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { datesMentioned, noticeKind, noticeSummary, proposeFromNotice } from './notices.ts'
+import { datesMentioned, listIn, noticeKind, noticeSummary, proposeFromNotice } from './notices.ts'
 
 /** Notice titles as RSSB and RPSC list them. */
 
@@ -16,7 +16,7 @@ test('what kind of notice a title says it is', () => {
 
 test('the board before the title: RSSB\'s Patwari, RSSB\'s VDO', () => {
   const vdo = proposeFromNotice({ board: 'RSSB', title: 'Village Development Officer 2025 : Office Order regarding Guidelines for Scrutiny Form and DV Schedule' })!
-  assert.deepEqual(vdo, { examKey: 'rssb-vdo', cycle: '2025', kind: 'dv', dates: [] })
+  assert.deepEqual(vdo, { examKey: 'rssb-vdo', cycle: '2025', kind: 'dv', dates: [], list: { means: 'shortlist', round: 'dv', pdfUrl: null } })
   assert.equal(proposeFromNotice({ board: 'RSSB', title: 'Junior Assistant 2026 : Advertisement' })!.examKey, 'rssb-ldc')
   assert.equal(proposeFromNotice({ board: 'RSSB', title: 'Lab Assistant 2026 : Last chance of Document Verification' }), null, 'not an exam in the list')
 })
@@ -28,6 +28,7 @@ test('a row of RPSC\'s exam dates: the exam, its round and its day', () => {
     cycle: '2026',
     kind: 'schedule',
     dates: [{ step: 'exam', on: '2026-12-06', at: null, round: 'prelims', note: null }],
+    list: null,
   })
   const ends = proposeFromNotice({ board: 'RPSC', title: 'RAJ. STATE AND SUB. SERVICES COMB. COMP EXAM 2026 — Mains (End Date)', examDate: '2027-05-02' })!
   assert.deepEqual(ends.dates, [{ step: 'other', on: '2027-05-02', at: null, round: 'mains', note: 'Mains ends' }])
@@ -46,4 +47,19 @@ test('dates in a notice, as hints: still to come, once each, in order', () => {
   const NOW = new Date(2026, 9, 13)
   const text = 'fnukad 17-11-2026, 07-12-2026, 17-11-2026 ... notice dated 23-06-2026 ... 16 January 2027'
   assert.deepEqual(datesMentioned(text, NOW), ['2026-11-17', '2026-12-07', '2027-01-16'])
+})
+
+test('what being on a list means', () => {
+  assert.deepEqual(listIn('rrb-ntpc', 'result', 'CEN 05/2024: Result of CBT-1 and list of candidates shortlisted for CBT-2'), { means: 'shortlist', round: 'cbt2', pdfUrl: null })
+  assert.deepEqual(listIn('rssb-patwari', 'result', 'Patwari 2025 : Final Result'), { means: 'selected', round: null, pdfUrl: null })
+  assert.deepEqual(listIn('ssc-cgl', 'result', 'CGL 2026 Tier-I: Marks of candidates'), { means: 'result', round: null, pdfUrl: null })
+  assert.deepEqual(listIn('rssb-vdo', 'dv', 'VDO 2025 : DV Schedule'), { means: 'shortlist', round: 'dv', pdfUrl: null })
+  assert.equal(listIn('ssc-cgl', 'admit_card', 'Admit card'), null)
+})
+
+test('a list says what it is', () => {
+  const base = { examKey: 'rrb-ntpc', cycle: 'CEN 05/2024', kind: 'result' as const, dates: [] }
+  assert.equal(noticeSummary({ ...base, list: { means: 'shortlist', round: 'cbt2', pdfUrl: null } }), 'RRB NTPC CEN 05/2024: CBT 2 shortlist out')
+  assert.equal(noticeSummary({ ...base, list: { means: 'selected', round: null, pdfUrl: null } }), 'RRB NTPC CEN 05/2024: final result out')
+  assert.equal(noticeSummary({ ...base, list: { means: 'result', round: null, pdfUrl: null } }), 'RRB NTPC CEN 05/2024: result out')
 })

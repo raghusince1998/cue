@@ -11,7 +11,11 @@ import {
   noticeCounts,
   runNoticeWatch,
   sourceStatus,
+  uploadList,
 } from '../services/noticeWatch.ts'
+
+/** A result list can run to hundreds of pages. */
+const MAX_LIST_BYTES = 40 * 1024 * 1024
 
 const idParam = z.object({ id: z.string().uuid() })
 const statusQuery = z.object({ status: z.enum(['pending', 'unmatched', 'approved', 'dismissed']).default('pending') })
@@ -21,6 +25,7 @@ const statusQuery = z.object({ status: z.enum(['pending', 'unmatched', 'approved
  * Everyone else is told the routes are not there.
  */
 export async function noticeRoutes(app: FastifyInstance) {
+  app.addContentTypeParser('application/pdf', { parseAs: 'buffer', bodyLimit: MAX_LIST_BYTES }, (_req, body, done) => done(null, body))
   app.addHook('onRequest', app.authenticate)
   app.addHook('preHandler', async (req: FastifyRequest, reply: FastifyReply) => {
     if (!isAdmin(scope(req).email)) return reply.code(404).send({ error: 'not_found' })
@@ -44,6 +49,18 @@ export async function noticeRoutes(app: FastifyInstance) {
     if (done === 'not_found') return reply.code(404).send({ error: 'not_found' })
     if (done === 'already') return reply.code(409).send({ error: 'already_reviewed' })
     return done
+  })
+
+  /**
+   * A result list's PDF, handed over by the reviewer — for a board whose
+   * site no robot may read. Its roll numbers are kept with the notice; its
+   * cut-offs are read for the reviewer to check.
+   */
+  app.post('/admin/notices/:id/list', async (req, reply) => {
+    const { id } = idParam.parse(req.params)
+    if (!Buffer.isBuffer(req.body)) return reply.code(415).send({ error: 'pdf_expected' })
+    const read = await uploadList(id, new Uint8Array(req.body))
+    return read ?? reply.code(422).send({ problem: 'No roll numbers could be read from it. A scanned list cannot be read.' })
   })
 
   app.post('/admin/notices/:id/dismiss', async (req, reply) => {

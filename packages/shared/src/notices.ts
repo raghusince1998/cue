@@ -7,6 +7,7 @@
  * everyone sitting it does real harm; a proposal costs a minute to check.
  */
 import { cycleIn, dateIn, examByKey, examStage, findExam, roundIn, type ExamStep } from './exams.ts'
+import type { CutOff, ListMeaning } from './results.ts'
 
 export const NOTICE_KINDS = [
   { key: 'notification', label: 'Notification: applications open' },
@@ -35,6 +36,10 @@ export interface NoticeProposal {
   cycle: string | null
   kind: NoticeKind
   dates: NoticeDate[]
+  /** A list of roll numbers in it, and what being on it means: checked for each person's number. */
+  list?: ListMeaning | null
+  /** Cut-offs by category, as the notice gives them. */
+  cutoffs?: CutOff[]
 }
 
 const KIND_WORDS: [NoticeKind, RegExp][] = [
@@ -94,7 +99,24 @@ export function proposeFromNotice(input: { title: string; board?: string; examDa
         : { step: 'exam', on: input.examDate, at: null, round, note: null },
     )
   }
-  return { examKey, cycle: cycleIn(text, found).cycle, kind: input.examDate ? 'schedule' : noticeKind(input.title), dates }
+  const kind = input.examDate ? 'schedule' : noticeKind(input.title)
+  return { examKey, cycle: cycleIn(text, found).cycle, kind, dates, list: listIn(examKey, kind, input.title) }
+}
+
+/**
+ * Whether a notice is a list of roll numbers, and what being on it means:
+ * a final result or recommendation is selection; a shortlist, or a call to
+ * document verification, is the next round; any other result, just marks.
+ */
+export function listIn(examKey: string, kind: NoticeKind, title: string): ListMeaning | null {
+  if (kind === 'dv') {
+    const dv = examStage(examKey, 'dv') ? 'dv' : null
+    return { means: 'shortlist', round: dv, pdfUrl: null }
+  }
+  if (kind !== 'result') return null
+  if (/\bfinal\s+(?:result|selection|recommendation|merit)|\brecommend|\bselected\b/i.test(title)) return { means: 'selected', round: null, pdfUrl: null }
+  if (/\bshort[\s-]?list|\bqualified\b|\bprovisional/i.test(title)) return { means: 'shortlist', round: roundIn(examKey, title.replace(/^.*?\bfor\b/i, '')), pdfUrl: null }
+  return { means: 'result', round: null, pdfUrl: null }
 }
 
 const day = (on: string) => {
@@ -127,10 +149,18 @@ export function noticeSummary(p: NoticeProposal): string {
         return d.note ? `${d.note[0]!.toLowerCase()}${d.note.slice(1)} ${day(d.on)}` : day(d.on)
     }
   })
+  // A list says what it is: "CBT 2 shortlist out", "final result out".
+  const listRound = p.list?.round ? examStage(p.examKey, p.list.round)?.label : null
+  const listed =
+    p.list?.means === 'shortlist'
+      ? `${listRound ? `${listRound} ` : ''}shortlist out`
+      : p.list?.means === 'selected'
+        ? 'final result out'
+        : null
   const what =
     said.length > 0
       ? said.join(', ')
-      : {
+      : listed ?? {
           notification: 'applications open',
           schedule: 'exam dates announced',
           admit_card: 'admit cards out',

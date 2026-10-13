@@ -2,15 +2,18 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { createExamInput, examDateInput, examDayInput, readAdmitCard, updateExamInput } from '@cue/shared'
 import { scope } from '../auth.ts'
-import { addExamDate, createExam, deleteExam, examById, listExams, saveExamDay, updateExam } from '../services/exams.ts'
-import { pdfText } from '../services/pdfText.ts'
+import { findNumber, numbersIn } from '@cue/shared'
+import { addExamDate, createExam, deleteExam, examById, examRowOf, listExams, saveExamDay, updateExam } from '../services/exams.ts'
+import { checkKeptLists } from '../services/noticeWatch.ts'
+import { pdfPages, pdfText } from '../services/pdfText.ts'
 
-/** An admit card is a page or two; this is a ceiling, not a target. */
+/** An admit card is a page or two; a result list, hundreds. Ceilings, not targets. */
 const MAX_CARD_BYTES = 5 * 1024 * 1024
+const MAX_LIST_BYTES = 40 * 1024 * 1024
 const idParam = z.object({ id: z.string().uuid() })
 
 export async function examRoutes(app: FastifyInstance) {
-  app.addContentTypeParser('application/pdf', { parseAs: 'buffer', bodyLimit: MAX_CARD_BYTES }, (_req, body, done) => done(null, body))
+  app.addContentTypeParser('application/pdf', { parseAs: 'buffer', bodyLimit: MAX_LIST_BYTES }, (_req, body, done) => done(null, body))
   app.addHook('onRequest', app.authenticate)
 
   app.get('/exams', async (req) => listExams(scope(req).sub))
@@ -29,9 +32,16 @@ export async function examRoutes(app: FastifyInstance) {
 
   app.patch('/exams/:id', async (req, reply) => {
     const { id } = idParam.parse(req.params)
-    const row = await updateExam(scope(req).sub, id, updateExamInput.parse(req.body))
+    const body = updateExamInput.parse(req.body)
+    const row = await updateExam(scope(req).sub, id, body)
     if (row === 'unknown_stage') return reply.code(400).send({ error: 'unknown_stage' })
-    return row ?? reply.code(404).send({ error: 'not_found' })
+    if (!row) return reply.code(404).send({ error: 'not_found' })
+    // A roll number added after its result came out: looked for in the lists already published.
+    if (body.rollNo || body.registrationNo) {
+      const exam = await examRowOf(scope(req).sub, id)
+      if (exam && (await checkKeptLists(exam)) > 0) return examById(scope(req).sub, id)
+    }
+    return row
   })
 
   app.delete('/exams/:id', async (req, reply) => {
@@ -53,6 +63,7 @@ export async function examRoutes(app: FastifyInstance) {
    * for the person to check before anything is made of it.
    */
   app.post('/exams/admit-card', async (req, reply) => {
+    if (Buffer.isBuffer(req.body) && req.body.length > MAX_CARD_BYTES) return reply.code(413).send({ problem: 'That PDF is too large for an admit card.' })
     const text = Buffer.isBuffer(req.body)
       ? await pdfText(new Uint8Array(req.body), 3)
       : z.object({ text: z.string().max(20_000) }).parse(req.body).text
@@ -62,6 +73,26 @@ export async function examRoutes(app: FastifyInstance) {
     const card = readAdmitCard(text)
     if (!card) return reply.code(422).send({ problem: 'That does not read as an admit card. Type the details instead.' })
     return { card }
+  })
+
+  /**
+   * A result list the person has, looked through for their own roll (or
+   * registration) number: which page it is on, or that it is not there.
+   * Read in memory and dropped; nothing is kept but nothing is changed
+   * either — they decide what it means.
+   */
+  app.post('/exams/:id/check-list', async (req, reply) => {
+    const { id } = idParam.parse(req.params)
+    const exam = await examRowOf(scope(req).sub, id)
+    if (!exam) return reply.code(404).send({ error: 'not_found' })
+    if (!exam.rollNo && !exam.registrationNo) return reply.code(422).send({ problem: 'Add your roll number first: it is what is looked for.' })
+    if (!Buffer.isBuffer(req.body)) return reply.code(415).send({ error: 'pdf_expected' })
+    const pages = await pdfPages(new Uint8Array(req.body), 1000)
+    const sets = (pages ?? []).map((p) => new Set(numbersIn(p)))
+    if (sets.every((s) => s.size === 0)) {
+      return reply.code(422).send({ problem: 'No roll numbers could be read from that PDF. A scanned list cannot be read: search it by eye.' })
+    }
+    return { page: findNumber(sets, [exam.rollNo, exam.registrationNo]), pages: sets.length }
   })
 
   /** The day itself, from a card as checked: the plan, what to carry, and the trip if it is away. */

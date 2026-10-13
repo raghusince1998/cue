@@ -416,6 +416,8 @@ export const exams = pgTable(
     centreAddress: text('centre_address'),
     centreCity: text('centre_city'),
     notes: text('notes'),
+    /** UR, EWS, OBC, MBC, SC or ST: for reading cut-offs. */
+    category: text('category'),
     closedAt: timestamp('closed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -443,6 +445,34 @@ export const notices = pgTable(
     told: integer('told').notNull().default(0),
   },
   (t) => [uniqueIndex('notices_source_key_unique').on(t.source, t.key), index('notices_status_idx').on(t.status, t.foundAt)],
+)
+
+/** A result list's roll numbers, page by page, read once from its public PDF. */
+export const noticeLists = pgTable('notice_lists', {
+  noticeId: uuid('notice_id')
+    .primaryKey()
+    .references(() => notices.id, { onDelete: 'cascade' }),
+  pages: jsonb('pages').$type<string[][]>().notNull(),
+  numbers: integer('numbers').notNull(),
+  readAt: timestamp('read_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/** Each look for an exam's roll number in a result list. */
+export const examListChecks = pgTable(
+  'exam_list_checks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    examId: uuid('exam_id')
+      .notNull()
+      .references(() => exams.id, { onDelete: 'cascade' }),
+    noticeId: uuid('notice_id')
+      .notNull()
+      .references(() => notices.id, { onDelete: 'cascade' }),
+    found: boolean('found').notNull(),
+    page: integer('page'),
+    checkedAt: timestamp('checked_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('exam_list_checks_unique').on(t.examId, t.noticeId)],
 )
 
 /** How each watched page fared when last read. */

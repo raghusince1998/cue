@@ -5757,6 +5757,26 @@ a.link-btn:hover {
   color: var(--muted);
 }
 
+.notice-list {
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.exam-checks .is-found {
+  color: var(--good);
+  font-weight: 600;
+}
+
+.exam-checks .is-missing {
+  color: var(--muted);
+}
+
+.exam-cutoffs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 /* ---- Bills & renewals ---------------------------------------------- */
 
 .bills-stats {

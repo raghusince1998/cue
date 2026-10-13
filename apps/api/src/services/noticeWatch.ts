@@ -1,12 +1,26 @@
 import https from 'node:https'
 import { constants as cryptoConstants } from 'node:crypto'
 import { and, desc, eq, sql } from 'drizzle-orm'
-import { datesMentioned, examLabel, noticeSummary, proposeFromNotice, dateIn, type NoticeDTO, type NoticeProposal } from '@cue/shared'
+import {
+  cutOffsIn,
+  datesMentioned,
+  dateIn,
+  examLabel,
+  examStage,
+  findNumber,
+  isLaterExamStage,
+  noticeSummary,
+  numbersIn,
+  proposeFromNotice,
+  type ListMeaning,
+  type NoticeDTO,
+  type NoticeProposal,
+} from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { env } from '../env.ts'
 import { sendToUser } from '../push.ts'
-import { addNoticeToExam, examsForNotice } from './exams.ts'
-import { pdfText } from './pdfText.ts'
+import { addNoticeToExam, examsForNotice, updateExam, type ExamRow } from './exams.ts'
+import { pdfPages, pdfText } from './pdfText.ts'
 
 /**
  * Watching exam boards' public notice pages. Politely: as CueBot, by name,
@@ -303,7 +317,12 @@ export async function runNoticeWatch(
         await pause(1500)
         const file = await get(fetcher, item.url, 5 * 1024 * 1024)
         const text = file.body ? await pdfText(new Uint8Array(file.body), 3) : null
-        if (text) hints = datesMentioned(text, now)
+        if (text) {
+          hints = datesMentioned(text, now)
+          // A result's cut-offs, read for the reviewer to confirm.
+          const cutoffs = cutOffsIn(text)
+          if (cutoffs.length > 0) for (const p of proposals) if (p.kind === 'result') p.cutoffs = cutoffs
+        }
       }
       const inserted = await db
         .insert(schema.notices)
@@ -397,17 +416,96 @@ export async function dismissNotice(id: string, reviewerId: string, now = new Da
   return done.length > 0
 }
 
+// ── Result lists ─────────────────────────────────────────────────────────
+
+/** Reading a list: a public PDF, or one a person handed over, page by page. */
+export async function readList(data: Uint8Array): Promise<{ pages: string[][]; numbers: number; text: string } | null> {
+  const pages = await pdfPages(data, 1000)
+  if (!pages || pages.length === 0) return null
+  const numbers = pages.map((p) => numbersIn(p))
+  const count = numbers.reduce((s, p) => s + p.length, 0)
+  return count > 0 ? { pages: numbers, numbers: count, text: pages.slice(0, 6).join('\n') } : null
+}
+
+/** A list kept for a notice, so a roll number added later can still be looked for. */
+async function storeList(noticeId: string, list: { pages: string[][]; numbers: number }, now: Date) {
+  await db
+    .insert(schema.noticeLists)
+    .values({ noticeId, pages: list.pages, numbers: list.numbers, readAt: now })
+    .onConflictDoUpdate({ target: schema.noticeLists.noticeId, set: { pages: list.pages, numbers: list.numbers, readAt: now } })
+}
+
+/** The list a reviewer handed over: read, kept, and its cut-offs read for them to check. */
+export async function uploadList(noticeId: string, data: Uint8Array, now = new Date()) {
+  const list = await readList(data)
+  if (!list) return null
+  await storeList(noticeId, list, now)
+  return { pages: list.pages.length, numbers: list.numbers, cutoffs: cutOffsIn(list.text) }
+}
+
+/**
+ * The list for a notice: kept, or fetched from the public PDF — where
+ * robots.txt allows, and only from a public https address.
+ */
+async function listFor(noticeId: string, url: string, fetcher: Fetcher, now: Date): Promise<{ pages: string[][]; numbers: number } | { problem: string }> {
+  const [kept] = await db.select().from(schema.noticeLists).where(eq(schema.noticeLists.noticeId, noticeId))
+  if (kept) return { pages: kept.pages, numbers: kept.numbers }
+  let u: URL
+  try {
+    u = new URL(url)
+  } catch {
+    return { problem: 'The list’s address is not a web address.' }
+  }
+  if (u.protocol !== 'https:' || !u.hostname.includes('.') || /^(?:localhost|[\d.]+|\[.*\])$/.test(u.hostname)) {
+    return { problem: 'Only a public https address is fetched.' }
+  }
+  if (!(await mayRead(fetcher, url, new Map()))) return { problem: 'Its robots.txt asks robots not to read it: upload the PDF instead.' }
+  const file = await get(fetcher, url, 40 * 1024 * 1024)
+  if (!file.body) return { problem: file.status ? `It answered ${file.status}: upload the PDF instead.` : 'It did not answer: upload the PDF instead.' }
+  const list = await readList(new Uint8Array(file.body))
+  if (!list) return { problem: 'No roll numbers could be read from it — a scan, perhaps: check it by hand.' }
+  await storeList(noticeId, list, now)
+  return list
+}
+
+const mask = (n: string) => `…${n.slice(-4)}`
+
+/** Where a find leaves an exam: on to the round it is a shortlist for, or selected. */
+function stageAfter(exam: ExamRow, list: ListMeaning): string | null {
+  if (list.means === 'selected') return exam.stage === 'selected' ? null : 'selected'
+  if (list.means === 'shortlist' && list.round && isLaterExamStage(exam.examKey, list.round, exam.stage)) return list.round
+  return null
+}
+
+/** One exam looked for in one list: the look kept, the stage moved on a find. */
+async function lookIn(exam: ExamRow, noticeId: string, list: ListMeaning, sets: Set<string>[], now: Date) {
+  const page = findNumber(sets, [exam.rollNo, exam.registrationNo])
+  await db
+    .insert(schema.examListChecks)
+    .values({ examId: exam.id, noticeId, found: page !== null, page, checkedAt: now })
+    .onConflictDoUpdate({ target: [schema.examListChecks.examId, schema.examListChecks.noticeId], set: { found: page !== null, page, checkedAt: now } })
+  const stage = page !== null ? stageAfter(exam, list) : null
+  if (stage) await updateExam(exam.userId, exam.id, { stage }, now)
+  return { found: page !== null, page, stage }
+}
+
 /**
  * A notice checked and approved, as the reviewer left it: onto every open
  * exam it is about, as plans with the notice in their notes, and each person
  * told once, with where to read it. Never twice: an approved notice is done.
+ *
+ * A result list in it is looked through for each person's roll (or
+ * registration) number: found, the exam moves on and they are told so; not
+ * found, they are told that too, carefully — lists are split by region,
+ * category or post more often than not, and the notice is the word on it.
  */
 export async function approveNotice(
   id: string,
   reviewerId: string,
   proposals: NoticeProposal[],
   now = new Date(),
-): Promise<{ told: number } | 'not_found' | 'already'> {
+  fetcher: Fetcher = watchFetch,
+): Promise<{ told: number; checked: number; found: number; listNumbers: number | null; listProblem: string | null } | 'not_found' | 'already'> {
   const [row] = await db.select().from(schema.notices).where(eq(schema.notices.id, id))
   if (!row) return 'not_found'
   if (row.status === 'approved' || row.status === 'dismissed') return 'already'
@@ -420,22 +518,106 @@ export async function approveNotice(
   if (claimed.length === 0) return 'already'
 
   const told = new Set<string>()
+  let checked = 0
+  let found = 0
+  let listNumbers: number | null = null
+  let listProblem: string | null = null
   for (const p of proposals) {
     const summary = noticeSummary(p)
-    for (const exam of await examsForNotice(p.examKey, p.cycle)) {
-      const added = await addNoticeToExam(exam, { url: row.url, kind: p.kind, summary, dates: p.dates }, now)
-      if (added === 0) continue
+    const exams = await examsForNotice(p.examKey, p.cycle)
+    // The list, read once, if anyone tracking it has a number to look for.
+    let sets: Set<string>[] | null = null
+    if (p.list && exams.some((x) => x.rollNo || x.registrationNo)) {
+      const got = await listFor(id, p.list.pdfUrl ?? row.url, fetcher, now)
+      if ('pages' in got) {
+        sets = got.pages.map((page) => new Set(page))
+        listNumbers = got.numbers
+      } else listProblem = got.problem
+    }
+    for (const exam of exams) {
+      const number = exam.rollNo ?? exam.registrationNo
+      let body: string | null = null
+      if (sets && p.list && number) {
+        checked++
+        const look = await lookIn(exam, id, p.list, sets, now)
+        const roundLabel = p.list.round ? examStage(exam.examKey, p.list.round)?.label : null
+        if (look.found) {
+          found++
+          body =
+            p.list.means === 'selected'
+              ? `${mask(number)} is in the list of those selected. Congratulations!`
+              : p.list.means === 'shortlist'
+                ? `${mask(number)} is in the list${roundLabel ? ` for ${roundLabel}` : ''}. On to the next round!`
+                : `${mask(number)} is in the result list. Open the notice for the marks.`
+        } else {
+          body = `${mask(number)} was not found in this list. Lists are often split by region, category or post, so check the notice to be sure.`
+        }
+        // Dates still go on; a "go and look" plan is not needed once it has been looked for.
+        if (p.dates.length > 0) await addNoticeToExam(exam, { url: row.url, kind: p.kind, summary, dates: p.dates }, now)
+      } else {
+        const added = await addNoticeToExam(exam, { url: row.url, kind: p.kind, summary, dates: p.dates }, now)
+        if (added > 0) body = `${summary.split(': ').slice(1).join(': ')}. From the official notice — tap to see it.`
+      }
+      if (!body) continue
       told.add(exam.userId)
-      await sendToUser(exam.userId, {
-        title: examLabel(exam),
-        body: `${summary.split(': ').slice(1).join(': ')}. From the official notice — tap to see it.`,
-        tag: `notice-${id}-${exam.id}`,
-        url: `/exams?exam=${exam.id}`,
-      }).catch(() => 0)
+      await sendToUser(exam.userId, { title: examLabel(exam), body, tag: `notice-${id}-${exam.id}`, url: `/exams?exam=${exam.id}` }).catch(() => 0)
     }
   }
   await db.update(schema.notices).set({ told: told.size }).where(eq(schema.notices.id, id))
-  return { told: told.size }
+  return { told: told.size, checked, found, listNumbers, listProblem }
+}
+
+/**
+ * An exam's number looked for in the lists already kept for it — a roll
+ * number added after its result came out. Nobody is notified: they are in
+ * the app, adding it, and see the answer there.
+ */
+export async function checkKeptLists(exam: ExamRow, now = new Date()): Promise<number> {
+  if (!exam.examKey || !(exam.rollNo || exam.registrationNo)) return 0
+  const rows = await db
+    .select({ id: schema.notices.id, proposals: schema.notices.proposals, pages: schema.noticeLists.pages })
+    .from(schema.notices)
+    .innerJoin(schema.noticeLists, eq(schema.noticeLists.noticeId, schema.notices.id))
+    .where(and(eq(schema.notices.status, 'approved'), sql`${schema.notices.proposals} @> ${JSON.stringify([{ examKey: exam.examKey }])}::jsonb`))
+  let n = 0
+  for (const r of rows) {
+    const p = r.proposals.find((x) => x.examKey === exam.examKey && x.list && (!x.cycle || !exam.cycle || x.cycle === exam.cycle))
+    if (!p?.list) continue
+    await lookIn(exam, r.id, p.list, r.pages.map((page) => new Set(page)), now)
+    n++
+  }
+  return n
+}
+
+/** The result lists an exam's number was looked for in, newest first. */
+export async function checksForExam(examId: string, examKey: string | null) {
+  const rows = await db
+    .select({
+      noticeId: schema.examListChecks.noticeId,
+      found: schema.examListChecks.found,
+      page: schema.examListChecks.page,
+      checkedAt: schema.examListChecks.checkedAt,
+      title: schema.notices.title,
+      url: schema.notices.url,
+      proposals: schema.notices.proposals,
+    })
+    .from(schema.examListChecks)
+    .innerJoin(schema.notices, eq(schema.notices.id, schema.examListChecks.noticeId))
+    .where(eq(schema.examListChecks.examId, examId))
+    .orderBy(desc(schema.examListChecks.checkedAt))
+  return rows.map((r) => {
+    const list = r.proposals.find((p) => p.examKey === examKey)?.list
+    return {
+      noticeId: r.noticeId,
+      title: r.title,
+      url: r.url,
+      found: r.found,
+      page: r.page,
+      means: list?.means ?? 'result',
+      round: list?.round ?? null,
+      checkedAt: r.checkedAt.toISOString(),
+    }
+  })
 }
 
 /** The approved notices about one exam, newest first, for its page. */
@@ -450,7 +632,14 @@ export async function noticesForExam(examKey: string | null, cycle: string | nul
   return rows
     .map((r) => ({ row: r, p: r.proposals.find((p) => p.examKey === examKey && (!p.cycle || !cycle || p.cycle === cycle)) }))
     .filter((x): x is { row: typeof x.row; p: NoticeProposal } => Boolean(x.p))
-    .map(({ row, p }) => ({ id: row.id, title: row.title, url: row.url, summary: noticeSummary(p), reviewedAt: row.reviewedAt!.toISOString() }))
+    .map(({ row, p }) => ({
+      id: row.id,
+      title: row.title,
+      url: row.url,
+      summary: noticeSummary(p),
+      reviewedAt: row.reviewedAt!.toISOString(),
+      cutoffs: p.cutoffs ?? [],
+    }))
 }
 
 /** Twice a day, a little after start. Off with NOTICE_WATCH=off. */

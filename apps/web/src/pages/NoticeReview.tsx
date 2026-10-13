@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import {
+  CATEGORIES,
   EXAMS,
   EXAM_STEPS,
   NOTICE_KINDS,
   examStages,
   noticeSummary,
+  type CutOff,
   type ExamStep,
+  type ListMeaning,
   type NoticeDTO,
   type NoticeDate,
   type NoticeProposal,
 } from '@cue/shared'
-import { api } from '../lib/api.ts'
+import { ApiError, api, apiSendFile } from '../lib/api.ts'
 import { dayLabel, formatDateTime } from '../lib/time.ts'
 
 type Status = 'pending' | 'unmatched' | 'approved' | 'dismissed'
@@ -234,7 +237,26 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDTO; onDone: () => void 
   const [proposals, setProposals] = useState<NoticeProposal[]>(notice.proposals)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<string | null>(null)
+  const [listRead, setListRead] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  /** The list's PDF, handed over: read for its numbers, its cut-offs put in for checking. */
+  async function uploadList(file: File) {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await apiSendFile<{ pages: number; numbers: number; cutoffs: CutOff[] }>(`/admin/notices/${notice.id}/list`, file)
+      setListRead(`Read ${res.pages} page${res.pages === 1 ? '' : 's'}: ${res.numbers.toLocaleString('en-IN')} numbers. It is used instead of fetching.`)
+      if (res.cutoffs.length > 0) {
+        setProposals((list) => list.map((p) => (p.kind === 'result' && !(p.cutoffs ?? []).length ? { ...p, cutoffs: res.cutoffs } : p)))
+      }
+    } catch (err) {
+      const problem = err instanceof ApiError ? (err.data as { problem?: string } | null)?.problem : null
+      setError(problem ?? (err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const change = (i: number, p: Partial<NoticeProposal>) => setProposals((list) => list.map((x, k) => (k === i ? { ...x, ...p } : x)))
   const changeDate = (i: number, j: number, d: Partial<NoticeDate>) =>
@@ -248,8 +270,21 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDTO; onDone: () => void 
     setBusy(true)
     setError(null)
     try {
-      const res = await api<{ told: number }>(`/admin/notices/${notice.id}/approve`, { method: 'POST', body: { proposals } })
-      setResult(res.told === 0 ? 'Approved. Nobody tracks that exam yet; it is on its page for those who will.' : `Approved: ${res.told} ${res.told === 1 ? 'person' : 'people'} told.`)
+      const res = await api<{ told: number; checked: number; found: number; listProblem: string | null }>(`/admin/notices/${notice.id}/approve`, {
+        method: 'POST',
+        body: { proposals },
+      })
+      setResult(
+        [
+          res.told === 0
+            ? 'Approved. Nobody tracks that exam yet; it is on its page for those who will.'
+            : `Approved: ${res.told} ${res.told === 1 ? 'person' : 'people'} told.`,
+          res.checked > 0 ? `${res.checked} roll number${res.checked === 1 ? '' : 's'} looked for; ${res.found} found.` : null,
+          res.listProblem ? `The list could not be read: ${res.listProblem}` : null,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      )
       setTimeout(onDone, 1500)
     } catch (err) {
       setError((err as Error).message)
@@ -373,6 +408,13 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDTO; onDone: () => void 
                     Not about this exam
                   </button>
                 </div>
+                <ListEditor
+                  proposal={p}
+                  rounds={rounds}
+                  onChange={(next) => change(i, next)}
+                  onUpload={(file) => void uploadList(file)}
+                  busy={busy}
+                />
                 {p.examKey && <p className="small notice-preview">They will be told: {noticeSummary(p)}</p>}
               </div>
             )
@@ -403,8 +445,117 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDTO; onDone: () => void 
           </ul>
         )
       )}
+      {listRead && <p className="small muted">{listRead}</p>}
       {result && <p className="small notice-preview">{result}</p>}
       {error && <p className="error small">{error}</p>}
     </article>
+  )
+}
+
+const MEANINGS: { key: ListMeaning['means'] | ''; label: string }[] = [
+  { key: '', label: 'Not a list of roll numbers' },
+  { key: 'shortlist', label: 'Shortlist for the next round' },
+  { key: 'selected', label: 'Final selection' },
+  { key: 'result', label: 'Results or marks only' },
+]
+
+/**
+ * For a result: whether it is a list of roll numbers and what being on it
+ * means — each person's number is looked for in it on approval — where the
+ * list is, and the cut-offs by category.
+ */
+function ListEditor({
+  proposal: p,
+  rounds,
+  onChange,
+  onUpload,
+  busy,
+}: {
+  proposal: NoticeProposal
+  rounds: { key: string; label: string }[]
+  onChange: (p: Partial<NoticeProposal>) => void
+  onUpload: (file: File) => void
+  busy: boolean
+}) {
+  if (p.kind !== 'result' && p.kind !== 'dv' && !p.list) return null
+  const list = p.list ?? null
+  const cutoffs = p.cutoffs ?? []
+  const setList = (next: Partial<ListMeaning> | null) =>
+    onChange({ list: next === null ? null : { means: 'result', round: null, pdfUrl: null, ...list, ...next } })
+  const setCutoff = (k: number, next: Partial<CutOff>) => onChange({ cutoffs: cutoffs.map((x, j) => (j === k ? { ...x, ...next } : x)) })
+  return (
+    <div className="stack tight notice-list">
+      <div className="tracker-fields">
+        <label>
+          The list in it
+          <select value={list?.means ?? ''} onChange={(e) => setList(e.target.value ? { means: e.target.value as ListMeaning['means'] } : null)}>
+            {MEANINGS.map((m) => (
+              <option key={m.key} value={m.key}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {list?.means === 'shortlist' && (
+          <label>
+            Shortlisted for
+            <select value={list.round ?? ''} onChange={(e) => setList({ round: e.target.value || null })}>
+              <option value="">— which round?</option>
+              {rounds.map((r) => (
+                <option key={r.key} value={r.key}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {list && (
+          <label className="tracker-wide">
+            The list&rsquo;s PDF, if it is not the notice itself
+            <input type="url" value={list.pdfUrl ?? ''} onChange={(e) => setList({ pdfUrl: e.target.value.trim() || null })} placeholder="https://… the list" />
+          </label>
+        )}
+      </div>
+      {list && (
+        <label className="ghost exam-file">
+          Or upload the list&rsquo;s PDF
+          <input
+            type="file"
+            accept="application/pdf"
+            disabled={busy}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) onUpload(file)
+              e.target.value = ''
+            }}
+          />
+        </label>
+      )}
+      {p.kind === 'result' && (
+        <div className="stack tight">
+          <span className="muted small">Cut-offs, as the notice gives them</span>
+          {cutoffs.map((c, k) => (
+            <div key={k} className="exam-date-add">
+              <select value={c.category} onChange={(e) => setCutoff(k, { category: e.target.value as CutOff['category'] })}>
+                {CATEGORIES.map((cat) => (
+                  <option key={cat.key} value={cat.key}>
+                    {cat.label}
+                  </option>
+                ))}
+              </select>
+              <input type="number" step="0.01" value={c.marks} onChange={(e) => setCutoff(k, { marks: Number(e.target.value) })} aria-label="Marks" />
+              <button className="link small" onClick={() => onChange({ cutoffs: cutoffs.filter((_, j) => j !== k) })}>
+                Remove
+              </button>
+            </div>
+          ))}
+          <div className="row">
+            <button className="link small" onClick={() => onChange({ cutoffs: [...cutoffs, { category: 'UR', marks: 0 }] })}>
+              + A cut-off
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

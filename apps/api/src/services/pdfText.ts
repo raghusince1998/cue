@@ -70,3 +70,33 @@ export async function pdfText(data: Uint8Array, maxPages = 4): Promise<string | 
     await task.destroy()
   }
 }
+
+/**
+ * Each page's words, as plain text and in page order: for a result list,
+ * where what matters is which numbers are on which page, not how a table is
+ * laid out. Hundreds of pages, so read lightly. Null for what cannot be read.
+ */
+export async function pdfPages(data: Uint8Array, maxPages = 1000): Promise<string[] | null> {
+  const task = getDocument({ data: new Uint8Array(data), disableFontFace: true, useSystemFonts: false, verbosity: 0 })
+  let doc: Awaited<typeof task.promise>
+  try {
+    doc = await task.promise
+  } catch {
+    await task.destroy()
+    return null
+  }
+  try {
+    const pages: string[] = []
+    for (let n = 1; n <= Math.min(doc.numPages, maxPages); n++) {
+      const page = await doc.getPage(n)
+      const content = await page.getTextContent()
+      pages.push(content.items.map((i) => ('str' in i ? i.str : '')).join(' '))
+      page.cleanup()
+    }
+    return pages
+  } catch {
+    return null
+  } finally {
+    await task.destroy()
+  }
+}
