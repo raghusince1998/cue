@@ -2,7 +2,7 @@ import { and, eq, ne, sql } from 'drizzle-orm'
 import { type ParsedBooking } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { sendToUser } from '../push.ts'
-import { scheduleFirstReminder } from './reminders.ts'
+import { cancelPendingReminders, scheduleFirstReminder } from './reminders.ts'
 import { tripForBooking, wishesFor } from './tripAssembly.ts'
 
 /**
@@ -34,10 +34,10 @@ export function webCheckInAt(dueAt: Date, now = new Date()): Date | null {
 }
 
 /** Whether this booking is already a plan: the same reference, or the same thing at the same time. */
-async function known(userId: string, b: ParsedBooking): Promise<boolean> {
+async function known(userId: string, b: ParsedBooking) {
   const c = schema.commitments
   const [row] = await db
-    .select({ id: c.id })
+    .select({ id: c.id, title: c.title, notes: c.notes, booking: c.booking, dueAt: c.dueAt, tripId: c.tripId, status: c.status, placeLabel: c.placeLabel, orgId: c.orgId })
     .from(c)
     .where(
       and(
@@ -47,7 +47,71 @@ async function known(userId: string, b: ParsedBooking): Promise<boolean> {
       ),
     )
     .limit(1)
-  return Boolean(row)
+  return row ?? null
+}
+
+/**
+ * A booking saved before, read again by a better reader: put right in place.
+ * "Train" becomes "Train 12951 Mumbai Rajdhani · Mumbai Central → New
+ * Delhi", the notes gain seats and arrival, and it joins its trip. Its time
+ * moves only when it was one of those read badly (no route in its title) —
+ * a time the person set themselves is never overwritten. Null when there was
+ * nothing to improve, or it is already done with.
+ */
+async function improve(
+  existing: NonNullable<Awaited<ReturnType<typeof known>>>,
+  orgId: string,
+  userId: string,
+  b: ParsedBooking,
+  city: string | null,
+  now: Date,
+): Promise<{ id: string; title: string } | null> {
+  if (existing.status !== 'pending') return null
+  const readBadly = !existing.title.includes('→')
+  const title = readBadly && b.title.includes('→') ? b.title : existing.title
+  const notes = b.notes && (!existing.notes || b.notes.length > existing.notes.length) ? b.notes : existing.notes
+  const old = existing.booking
+  const booking = {
+    type: b.type,
+    ref: b.ref ?? old?.ref ?? null,
+    from: b.from ?? old?.from ?? null,
+    city: city ?? old?.city ?? null,
+    provider: b.provider ?? old?.provider ?? null,
+    remindBeforeMinutes: b.remindBeforeMinutes,
+    fromCity: b.fromCity ?? old?.fromCity ?? null,
+    endsOn: b.endsOn ?? old?.endsOn ?? null,
+  }
+  const moveTo = readBadly && b.timeKnown && b.startsAt.getTime() !== existing.dueAt.getTime() && b.startsAt > now ? b.startsAt : null
+  const sameBooking = (Object.keys(booking) as (keyof typeof booking)[]).every((k) => booking[k] === (old?.[k] ?? null))
+  // Another email about the same booking with nothing new in it is not news.
+  if (title === existing.title && notes === existing.notes && !moveTo && sameBooking) return null
+
+  await db.transaction(async (tx) => {
+    // One read badly never found its trip: it can now.
+    const trip =
+      existing.tripId || !readBadly
+        ? null
+        : await tripForBooking(orgId, userId, { type: b.type, startsAt: moveTo ?? existing.dueAt, endsOn: b.endsOn, city, fromCity: b.fromCity ?? null }, tx)
+    await tx
+      .update(schema.commitments)
+      .set({
+        title,
+        notes,
+        booking,
+        placeLabel: existing.placeLabel ?? b.from,
+        ...(trip ? { tripId: trip.tripId } : {}),
+        ...(moveTo ? { dueAt: moveTo, escalationCount: 0 } : {}),
+      })
+      .where(eq(schema.commitments.id, existing.id))
+    if (moveTo) {
+      // Reminders for the wrong time go; the right ones come.
+      await cancelPendingReminders(existing.id, tx)
+      for (const at of bookingReminderTimes(moveTo, b.type, b.remindBeforeMinutes, now)) {
+        await scheduleFirstReminder({ orgId, commitmentId: existing.id, fireAt: at }, tx)
+      }
+    }
+  })
+  return { id: existing.id, title }
 }
 
 /**
@@ -63,7 +127,8 @@ export async function saveFoundBooking(
   now = new Date(),
 ): Promise<{ id: string; title: string } | null> {
   if (b.startsAt.getTime() < now.getTime()) return null
-  if (await known(userId, b)) return null
+  const existing = await known(userId, b)
+  if (existing) return improve(existing, orgId, userId, b, city, now)
 
   const saved = await db.transaction(async (tx) => {
     // The trip it is part of: the way out, the stay and the way home, as one.

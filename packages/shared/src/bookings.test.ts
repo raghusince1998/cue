@@ -17,7 +17,7 @@ test('IRCTC: PNR, train, date, class, route, departure, seat', () => {
   assert.equal(local(b.startsAt), '2026-10-15 17:00')
   assert.equal(b.city, 'Delhi')
   assert.equal(b.ref, '2345678901')
-  assert.equal(b.notes, 'PNR 2345678901 · 3A · B2 45')
+  assert.equal(b.notes, 'PNR 2345678901 · 3A · B2 45, B2 46', 'both passengers')
   assert.equal(b.remindBeforeMinutes, 120)
 
   const wl = parseBooking('PNR:4512345678 TRN:12627 DOJ:22-10-2026 SL SBC-NDLS DP:20:00 WL 12 -IRCTC', now)!
@@ -79,10 +79,10 @@ test('the same bookings as emails lay them out', () => {
     now,
   )!
   assert.equal(ers.type, 'train')
-  assert.equal(ers.title, 'Train 12951 · Mumbai Central → New Delhi')
+  assert.equal(ers.title, 'Train 12951 Mumbai Rajdhani · Mumbai Central → New Delhi')
   assert.equal(local(ers.startsAt), '2026-10-17 17:00')
   assert.equal(ers.city, 'Delhi')
-  assert.equal(ers.notes, 'PNR 2345678901 · 3A · B2 45')
+  assert.equal(ers.notes, 'PNR 2345678901 · 3A · B2 45 Lower · Arrives New Delhi 8:32 am, Sun, 18 Oct')
 
   const itinerary = parseBooking(
     `Booking Confirmed | IndiGo. Your PNR is X7K2LM. Bengaluru (BLR) → Delhi (DEL) Flight 6E 2134 Sun, 18 Oct 2026 Departure 06:15 Terminal 1 Arrival 09:05 Terminal 2. Web check-in opens 48 hours before departure.`,

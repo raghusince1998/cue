@@ -185,82 +185,309 @@ const at = (day: Date, t: { h: number; m: number } | null, fallbackHour: number)
 
 const provider = (text: string) => PLATFORMS.find(([re]) => re.test(text))?.[1] ?? null
 
+// ------------------------------------------------- reading a ticket's parts
+
+/** "MUMBAI CENTRAL" → "Mumbai Central", keeping the abbreviations stations use. */
+function titleCase(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\b([a-z])/g, (c) => c.toUpperCase())
+    .replace(/\b(Ksr|Smvt|Csmt|Ltt|Sf|Ac)\b/g, (w) => w.toUpperCase())
+}
+
+/** Quotas, classes and statuses written the way stations are: "GENERAL (GN)", "SLEEPER CLASS (SL)". */
+const NOT_A_PLACE =
+  /\b(?:class|tier|quota|general|tatkal|premium|ladies|senior|chair car|sleeper|first ac|second ac|third ac|economy|business|executive|berth|divyaang|passenger|adult|child|infant|reservation|slip|ticket|transaction|booking|amount|fare|charges?|fees?|insurance|refund)\b/i
+const NOT_A_PLACE_CODE = new Set(['GN', 'TQ', 'PT', 'LD', 'SS', 'HP', 'DF', 'PH', 'YU', 'SL', 'CC', 'EC', 'EA', 'FC', 'EV', 'VS', 'CNF', 'RAC', 'WL', 'INR', 'GST', 'PNR'])
+/** Words that lead into a place without being part of its name. */
+const LEAD_IN = /^(?:(?:from|to|at|via|and|the|in|for|departure|arrival|boarding|booked|origin|destination|departs?|arrives?|depart(?:ing)?|arriv(?:ing)?|station)\s+)+/i
+
+interface Place {
+  /** As the message writes it: "MUMBAI CENTRAL", "Pune Jn". */
+  name: string
+  code: string
+  at: number
+}
+
+/** Every "NAME (CODE)" in order: how tickets and itineraries name stations and airports. */
+function namedPlaces(text: string): Place[] {
+  const out: Place[] = []
+  for (const m of text.matchAll(/([A-Za-z][A-Za-z.']*(?:[ -][A-Za-z][A-Za-z.']*){0,4})\s*\(([A-Z]{2,5})\)/g)) {
+    const name = m[1]!.replace(LEAD_IN, '').trim()
+    const code = m[2]!
+    if (!name || NOT_A_PLACE.test(name) || NOT_A_PLACE_CODE.has(code)) continue
+    // Where the name itself starts, so the label just before it can be read.
+    out.push({ name, code, at: m.index! + m[1]!.indexOf(name) })
+  }
+  return out
+}
+
+/** The label a place sits under, if any: "Booked From: …", "Boarding At: …", "To: …". */
+function labelOf(text: string, place: Place): 'from' | 'boarding' | 'to' | null {
+  const before = text.slice(Math.max(0, place.at - 30), place.at)
+  if (/\bboarding(?:\s+(?:at|station|point))?\s*[:|-]?\s*$/i.test(before)) return 'boarding'
+  if (/\b(?:booked\s+from|from|source|origin)\s*[:|-]?\s*$/i.test(before)) return 'from'
+  if (/\b(?:to|upto|destination|reservation\s+upto)\s*[:|-]?\s*$/i.test(before)) return 'to'
+  return null
+}
+
+/** Where a journey starts and ends, and where it is boarded when that differs. */
+function routeOf(text: string, isKnown: (code: string) => boolean): { from: Place | null; to: Place | null; boarding: Place | null } {
+  const places = namedPlaces(text).filter((p) => isKnown(p.code) || p.name.length >= 3)
+  const labelled = (which: 'from' | 'boarding' | 'to') => places.find((p) => labelOf(text, p) === which) ?? null
+  const unique = places.filter((p, i) => places.findIndex((q) => q.code === p.code) === i)
+  const from = labelled('from') ?? unique[0] ?? null
+  const to = labelled('to') ?? (unique.length >= 2 ? unique[unique.length - 1]! : null)
+  const boarding = labelled('boarding')
+  return {
+    from,
+    to: to && from && to.code === from.code ? null : to,
+    boarding: boarding && from && boarding.code !== from.code ? boarding : null,
+  }
+}
+
+/** The date and the time written after a label, on its own line: "Departure* 17:00 17-Oct-2026". */
+function afterLabel(text: string, label: RegExp, now: Date): { day: Date | null; time: { h: number; m: number } | null } | null {
+  const m = label.exec(text)
+  if (!m) return null
+  const line = text.slice(m.index + m[0].length).split('\n')[0]!.slice(0, 90)
+  const day = datesIn(line, now)[0]?.day ?? null
+  const time = timeIn(line)
+  return day || time ? { day, time } : null
+}
+
+/** The date and time written just after a place, before the next place begins. */
+function afterPlace(text: string, place: Place, next: Place | null, now: Date) {
+  const end = next && next.at > place.at ? next.at : place.at + 120
+  const span = text.slice(place.at, Math.min(end, place.at + 120))
+  return { day: datesIn(span, now)[0]?.day ?? null, time: timeIn(span) }
+}
+
+/** The clock time nearest a point in the text, on either side: "07:00, BLR" and "BLR 07:00" alike. */
+function timeNear(text: string, index: number): { h: number; m: number } | null {
+  const from = Math.max(0, index - 40)
+  const window = text.slice(from, index + 100)
+  let best: { t: { h: number; m: number }; d: number } | null = null
+  for (const m of window.matchAll(/\b(\d{1,2})[:.](\d{2})\s*(am|pm|hrs)?\b/gi)) {
+    let h = Number(m[1])
+    const min = Number(m[2])
+    if (m[3]?.toLowerCase() === 'pm' && h < 12) h += 12
+    if (m[3]?.toLowerCase() === 'am' && h === 12) h = 0
+    if (h > 23 || min > 59) continue
+    const d = Math.abs(from + m.index! - index)
+    if (!best || d < best.d) best = { t: { h, m: min }, d }
+  }
+  return best?.t ?? null
+}
+
+/** A date that is not when it was booked: "Booking Date: 12-Oct-2026" is not the journey. */
+function journeyDay(text: string, now: Date): Date | null {
+  const dates = datesIn(text, now)
+  return (
+    dates.find((d) => !/\b(?:booking date|booked on|booking time|transaction|issued on|invoice date|order date)\b[^\n]{0,25}$/i.test(text.slice(Math.max(0, d.at - 40), d.at)))
+      ?.day ?? null
+  )
+}
+
+const clockLabelOf = (t: { h: number; m: number }) =>
+  `${t.h % 12 === 0 ? 12 : t.h % 12}${t.m ? `:${String(t.m).padStart(2, '0')}` : ''} ${t.h < 12 ? 'am' : 'pm'}`
+const dayLabelOf = (d: Date) => d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+
+// ------------------------------------------------------------------- trains
+
+const TRAIN_KIND =
+  'Express|Exp|Mail|Rajdhani|Shatabdi|Duronto|SF|Superfast|Vande Bharat|Garib Rath|Humsafar|Tejas|Passenger|Special|Spl|Intercity|Jan Shatabdi|Sampark Kranti|Antyodaya|Double Decker|Link|Memu|Demu'
+
+/** The train's number and its name: "12951/MUMBAI RAJDHANI", "12779 Goa Express", "TRN:12951". */
+function trainOf(text: string): { number: string | null; name: string | null } {
+  const named = (raw: string) =>
+    titleCase(raw.trim())
+      .replace(/\bExp\b\.?/, 'Express')
+      .replace(/\bSpl\b\.?/, 'Special')
+  // The name ends where the next field begins: a line break, a bar, or the
+  // next label on the same line ("… RAJDHANI Class : AC 3 TIER").
+  let m = /\b(\d{5})\s*\/\s*([A-Z][A-Z0-9 .'-]{2,40}?)(?=\s*(?:\||\n|,|$)|\s{2,}|\s+(?:AC|SLEEPER|CLASS|Class|SECOND|FIRST|THIRD|Quota|QUOTA|From|FROM|Date|DOJ)\b)/.exec(text)
+  if (m) return { number: m[1]!, name: named(m[2]!) }
+  m = new RegExp(String.raw`\b(\d{5})\s+((?:[A-Za-z][A-Za-z.]*\s+){0,4}(?:${TRAIN_KIND}))\b`, 'i').exec(text)
+  if (m) return { number: m[1]!, name: named(m[2]!) }
+  m = /\b(?:TRN|TRAIN)\s*(?:no\.?|number|#)?\s*[:-]?\s*(\d{5})\b/i.exec(text) ?? /\btrain\b[^\d\n]{0,20}?(\d{5})\b/i.exec(text)
+  return { number: m?.[1] ?? null, name: null }
+}
+
+const CLASSES = '1A|2A|3A|3E|SL|CC|EC|2S|FC|EA|EV'
+
+/** Where everyone is sitting, or how far down the waiting list they are. */
+function seatsOf(text: string): { seats: string[]; waiting: string | null } {
+  const seats: string[] = []
+  let waiting: string | null = null
+  const STATUS = /\b(CNF|RAC|GNWL|RLWL|PQWL|TQWL|RSWL|CKWL|WL)\s*\/?\s*(?:([A-Z]{1,2}\d{1,2})\s*\/\s*)?(\d{1,3})(?:\s*\/\s*(SIDE LOWER|SIDE UPPER|LOWER|MIDDLE|UPPER|WINDOW SIDE|WINDOW|AISLE|NO CHOICE))?/gi
+  // One passenger to a line; the last status on it is the current one. A
+  // ticket laid out as labels says which: only "Current Status" counts.
+  const lines = text.split('\n')
+  const current = lines.filter((l) => /\bcurrent status\b/i.test(l))
+  for (const line of current.length > 0 ? current : lines) {
+    const found = [...line.matchAll(STATUS)]
+    const now = found[found.length - 1]
+    if (!now) continue
+    const status = now[1]!.toUpperCase()
+    if (status === 'CNF' && now[2]) seats.push([now[2], now[3], now[4] ? titleCase(now[4]) : null].filter(Boolean).join(' '))
+    else if (status !== 'CNF') waiting ??= `${status} ${now[3]}`
+  }
+  if (seats.length === 0 && !waiting) {
+    // A message: "B2 45,B2 46".
+    for (const m of text.matchAll(/\b((?:[ABHS]|CC|EC|C|D|E|M|GS)\d{1,2})[\s,/-]+(\d{1,3})\b/g)) seats.push(`${m[1]} ${m[2]}`)
+  }
+  return { seats: [...new Set(seats)], waiting }
+}
+
+function stationName(p: Place): string {
+  return STATIONS[p.code]?.[0] ?? titleCase(p.name)
+}
+function stationCity(p: Place): string {
+  return STATIONS[p.code]?.[1] ?? cityIn(p.name) ?? titleCase(p.name.replace(/\b(?:jn|junction|central|cantt|terminus|city|road|station)\b\.?/gi, '').trim()) ?? p.code
+}
+
 function train(text: string, now: Date): ParsedBooking | null {
-  const pnr = /\bPNR\s*(?:no\.?|number)?\s*[:-]?\s*(\d{10})\b/i.exec(text)?.[1] ?? null
-  // "TRN:12951" in a message, "Train No./Name : 12951/MUMBAI RAJDHANI" in the e-ticket.
-  const trn =
-    /\b(?:TRN|TRAIN)\s*(?:no\.?|number)?\s*[:-]?\s*(\d{5})\b/i.exec(text)?.[1] ?? /\btrain\b[^\d]{0,20}?(\d{5})\b/i.exec(text)?.[1] ?? null
-  if (!pnr || (!trn && !/\b(?:irctc|doj|train)\b/i.test(text))) return null
-  const doj =
-    /\bDOJ\s*[:-]?\s*([^,;]+)/i.exec(text)?.[1] ?? /\b(?:date of journey|journey date)\s*[:-]?\s*([^,;]+)/i.exec(text)?.[1] ?? text
-  const date = datesIn(doj, now)[0] ?? datesIn(text, now)[0]
-  if (!date) return null
-  // "From : MUMBAI CENTRAL (MMCT) … To : NEW DELHI (NDLS)" in the e-ticket, "MMCT-NDLS" in a message.
-  const route =
-    /\bfrom\b[\s:]*[^()]{0,40}\(([A-Z]{2,5})\)[\s\S]{0,200}?\bto\b[\s:]*[^()]{0,40}\(([A-Z]{2,5})\)/i.exec(text) ??
-    /\b([A-Z]{1,5})\s*(?:-|to|→)\s*([A-Z]{1,5})\b/.exec(text.replace(/\bPNR\b|\bTRN\b|\bDOJ\b|\bDP\b/g, ' '))
-  const fromCode = route?.[1] ?? null
-  const toCode = route?.[2] ?? null
-  const from = fromCode ? (STATIONS[fromCode]?.[0] ?? fromCode) : null
-  const to = toCode ? (STATIONS[toCode]?.[0] ?? toCode) : null
-  const time = timeIn(text, /\b(?:DP|DEP|Dept?|Departure|Departs?)\b/)
-  const cls = /\b(1A|2A|3A|3E|SL|CC|EC|2S|FC|EA)\b/.exec(text)?.[1] ?? null
-  const seat = /\b((?:[ABHS]|CC|EC|C|D|E|M|GS)\d{1,2})[\s,/-]+(\d{1,3})\b/.exec(text)
-  const wl = /\b((?:GN|PQ|RL|TQ|CK)?WL|RAC|RLWL|PQWL)\s*[:/-]?\s*(\d{1,3})\b/i.exec(text)
+  const pnr = /\bPNR\b[^\d\n]{0,30}?(\d{10})\b/i.exec(text)?.[1] ?? /\bPNR\b[\s\S]{0,60}?\b(\d{10})\b/i.exec(text)?.[1] ?? null
+  const { number, name } = trainOf(text)
+  if (!pnr || (!number && !/\b(?:irctc|doj|train|rail)\b/i.test(text))) return null
+
+  let { from, to, boarding } = routeOf(text, (code) => Boolean(STATIONS[code]))
+  // Named in the text, "MUMBAI CENTRAL (MMCT)": what follows a name is its time.
+  const named = Boolean(from && to)
+  if (!from || !to) {
+    // A message: "MMCT-NDLS".
+    const codes = /\b([A-Z]{2,5})\s*(?:-|to|→)\s*([A-Z]{2,5})\b/.exec(text.replace(/\bPNR\b|\bTRN\b|\bDOJ\b|\bDP\b|\bIRCTC\b/g, ' '))
+    if (codes) {
+      from = { name: STATIONS[codes[1]!]?.[0] ?? codes[1]!, code: codes[1]!, at: codes.index }
+      to = { name: STATIONS[codes[2]!]?.[0] ?? codes[2]!, code: codes[2]!, at: codes.index + codes[0].length }
+      boarding = null
+    }
+  }
+
+  // When it leaves: said after "Departure", or beside the station it leaves from.
+  const dep = afterLabel(text, /\b(?:departure|dep|dp|departs?)\b\*?\s*[:-]?/i, now)
+  const start = afterLabel(text, /\b(?:start date|doj|date of journey|journey date)\b\*?\s*[:-]?/i, now)
+  const beside = named && from ? afterPlace(text, from, to, now) : null
+  const day = dep?.day ?? start?.day ?? beside?.day ?? journeyDay(text, now)
+  if (!day) return null
+  const time = dep?.time ?? beside?.time ?? null
+  const arr = afterLabel(text, /\b(?:arrival|arr|arrives?)\b\*?\s*[:-]?/i, now) ?? (named && to ? afterPlace(text, to, null, now) : null)
+
+  const cls =
+    new RegExp(String.raw`\((${CLASSES})\)`).exec(text)?.[1] ??
+    new RegExp(String.raw`\bclass\b\s*[:-]?\s*(${CLASSES})\b`, 'i').exec(text)?.[1] ??
+    new RegExp(String.raw`,\s*(${CLASSES})\s*,`).exec(text)?.[1] ??
+    new RegExp(String.raw`\b(${CLASSES.replace('|SL', '')})\b`).exec(text)?.[1] ??
+    null
+  const { seats, waiting } = seatsOf(text)
+  const fromName = from ? stationName(from) : null
+  const toName = to ? stationName(to) : null
   const notes = [
     `PNR ${pnr}`,
     cls,
-    seat ? `${seat[1]} ${seat[2]}` : null,
-    wl ? `Waitlisted (${wl[1]!.toUpperCase()} ${wl[2]}): check the chart before you go` : null,
+    seats.length ? seats.join(', ') : null,
+    waiting ? `Waitlisted (${waiting}): check the chart before you go` : null,
+    boarding ? `Board at ${stationName(boarding)}` : null,
+    arr?.time && toName ? `Arrives ${toName} ${clockLabelOf(arr.time)}${arr.day ? `, ${dayLabelOf(arr.day)}` : ''}` : null,
   ]
     .filter(Boolean)
     .join(' · ')
   return {
     type: 'train',
-    title: [`Train${trn ? ` ${trn}` : ''}`, from && to ? `${from} → ${to}` : null].filter(Boolean).join(' · '),
-    startsAt: at(date.day, time, 8),
+    title: [`Train${number ? ` ${number}` : ''}${name ? ` ${name}` : ''}`, fromName && toName ? `${fromName} → ${toName}` : null]
+      .filter(Boolean)
+      .join(' · '),
+    startsAt: at(day, time, 8),
     timeKnown: Boolean(time),
     endsOn: null,
-    city: toCode ? (STATIONS[toCode]?.[1] ?? null) : null,
-    from,
-    fromCity: fromCode ? (STATIONS[fromCode]?.[1] ?? null) : null,
+    city: to ? stationCity(to) : null,
+    from: boarding ? stationName(boarding) : fromName,
+    fromCity: from ? stationCity(from) : null,
     ref: pnr,
     notes,
-    provider: 'IRCTC',
+    provider: /\birctc\b/i.test(text) ? 'IRCTC' : (provider(text) ?? 'IRCTC'),
     durationMinutes: 60,
     remindBeforeMinutes: 120,
   }
 }
 
+// ------------------------------------------------------------------ flights
+
+const FLIGHT_NO = /\b(6E|AI|IX|SG|QP|UK|I5|G8|EK|QR|EY|SQ|TG|LH|BA|UL)\s?-?\s?(\d{2,4})\b/
+
+/** The airports a flight goes between: "(BLR)", or a known code on its own, in order. */
+function airportsOf(text: string): { code: string; at: number }[] {
+  const out: { code: string; at: number }[] = []
+  for (const m of text.matchAll(/\b([A-Z]{3})\b/g)) {
+    if (!AIRPORTS[m[1]!]) continue
+    // Not the letters of a PNR or a flight number.
+    const around = text.slice(Math.max(0, m.index! - 2), m.index! + 5)
+    if (/[A-Z0-9]{4,}/.test(around.replace(m[1]!, ''))) continue
+    out.push({ code: m[1]!, at: m.index! })
+  }
+  return out
+}
+
 function flight(text: string, now: Date): ParsedBooking | null {
-  const fl = /\b(6E|AI|IX|SG|QP|UK|I5|G8|EK|QR|EY|SQ|TG|LH|BA|UL)\s?-?\s?(\d{2,4})\b/.exec(text)
+  const fl = FLIGHT_NO.exec(text)
   const named = /\b(?:indigo|air india|spicejet|akasa|vistara|emirates|qatar|etihad)\b/i.test(text)
   const flighty = /\b(?:flight|boarding|departure|depart|terminal|e-?ticket|itinerary|pnr)\b/i.test(text)
   if (!(fl || named) || !flighty) return null
-  const date = datesIn(text, now)[0]
-  if (!date) return null
-  // "BLR-DEL" in a message, "Bengaluru (BLR) → Delhi (DEL)" in an itinerary.
-  const route =
-    /\b([A-Z]{3})\s*(?:-|–|—|→|to)\s*([A-Z]{3})\b/.exec(text) ?? /\(([A-Z]{3})\)[^()]{0,40}?\(([A-Z]{3})\)/.exec(text)
-  const fromCode = route && AIRPORTS[route[1]!] ? route[1]! : null
-  const toCode = route && AIRPORTS[route[2]!] ? route[2]! : null
-  const from = fromCode ? AIRPORTS[fromCode]![0] : null
-  const to = toCode ? AIRPORTS[toCode]![0] : null
-  const time = timeIn(text, /\b(?:dep(?:arture|arts?)?|std|boarding|at)\b/)
-  const pnr = /\bPNR\s*(?:is|no\.?|number)?\s*[:-]?\s*([A-Z0-9]{6})\b/i.exec(text)?.[1] ?? /\bbooking (?:ref(?:erence)?|id)\s*[:-]?\s*([A-Z0-9]{6,})\b/i.exec(text)?.[1] ?? null
+
+  const airports = airportsOf(text)
+  const fromAp = airports[0] ?? null
+  const toAp = airports.find((a) => a.code !== fromAp?.code) ?? null
+  let from = fromAp ? AIRPORTS[fromAp.code]![0] : null
+  let to = toAp ? AIRPORTS[toAp.code]![0] : null
+  let city = toAp ? AIRPORTS[toAp.code]![1] : null
+  let fromCity = fromAp ? AIRPORTS[fromAp.code]![1] : null
+  if (!from || !to) {
+    // "Bengaluru → Goa", "Mumbai to Delhi": cities the lists know.
+    const m = /\b([A-Z][a-z]+(?: [A-Z][a-z]+)?)\s*(?:→|->|–|to)\s*([A-Z][a-z]+(?: [A-Z][a-z]+)?)\b/.exec(text)
+    if (m && cityIn(m[1]!) && cityIn(m[2]!)) {
+      from = cityIn(m[1]!)
+      to = cityIn(m[2]!)
+      fromCity = from
+      city = to
+    }
+  }
+
+  // When it leaves: after "Departure", else the time beside the airport it leaves from.
+  const dep = afterLabel(text, /\b(?:departure|departs?|dep|std)\b\*?\s*[:-]?/i, now)
+  const day = dep?.day ?? (fromAp ? afterPlace(text, { name: '', code: fromAp.code, at: fromAp.at }, null, now).day : null) ?? journeyDay(text, now)
+  if (!day) return null
+  const time = dep?.time ?? (fromAp ? timeNear(text, fromAp.at) : null) ?? timeIn(text, /\b(?:boarding|at)\b/)
+  const arr = afterLabel(text, /\b(?:arrival|arrives?|arr|sta)\b\*?\s*[:-]?/i, now)
+  const arrTime = arr?.time ?? (toAp ? timeNear(text, toAp.at) : null)
+  const terminal = fromAp ? /\bterminal\s*[:-]?\s*(T?\d[A-Z]?|[A-Z]\d?)\b/i.exec(text.slice(fromAp.at, fromAp.at + 140))?.[1] : null
+
+  // "PNR: X7K2LM", "Your PNR is X7K2LM", "Booking Reference (PNR): 8HJ2KQ".
+  const pnr =
+    /\b(?:airline\s+pnr|pnr|booking\s+ref(?:erence)?(?:\s*\(pnr\))?)\b(?:\s*(?:is|no\.?|number|code|[:#-]))*\s*([A-Z0-9]{6})\b/i.exec(text)?.[1] ??
+    /\bbooking\s+id\s*[:-]?\s*([A-Z0-9]{6,})\b/i.exec(text)?.[1] ??
+    null
   const airline = fl ? (AIRLINES[fl[1]!] ?? null) : provider(text)
   const number = fl ? `${fl[1]} ${fl[2]}` : null
   return {
     type: 'flight',
     title: [`Flight${number ? ` ${number}` : ''}`, from && to ? `${from} → ${to}` : null].filter(Boolean).join(' · '),
-    startsAt: at(date.day, time, 8),
+    startsAt: at(day, time, 8),
     timeKnown: Boolean(time),
     endsOn: null,
-    city: toCode ? AIRPORTS[toCode]![1] : null,
+    city,
     from,
-    fromCity: fromCode ? AIRPORTS[fromCode]![1] : null,
+    fromCity,
     ref: pnr,
-    notes: [pnr ? `PNR ${pnr}` : null, airline].filter(Boolean).join(' · ') || null,
+    notes:
+      [
+        pnr ? `PNR ${pnr}` : null,
+        airline,
+        terminal ? `Terminal ${terminal.replace(/^T/i, '')}` : null,
+        arrTime && to ? `Lands in ${to} ${clockLabelOf(arrTime)}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') || null,
     provider: airline,
     durationMinutes: 120,
     remindBeforeMinutes: 180,
@@ -523,7 +750,9 @@ function typed(text: string, now: Date): ParsedBooking | null {
  * most general, so a hotel near a station is still a hotel.
  */
 export function parseBooking(input: string, now = new Date()): ParsedBooking | null {
-  const text = input.replace(/\s+/g, ' ').trim()
+  // Lines kept: an email's lines are its structure — a passenger to a line,
+  // "Departure: …" on one and "Arrival: …" on the next.
+  const text = input.replace(/[ \t\r]+/g, ' ').replace(/ *\n[\n ]*/g, '\n').trim()
   if (text.length >= 20) {
     for (const read of [train, flight, hotel, bus, show, appointment, other]) {
       const b = read(text, now)

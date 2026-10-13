@@ -823,6 +823,8 @@ export const oauthAccounts = pgTable(
     mailEnabled: boolean('mail_enabled').notNull().default(false),
     mailCheckedAt: timestamp('mail_checked_at', { withTimezone: true }),
     mailError: text('mail_error'),
+    /** The reader that last read this mailbox: an older one means read the last month again. */
+    mailReaderVersion: integer('mail_reader_version').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('oauth_accounts_user_idx').on(t.userId, t.status)],
@@ -838,6 +840,8 @@ export const mailSeen = pgTable(
     messageId: text('message_id').notNull(),
     found: text('found'),
     seenAt: timestamp('seen_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Which reader read it: one older than the current is read again. */
+    readerVersion: integer('reader_version').notNull().default(1),
   },
   (t) => [primaryKey({ columns: [t.accountId, t.messageId] })],
 )

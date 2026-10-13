@@ -64,6 +64,11 @@ async function existing(userId: string, p: ParsedDelivery) {
 }
 
 /** Records what a message says: a new parcel, or news of one already known. */
+/** An item name an older reader got wrong: missing, or with the email around it run in. */
+function garbled(item: string | null): boolean {
+  return !item || /[<>@"“”]|…$|\b(?:hi|hello)\b/i.test(item)
+}
+
 export async function recordDelivery(
   orgId: string,
   userId: string,
@@ -98,7 +103,9 @@ export async function recordDelivery(
     .set({
       status,
       expectedOn,
-      item: found.item ?? p.item,
+      // A clean name replaces one read badly before: a quote mark, the
+      // sender's address or a greeting run into it.
+      item: p.item && garbled(found.item) ? p.item : (found.item ?? p.item),
       codPaise: p.codPaise ?? found.codPaise,
       orderRef: found.orderRef ?? p.orderRef,
       trackingUrl: p.trackingUrl ?? found.trackingUrl,

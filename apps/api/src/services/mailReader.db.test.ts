@@ -120,7 +120,7 @@ test('a statement, an e-ticket and a shipping email become a bill, a booking and
   const [train] = await h.sql<{ title: string; ref: string; trip: string | null }[]>`
     select c.title, c.booking->>'ref' as ref, t.place_label as trip
     from commitments c left join trips t on t.id = c.trip_id where c.booking is not null`
-  assert.deepEqual(train, { title: 'Train 12951 · Mumbai Central → New Delhi', ref: '2345678901', trip: 'Delhi' })
+  assert.deepEqual(train, { title: 'Train 12951 Mumbai Rajdhani · Mumbai Central → New Delhi', ref: '2345678901', trip: 'Delhi' })
 
   const [parcel] = await h.sql<{ store: string; item: string }[]>`select store, item from deliveries`
   assert.deepEqual(parcel, { store: 'Amazon', item: 'Prestige Electric Kettle 1.5L' })
@@ -187,7 +187,8 @@ test('only what is worth opening, and HTML made readable', () => {
   assert.equal(svc.worthOpening('A friend <friend@example.com>', 'Dinner on Saturday?'), false)
   assert.equal(
     svc.htmlToText('<p>Total Amount Due</p><table><tr><td>Rs.&nbsp;12,345</td><td>&#8377;5</td></tr></table><style>.x{}</style>'),
-    'Total Amount Due\nRs. 12,345 ₹5',
+    // Cells kept apart, so values in one row do not run together.
+    'Total Amount Due\nRs. 12,345 | ₹5',
   )
 })
 

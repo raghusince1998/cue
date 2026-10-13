@@ -130,7 +130,8 @@ export function parseDueNotice(input: string): DueNotice | null {
   if (card) {
     const bank = BANKS.find(([re]) => re.test(text))?.[1] ?? null
     const last4 =
-      /\b(?:ending|ending with|ending in|xx+|\*{2,}|x{4}[\s-]?x{4}[\s-]?x{4}[\s-]?)\s*(\d{4})\b/i.exec(text)?.[1] ??
+      // "ending 1234", and as a table writes it, "Credit Card ending: 1234".
+      /\b(?:ending|ending with|ending in|xx+|\*{2,}|x{4}[\s-]?x{4}[\s-]?x{4}[\s-]?)\s*[:|-]?\s*(\d{4})\b/i.exec(text)?.[1] ??
       /\bcard (?:no\.?|number)?\s*[:-]?\s*[x*]+\s*(\d{4})\b/i.exec(text)?.[1] ??
       null
     return {

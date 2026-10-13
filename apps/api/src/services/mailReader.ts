@@ -97,21 +97,93 @@ export function gmailQueries(days: number): string[] {
   return out
 }
 
-/** Readable text from an email's HTML: what a person would see, in order. */
-export function htmlToText(html: string): string {
-  return html
-    .replace(/<(?:style|script|head)[\s\S]*?<\/(?:style|script|head)>/gi, ' ')
-    .replace(/<(?:br|\/p|\/div|\/tr|\/li|\/h\d)\s*\/?>/gi, '\n')
-    .replace(/<\/t[dh]>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
+const ENTITIES: Record<string, string> = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", rarr: '→', larr: '←', middot: '·', ndash: '–', mdash: '—', bull: '•', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', hellip: '…', inr: '₹' }
+
+function entities(s: string): string {
+  return s
     .replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
     .replace(/&#x([0-9a-f]+);/gi, (_, n: string) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&([a-z]+);/gi, (whole, name: string) => ENTITIES[name.toLowerCase()] ?? whole)
+}
+
+/** A cell's words, its own line breaks kept as commas: "Bengaluru (BLR), Sun, 18 Oct 2026, 06:15". */
+function cellText(html: string): string {
+  // Breaks marked first and made commas last, so "₹17,999" keeps its comma
+  // and only real line breaks become separators.
+  return entities(
+    html
+      .replace(/<br\s*\/?>|<\/(?:p|div|li|h\d)>/gi, '\u0001')
+      .replace(/<[^>]+>/g, ' '),
+  )
+    .replace(/[ \t\r\n]+/g, ' ')
+    .replace(/\s*\u0001[\s\u0001]*/g, ', ')
+    .replace(/^[\s,]+|[\s,]+$/g, '')
+}
+
+/**
+ * A row of labels: short, wordy cells such as "PNR | Train No./Name | Class".
+ * Not a row of station or airport names: "MUMBAI CENTRAL (MMCT)" is a value.
+ */
+function isLabelRow(cells: string[]): boolean {
+  return (
+    cells.length >= 2 &&
+    cells.every(
+      (c) => c.length > 0 && c.length <= 32 && !/\d{3,}/.test(c) && !/[₹$]/.test(c) && /^[A-Za-z#]/.test(c) && !/\([A-Z0-9]{2,5}\)/.test(c),
+    )
+  )
+}
+
+/**
+ * One table as text. A row of labels over rows of values — how IRCTC lays out
+ * a ticket and banks a statement — becomes "Label: value" pairs, so a value
+ * stays next to what it is; flattened, "PNR Train No./Name Class" and
+ * "2345678901 12951/MUMBAI RAJDHANI 3A" came apart and read as nothing. Any
+ * other row keeps its cells apart with a bar.
+ */
+function tableText(table: string): string {
+  const rows = [...table.matchAll(/<tr\b[\s\S]*?(?=<tr\b|$)/gi)].map((r) =>
+    [...r[0].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)(?=<t[dh]\b|<\/tr>|$)/gi)].map((c) => cellText(c[1]!)).filter((c) => c !== ''),
+  )
+  const out: string[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!
+    if (row.length === 0) continue
+    const next = rows[i + 1]
+    if (next && isLabelRow(row) && next.length === row.length && !isLabelRow(next)) {
+      // Every value row under the same labels: a passenger list has several.
+      let j = i + 1
+      while (rows[j] && rows[j]!.length === row.length && !isLabelRow(rows[j]!)) {
+        out.push(row.map((label, k) => `${label.replace(/[:*\s]+$/, '')}: ${rows[j]![k]}`).join('\n'))
+        j++
+      }
+      i = j - 1
+      continue
+    }
+    // A key and its value side by side: "Credit Card ending | 1234".
+    if (row.length === 2 && isLabelRow([row[0]!, 'x']) && !isLabelRow([row[1]!, 'x'])) {
+      out.push(`${row[0]!.replace(/[:*\s]+$/, '')}: ${row[1]}`)
+      continue
+    }
+    out.push(row.join(' | '))
+  }
+  return out.join('\n')
+}
+
+/** Readable text from an email's HTML: what a person would see, in order. */
+export function htmlToText(html: string): string {
+  let body = html.replace(/<(?:style|script|head|title)\b[\s\S]*?<\/(?:style|script|head|title)>/gi, ' ').replace(/<!--[\s\S]*?-->/g, ' ')
+  // Innermost tables first: emails nest a table for each part of the layout.
+  for (let guard = 0; guard < 50 && /<table\b/i.test(body); guard++) {
+    const next = body.replace(/<table\b[^>]*>((?:(?!<table\b)[\s\S])*?)<\/table>/gi, (_, inner: string) => `\n${tableText(inner)}\n`)
+    if (next === body) break
+    body = next
+  }
+  return entities(
+    body
+      .replace(/<(?:br|\/p|\/div|\/tr|\/li|\/h\d)\s*\/?>/gi, '\n')
+      .replace(/<\/t[dh]>/gi, ' ')
+      .replace(/<[^>]+>/g, ' '),
+  )
     .replace(/[ \t]+/g, ' ')
     .replace(/\s*\n\s*/g, '\n')
     .trim()
@@ -223,7 +295,9 @@ export async function actOn(orgId: string, userId: string, msg: MailMessage, now
   if (booking && (booking.ref || booking.type === 'appointment')) {
     const city = booking.city ?? (booking.type === 'hotel' || booking.type === 'bus' ? findCity(text, await knownPlaces(userId)) : null)
     const saved = await saveFoundBooking(orgId, userId, booking, city, now)
-    return saved ? `${saved.title}, ${dayWords(booking.startsAt)}` : null
+    // Said in full where it is listed: which train, from where to where, when.
+    const when = `${dayWords(booking.startsAt)}${booking.timeKnown ? `, ${booking.startsAt.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}` : ''}`
+    return saved ? `${saved.title}, ${when}` : null
   }
 
   // A vehicle's PUC running out, or its service due. Before insurance: some
@@ -266,7 +340,7 @@ export async function actOn(orgId: string, userId: string, msg: MailMessage, now
     const what = [delivery.store, delivery.item].filter(Boolean).join(' · ') || 'A parcel'
     return delivery.status === 'delivered'
       ? `${what}: delivered`
-      : `${what}${delivery.expectedOn ? `, expected ${dayWords(delivery.expectedOn)}` : ''}`
+      : `${what}${delivery.expectedOn ? `, expected ${dayWords(delivery.expectedOn)}` : ''}${delivery.codPaise ? ` · keep ${formatRupees(delivery.codPaise)} ready` : ''}`
   }
   return null
 }
@@ -274,10 +348,20 @@ export async function actOn(orgId: string, userId: string, msg: MailMessage, now
 /** How far back to look: a fortnight the first time, then from the last look, with a day's overlap. */
 function lookBack(account: AccountRow, now: Date): Date {
   const first = new Date(now.getTime() - 14 * 86_400_000)
+  // Read by an older reader: the last month again, so what it got wrong is put right.
+  if (account.mailCheckedAt && account.mailReaderVersion < READER_VERSION) return new Date(now.getTime() - 30 * 86_400_000)
   if (!account.mailCheckedAt) return first
   const since = new Date(account.mailCheckedAt.getTime() - 86_400_000)
   return since > first ? since : first
 }
+
+/**
+ * The readers' version. Raise it when they read something better than they
+ * did — a layout they missed, a field they got wrong — and every mailbox
+ * reads its last month again, correcting what was saved from it. Never
+ * lower it.
+ */
+export const READER_VERSION = 2
 
 /**
  * Reads one account's new mail and acts on it. Each message is marked read
@@ -288,13 +372,16 @@ export async function readMail(
   now = new Date(),
   token: () => Promise<string> = () => freshAccessToken(account),
 ): Promise<string[]> {
+  // Read before by an older reader: read again, but not news to announce.
+  const readBefore = new Set<string>()
   const seen = async (ids: string[]) => {
     if (ids.length === 0) return new Set<string>()
     const rows = await db
-      .select({ id: schema.mailSeen.messageId })
+      .select({ id: schema.mailSeen.messageId, version: schema.mailSeen.readerVersion })
       .from(schema.mailSeen)
       .where(and(eq(schema.mailSeen.accountId, account.id), inArray(schema.mailSeen.messageId, ids)))
-    return new Set(rows.map((r) => r.id))
+    for (const r of rows) if (r.version < READER_VERSION) readBefore.add(r.id)
+    return new Set(rows.filter((r) => r.version >= READER_VERSION).map((r) => r.id))
   }
   try {
     const since = lookBack(account, now)
@@ -312,10 +399,21 @@ export async function readMail(
       } catch (err) {
         console.error('[mail] could not act on a message', (err as Error).message)
       }
-      await db.insert(schema.mailSeen).values({ accountId: account.id, messageId: msg.id, found: what }).onConflictDoNothing()
-      if (what) found.push(what)
+      await db
+        .insert(schema.mailSeen)
+        .values({ accountId: account.id, messageId: msg.id, found: what, readerVersion: READER_VERSION })
+        .onConflictDoUpdate({
+          target: [schema.mailSeen.accountId, schema.mailSeen.messageId],
+          // What the better reader found, in place of what the older one said.
+          set: { found: what, readerVersion: READER_VERSION },
+        })
+      // A message read again is a correction, not news: only new finds are told.
+      if (what && !readBefore.has(msg.id)) found.push(what)
     }
-    await db.update(schema.oauthAccounts).set({ mailCheckedAt: now, mailError: null }).where(eq(schema.oauthAccounts.id, account.id))
+    await db
+      .update(schema.oauthAccounts)
+      .set({ mailCheckedAt: now, mailError: null, mailReaderVersion: READER_VERSION })
+      .where(eq(schema.oauthAccounts.id, account.id))
     return found
   } catch (err) {
     await db

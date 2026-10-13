@@ -161,8 +161,63 @@ function orderRefOf(text: string): string | null {
     /\b(OD\d{12,})\b/.exec(text) ??
     /\border\s*(?:id|no\.?|number|#)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{5,})/i.exec(text) ??
     /\bAWB\s*(?:no\.?|number)?\s*[:#-]?\s*([A-Z0-9]{6,})/i.exec(text) ??
-    /\border\s+#\s*([A-Z0-9][A-Z0-9-]{5,})/i.exec(text)
+    /\border\s+#\s*([A-Z0-9][A-Z0-9-]{5,})/i.exec(text) ??
+    // "Your Nykaa order NYK-12345678 has been dispatched".
+    /\border\s+([A-Z]{2,5}-?\d{6,})\b/.exec(text)
   return m ? m[1]!.toUpperCase() : null
+}
+
+/** Words a product name does not start with, or contain: lines about the order, not the thing. */
+const NOT_AN_ITEM =
+  /^(?:hi|hello|dear|your|we|thank|thanks|track|view|manage|order|delivery|delivered|arriving|expected|estimated|shipped|dispatched|out for|size|qty|quantity|price|total|amount|sold by|seller|payment|pay|cash|address|ship to|deliver to|need help|download|get the app|https?:)\b|[@₹]|\brs\.?\s*\d|\border\b|\bdelivery\b/i
+
+function cleanItem(raw: string, store: string | null): string | null {
+  let item = raw
+    .replace(/^["'“‘]+|["'”’]+$/g, '')
+    .replace(/(?:\.{3}|…)+["'”’]?$/, '')
+    .replace(/["'”’]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (store) item = item.replace(new RegExp(`^${store}(?:\\.in)?\\s+`, 'i'), '')
+  if (!item || item.length < 3 || /^(?:order|package|shipment|parcel|item|items|product)s?$/i.test(item)) return null
+  return item.length > 80 ? `${item.slice(0, 79).trimEnd()}…` : item
+}
+
+/**
+ * What is coming, one line at a time — the subject first, where shops name
+ * it: 'Your Amazon.in order of "boAt Rockerz 450…" has shipped', "Shipped:
+ * Your Flipkart order for Redmi Note 13 5G". Then a line that says so
+ * ("Items: …"), then the product line a shop puts under "shipped". Never
+ * across lines, which is how a name used to run on into the sender's address.
+ */
+function itemFromLines(input: string, store: string | null): string | null {
+  const lines = input
+    .split('\n')
+    .map((l) => l.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+  const patterns = [
+    /\border of\s+["“'‘](.+?)(?:["”'’]|…|\.{3})/i,
+    /^(?:out for delivery|delivered|shipped|dispatched|arriving (?:today|tomorrow)|on its way)\s*:\s*(?:your\s+(?:\S+\s+)?(?:order|package)\s+(?:of|for)\s+)?["“'‘]?(.+?)["”'’]?$/i,
+    /\b(?:order|package|shipment)\s+(?:#?\s*[A-Z0-9-]{6,}\s+)?(?:for|of|containing|with)\s+["“'‘]?(.+?)["”'’]?(?:\s+(?:has|have|is|was|will|from)\b|$)/i,
+    /(?:^|\b)(?:items?|products?|item name|product name)\s*[:-]\s*(.+?)(?:\.\s|\s+\||$)/i,
+  ]
+  for (const re of patterns) {
+    for (const line of lines.slice(0, 40)) {
+      const m = re.exec(line)
+      const item = m ? cleanItem(m[1]!, store) : null
+      if (item && !NOT_AN_ITEM.test(item)) return item
+    }
+  }
+  // The product line under "shipped": a short name, not a sentence about the order.
+  const shippedAt = lines.findIndex((l) => /\b(?:shipped|dispatched|on its way|out for delivery|delivered)\b/i.test(l))
+  for (const line of lines.slice(Math.max(0, shippedAt + 1), shippedAt + 6)) {
+    const words = line.split(' ')
+    if (words.length < 2 || words.length > 14 || NOT_AN_ITEM.test(line) || /[.!?:]$/.test(line) || /<|>/.test(line)) continue
+    if (words.filter((w) => /^[A-Z0-9]/.test(w)).length < 2) continue
+    const item = cleanItem(line, store)
+    if (item) return item
+  }
+  return null
 }
 
 function itemOf(text: string, store: string | null): string | null {
@@ -203,7 +258,8 @@ export function parseDelivery(input: string, now = new Date()): ParsedDelivery |
   if (!expectedOn && status === 'out_for_delivery') expectedOn = ymd(now)
   return {
     store: store ?? courier,
-    item: itemOf(text, store),
+    // By line when there are lines (an email); as one sentence when not (a message).
+    item: (input.includes('\n') ? itemFromLines(input, store) : null) ?? itemOf(text, store),
     status,
     expectedOn,
     codPaise: status === 'delivered' || status === 'cancelled' ? null : codOf(text),
