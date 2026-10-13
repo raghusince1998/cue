@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ApiError, api, getToken, BASE as API_BASE } from '../lib/api.ts'
 import { formatDateTime } from '../lib/time.ts'
+import { msg, t } from '../lib/i18n.tsx'
 import { ConnectedCalendars } from './ConnectedCalendars.tsx'
 
 interface FeedDTO {
@@ -34,13 +35,13 @@ interface SyncReport {
 
 function describe(r: SyncReport): string {
   const bits = [
-    r.imported ? `${r.imported} brought in` : null,
-    r.repeating ? `${r.repeating} repeating` : null,
-    r.updated ? `${r.updated} updated` : null,
-    r.removed ? `${r.removed} removed` : null,
-    r.skipped ? `${r.skipped} skipped` : null,
+    r.imported ? t('{n} brought in', { n: r.imported }) : null,
+    r.repeating ? t('{n} repeating', { n: r.repeating }) : null,
+    r.updated ? t('{n} updated', { n: r.updated }) : null,
+    r.removed ? t('{n} removed', { n: r.removed }) : null,
+    r.skipped ? t('{n} skipped', { n: r.skipped }) : null,
   ].filter(Boolean)
-  return bits.length ? bits.join(', ') : 'nothing new'
+  return bits.length ? bits.join(', ') : t('nothing new')
 }
 
 /**
@@ -51,26 +52,38 @@ function describe(r: SyncReport): string {
  */
 function explainWindow(r: SyncReport): string | null {
   if (!r.outsideWindow) return null
-  const span = r.oldest && r.newest ? ` The file covers ${r.oldest} to ${r.newest}.` : ''
+  const span = r.oldest && r.newest ? t('The file covers {from} to {to}.', { from: r.oldest, to: r.newest }) : null
   const kept =
     r.historyDays === null
-      ? 'over a year ahead'
+      ? t('over a year ahead')
       : r.historyDays >= 365
-        ? `more than ${Math.round(r.historyDays / 365)} year${r.historyDays >= 730 ? 's' : ''} past, or over a year ahead`
-        : `more than ${r.historyDays} days past, or over a year ahead`
-  return `${r.outsideWindow} ${r.outsideWindow === 1 ? 'event was' : 'events were'} outside the window this calendar keeps — ${kept}.${span} Change "How much history" below and read it again to pull them in.`
+        ? r.historyDays >= 730
+          ? t('more than {n} years past, or over a year ahead', { n: Math.round(r.historyDays / 365) })
+          : t('more than {n} year past, or over a year ahead', { n: Math.round(r.historyDays / 365) })
+        : t('more than {n} days past, or over a year ahead', { n: r.historyDays })
+  return [
+    r.outsideWindow === 1
+      ? t('1 event was outside the window this calendar keeps — {kept}.', { kept })
+      : t('{n} events were outside the window this calendar keeps — {kept}.', { n: r.outsideWindow, kept }),
+    span,
+    t('Change "How much history" below and read it again to pull them in.'),
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 
+/** Show the label with t(). */
 const HISTORY_CHOICES: Array<{ label: string; value: number | null }> = [
-  { label: '2 weeks', value: 14 },
-  { label: '1 year', value: 365 },
-  { label: '5 years', value: 1825 },
-  { label: 'Everything', value: null },
+  { label: msg('2 weeks'), value: 14 },
+  { label: msg('1 year'), value: 365 },
+  { label: msg('5 years'), value: 1825 },
+  { label: msg('Everything'), value: null },
 ]
 
 function historyLabel(days: number | null | undefined): string {
-  if (days === null) return 'Everything'
-  return HISTORY_CHOICES.find((c) => c.value === days)?.label ?? `${days} days`
+  if (days === null) return t('Everything')
+  const choice = HISTORY_CHOICES.find((c) => c.value === days)
+  return choice ? t(choice.label) : t('{n} days', { n: days ?? 0 })
 }
 
 /**
@@ -137,9 +150,9 @@ export function CalendarFeeds() {
         body: text,
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.message ?? data?.error ?? 'Could not read that file.')
+      if (!res.ok) throw new Error(data?.message ?? data?.error ?? t('Could not read that file.'))
 
-      setMessage(`Imported ${file.name} — ${describe(data.report as SyncReport)}.`)
+      setMessage(t('Imported {file} — {what}.', { file: file.name, what: describe(data.report as SyncReport) }))
       setNote(explainWindow(data.report as SyncReport))
       await load()
     } catch (err) {
@@ -186,7 +199,7 @@ export function CalendarFeeds() {
         setMessage(`${feed.label}: ${describe(r.report)}.`)
         setNote(explainWindow(r.report))
       } else {
-        setMessage('Saved. Upload the file again with "Replace file" to pull in the extra events.')
+        setMessage(t('Saved. Upload the file again with "Replace file" to pull in the extra events.'))
         setNote(null)
       }
       await load()
@@ -212,9 +225,11 @@ export function CalendarFeeds() {
       setMessage(
         on
           ? n > 0
-            ? `Reminders on for ${name} — ${n} upcoming event${n === 1 ? '' : 's'} will notify you at the time.`
-            : `Reminders on for ${name}. Nothing ahead in it yet; new events will notify you.`
-          : `Reminders off for ${name}.`,
+            ? n === 1
+              ? t('Reminders on for {name} — 1 upcoming event will notify you at the time.', { name })
+              : t('Reminders on for {name} — {n} upcoming events will notify you at the time.', { name, n })
+            : t('Reminders on for {name}. Nothing ahead in it yet; new events will notify you.', { name })
+          : t('Reminders off for {name}.', { name }),
       )
       setNote(null)
       await load()
@@ -227,20 +242,20 @@ export function CalendarFeeds() {
 
   async function remove(feed: FeedDTO) {
     const ok = window.confirm(
-      `Stop reading "${feed.calendarName ?? feed.label}"?\n\nEverything it brought in will be removed from Cue. The calendar itself is not touched.`,
+      `${t('Stop reading "{name}"?', { name: feed.calendarName ?? feed.label })}\n\n${t('Everything it brought in will be removed from Cue. The calendar itself is not touched.')}`,
     )
     if (!ok) return
     setBusy(true)
     try {
       await api(`/calendar-feeds/${feed.id}`, { method: 'DELETE' })
-      setMessage('Stopped reading it.')
+      setMessage(t('Stopped reading it.'))
       await load()
     } finally {
       setBusy(false)
     }
   }
 
-  if (!feeds) return <p className="muted small">Loading calendars…</p>
+  if (!feeds) return <p className="muted small">{t('Loading calendars…')}</p>
 
   return (
     <div className="stack tight">
@@ -250,14 +265,15 @@ export function CalendarFeeds() {
       />
 
       <div className="accounts-head">
-        <span className="label-text">Calendars I read</span>
+        <span className="label-text">{t('Calendars I read')}</span>
         <span className="accounts-count">{feeds.length}</span>
       </div>
 
       {feeds.length === 0 && (
         <p className="muted small">
-          None yet. Connect an account above, then choose which of its calendars to read — their
-          events appear in Cue and count towards clashes.
+          {t(
+            'None yet. Connect an account above, then choose which of its calendars to read — their events appear in Cue and count towards clashes.',
+          )}
         </p>
       )}
 
@@ -270,16 +286,16 @@ export function CalendarFeeds() {
                 <span className="error">{feed.lastError}</span>
               ) : (
                 <>
-                  {feed.lastEventCount ?? 0} events
-                  {feed.lastSkippedCount ? ` · ${feed.lastSkippedCount} skipped` : ''}
-                  {feed.lastSyncedAt ? ` · read ${formatDateTime(feed.lastSyncedAt)}` : ''}
-                  {` · keeps ${historyLabel(feed.historyDays)}`}
+                  {feed.lastEventCount === 1 ? t('1 event') : t('{n} events', { n: feed.lastEventCount ?? 0 })}
+                  {feed.lastSkippedCount ? ` · ${t('{n} skipped', { n: feed.lastSkippedCount })}` : ''}
+                  {feed.lastSyncedAt ? ` · ${t('read {when}', { when: formatDateTime(feed.lastSyncedAt) })}` : ''}
+                  {` · ${t('keeps {span}', { span: historyLabel(feed.historyDays) })}`}
                   {feed.source === 'file'
-                    ? ` · from ${feed.fileName ?? 'a file'} (does not update on its own)`
+                    ? ` · ${t('from {file} (does not update on its own)', { file: feed.fileName ?? t('a file') })}`
                     : feed.source === 'google'
-                      ? ' · from your Google account'
+                      ? ` · ${t('from your {provider} account', { provider: 'Google' })}`
                       : feed.source === 'microsoft'
-                        ? ' · from your Microsoft account'
+                        ? ` · ${t('from your {provider} account', { provider: 'Microsoft' })}`
                         : ''}
                 </>
               )}
@@ -291,10 +307,10 @@ export function CalendarFeeds() {
                 disabled={busy}
                 onChange={() => void toggleRemind(feed)}
               />
-              <span className="muted small">Remind me about these too</span>
+              <span className="muted small">{t('Remind me about these too')}</span>
             </label>
             <label className="inline-field">
-              <span className="muted small">How much history</span>
+              <span className="muted small">{t('How much history')}</span>
               <select
                 value={feed.historyDays === null ? 'all' : String(feed.historyDays ?? 365)}
                 disabled={busy}
@@ -304,7 +320,7 @@ export function CalendarFeeds() {
               >
                 {HISTORY_CHOICES.map((c) => (
                   <option key={c.label} value={c.value === null ? 'all' : String(c.value)}>
-                    {c.label}
+                    {t(c.label)}
                   </option>
                 ))}
               </select>
@@ -313,7 +329,7 @@ export function CalendarFeeds() {
           <div className="stack tight">
             {feed.source === 'file' ? (
               <label className="ghost small-btn file-btn">
-                Replace file
+                {t('Replace file')}
                 <input
                   type="file"
                   accept=".ics,text/calendar"
@@ -328,11 +344,11 @@ export function CalendarFeeds() {
               </label>
             ) : (
               <button className="ghost small-btn" onClick={() => void sync(feed)} disabled={busy}>
-                Read now
+                {t('Read now')}
               </button>
             )}
             <button className="ghost small-btn" onClick={() => void remove(feed)} disabled={busy}>
-              Stop reading
+              {t('Stop reading')}
             </button>
           </div>
         </div>

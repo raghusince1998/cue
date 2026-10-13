@@ -1,5 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm'
+import type { Lang } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { langOf, langsOf, localeOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
 import { managedByCue, meetingEnd } from './overdue.ts'
 import { cancelPendingReminders, scheduleFirstReminder } from './reminders.ts'
@@ -20,8 +22,8 @@ export interface WrapUpItem {
   dueAt: string
 }
 
-function dateLabel(d: Date): string {
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+function dateLabel(d: Date, lang: Lang): string {
+  return d.toLocaleDateString(localeOf(lang), { day: 'numeric', month: 'short' })
 }
 
 /** Returns how many follow-ups were made, or null if the meeting is not theirs. */
@@ -37,6 +39,9 @@ export async function wrapUpMeeting(
     .where(and(eq(schema.commitments.id, meetingId), eq(schema.commitments.userId, userId)))
     .limit(1)
   if (!meeting) return null
+  // The note on each follow-up is read by the person, in their language. The
+  // title is not translated: "Waiting on …:" is how a check-in is recognised.
+  const lang = await langOf(userId)
 
   return db.transaction(async (tx) => {
     let created = 0
@@ -54,7 +59,7 @@ export async function wrapUpMeeting(
           kind: who ? 'followup' : 'task',
           dueAt,
           durationMinutes: 15,
-          notes: `From the meeting "${meeting.title}" on ${dateLabel(meeting.dueAt)}.`,
+          notes: t(lang, 'From the meeting "{title}" on {date}.', { title: meeting.title, date: dateLabel(meeting.dueAt, lang) }),
           fromCommitmentId: meeting.id,
           waitingOn: who || null,
           status: 'pending',
@@ -120,13 +125,16 @@ export async function promptFollowUps(now = new Date()): Promise<number> {
     returning id, user_id, title
   `)) as unknown as JustEnded[]
 
+  const langs = await langsOf(rows.map((r) => r.user_id))
   for (const row of rows) {
     try {
+      const lang = langs.get(row.user_id) ?? 'en'
       await sendToUser(row.user_id, {
-        title: `${row.title} just ended`,
-        body: 'Anything to follow up on? Tap to note it while it is fresh.',
+        title: t(lang, '{title} just ended', { title: row.title }),
+        body: t(lang, 'Anything to follow up on? Tap to note it while it is fresh.'),
         tag: `wrapup-${row.id}`,
         url: `/?wrapup=${row.id}`,
+        lang,
       })
     } catch (err) {
       console.error('[followups] could not send for', row.id, (err as Error).message)

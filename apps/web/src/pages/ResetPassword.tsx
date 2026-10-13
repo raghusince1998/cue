@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ApiError, api } from '../lib/api.ts'
+import { t } from '../lib/i18n.tsx'
 
 /**
  * Spending a reset link.
@@ -28,7 +29,7 @@ export default function ResetPassword() {
     // Checked here rather than server-side: a mistyped confirmation is not the
     // server's business, and a round trip to say so is a round trip wasted.
     if (password !== confirm) {
-      setError('The two passwords do not match.')
+      setError(t('The two passwords do not match.'))
       return
     }
 
@@ -38,17 +39,17 @@ export default function ResetPassword() {
       setDone(true)
     } catch (err) {
       const messages: Record<string, string> = {
-        token_used: 'That link has already been used. Ask for a new one.',
-        token_expired: 'That link has expired. Ask for a new one.',
-        invalid_token: 'That link is not valid. Ask for a new one.',
-        invalid_input: 'The password must be at least 8 characters.',
+        token_used: t('That link has already been used. Ask for a new one.'),
+        token_expired: t('That link has expired. Ask for a new one.'),
+        invalid_token: t('That link is not valid. Ask for a new one.'),
+        invalid_input: t('The password must be at least 8 characters.'),
       }
       const code = err instanceof ApiError ? err.code : ''
       setError(
         messages[code] ??
           (err instanceof ApiError
-            ? `Could not reset the password (${err.status}).`
-            : 'Could not reach the server.'),
+            ? t('Could not reset the password ({status}).', { status: err.status })
+            : t('Could not reach the server.')),
       )
     } finally {
       setBusy(false)
@@ -63,9 +64,9 @@ export default function ResetPassword() {
             <img className="brand-mark" src="/brand/cue-mark.svg" alt="" />
             Cue
           </div>
-          <p className="error">That link is missing its token. Ask for a new one.</p>
+          <p className="error">{t('That link is missing its token. Ask for a new one.')}</p>
           <button className="ghost" onClick={() => navigate('/')}>
-            Back to sign in
+            {t('Back to sign in')}
           </button>
         </div>
       </div>
@@ -80,9 +81,9 @@ export default function ResetPassword() {
             <img className="brand-mark" src="/brand/cue-mark.svg" alt="" />
             Cue
           </div>
-          <p>Your password is changed. Sign in with the new one.</p>
+          <p>{t('Your password is changed. Sign in with the new one.')}</p>
           <button className="primary" onClick={() => navigate('/')}>
-            Sign in
+            {t('Sign in')}
           </button>
         </div>
       </div>
@@ -96,10 +97,10 @@ export default function ResetPassword() {
           <img className="brand-mark" src="/brand/cue-mark.svg" alt="" />
           Cue
         </div>
-        <p className="muted">Choose a new password.</p>
+        <p className="muted">{t('Choose a new password.')}</p>
 
         <label>
-          New password
+          {t('New password')}
           <input
             type="password"
             value={password}
@@ -112,7 +113,7 @@ export default function ResetPassword() {
         </label>
 
         <label>
-          Again, to be sure
+          {t('Again, to be sure')}
           <input
             type="password"
             value={confirm}
@@ -126,11 +127,11 @@ export default function ResetPassword() {
         {error && <p className="error small">{error}</p>}
 
         <button className="primary" type="submit" disabled={busy || password.length < 8}>
-          {busy ? 'Changing…' : 'Change my password'}
+          {busy ? t('Changing…') : t('Change my password')}
         </button>
 
         <button type="button" className="link" onClick={() => navigate('/')}>
-          Back to sign in
+          {t('Back to sign in')}
         </button>
       </form>
     </div>

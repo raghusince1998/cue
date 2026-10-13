@@ -1,3 +1,4 @@
+import { language, setLanguage } from './i18n.tsx'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { FILLABLE, sectionsFor } from '@cue/shared'
@@ -18,7 +19,7 @@ export interface Me {
   isDemo?: boolean
   /** Reviews official exam notices before they go out (ADMIN_EMAILS on the server). */
   isAdmin?: boolean
-  /** The language Cue speaks in: the exam screens and their reminders first. */
+  /** The language Cue speaks in, on every screen and in its reminders. */
   language?: 'en' | 'hi'
 }
 
@@ -51,6 +52,8 @@ const AuthContext = createContext<AuthValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null)
   const [loading, setLoading] = useState(true)
+  // Before anything below draws: every screen reads the language from i18n.
+  if (me) setLanguage(me.language === 'hi' ? 'hi' : 'en')
 
   const refresh = useCallback(async () => {
     if (!getToken()) {
@@ -91,9 +94,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: input,
       })
       setToken(res.token)
-      // Set before the first screen, so it opens as what it is for.
-      if (start && (start.uses || start.language)) {
-        await api('/me/preferences', { method: 'PATCH', body: start }).catch(() => undefined)
+      // Set before the first screen, so it opens as what it is for — and in
+      // the language the website was read in.
+      const first = { ...start, language: start?.language ?? (language() === 'hi' ? 'hi' : undefined) }
+      if (first.uses || first.language) {
+        await api('/me/preferences', { method: 'PATCH', body: first }).catch(() => undefined)
       }
       await refresh()
     },
@@ -132,6 +137,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const enterDemo = useCallback(async () => {
     const res = await api<{ token: string }>('/auth/demo', { method: 'POST', body: {} })
     setToken(res.token)
+    // A demo opened from the Hindi website is a demo in Hindi.
+    if (language() === 'hi') {
+      await api('/me/preferences', { method: 'PATCH', body: { language: 'hi' } }).catch(() => undefined)
+    }
     await refresh()
   }, [refresh])
 

@@ -3,6 +3,7 @@ import { ACCOUNT_STAGES, ACCOUNT_STAGE_LABELS, hasClients, type AccountStage, ty
 import { api } from '../lib/api.ts'
 import { useAuth } from '../lib/auth.tsx'
 import { announceChange } from '../lib/changes.ts'
+import { t } from '../lib/i18n.tsx'
 import { openAdd } from '../lib/addSheet.ts'
 import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
 import { waitingWhat } from './Nudge.tsx'
@@ -98,10 +99,19 @@ export function AccountSheet({
   }
 
   if (error && !o) return <p className="error small">{error}</p>
-  if (!o) return <p className="muted small">Gathering everything with them…</p>
+  if (!o) return <p className="muted small">{t('Gathering everything with them…')}</p>
 
   const count = o.people.length
-  const quietFor = o.lastContact ? relativeDay(o.lastContact).replace(/ ago$/, '') : null
+  // "3 weeks ago" less the "ago", in either language.
+  const quietFor = o.lastContact ? relativeDay(o.lastContact).replace(/ ago$| पहले$/, '') : null
+  const quietLine =
+    o.stage === 'proposal'
+      ? quietFor
+        ? t('No contact for {span}, with a proposal out. Worth a call before it goes cold.', { span: quietFor })
+        : t('No contact on record, with a proposal out. Worth a call before it goes cold.')
+      : quietFor
+        ? t('No contact for {span}, while in talks. Worth a call before it goes cold.', { span: quietFor })
+        : t('No contact on record, while in talks. Worth a call before it goes cold.')
 
   return (
     <div className="stack tight person account">
@@ -109,40 +119,40 @@ export function AccountSheet({
         <div>
           {renaming ? (
             <div className="row inline-field-row">
-              <input value={newName} onChange={(e) => setNewName(e.target.value)} aria-label="Name" autoFocus />
+              <input value={newName} onChange={(e) => setNewName(e.target.value)} aria-label={t('Name')} autoFocus />
               <button className="primary small-btn" onClick={() => void rename()} disabled={busy || !newName.trim()}>
-                Save
+                {t('Save')}
               </button>
               <button className="ghost small-btn" onClick={() => setRenaming(false)}>
-                Cancel
+                {t('Cancel')}
               </button>
             </div>
           ) : (
             <h3 className="details-title">{o.name}</h3>
           )}
           <p className="muted small">
-            {count === 0 ? 'Nobody saved here yet' : `${count} ${count === 1 ? 'person' : 'people'}`}
+            {count === 0 ? t('Nobody saved here yet') : count === 1 ? t('1 person') : t('{n} people', { n: count })}
             {' · '}
-            {o.lastContact ? `last contact ${relativeDay(o.lastContact)}` : 'no contact on record'}
+            {o.lastContact ? t('last contact {when}', { when: relativeDay(o.lastContact) }) : t('no contact on record')}
           </p>
         </div>
         {!renaming && (
           <button className="link small" onClick={() => setRenaming(true)}>
-            Rename
+            {t('Rename')}
           </button>
         )}
       </div>
       {renaming && (
-        <p className="muted small">Renames it on everyone who works here too. An existing name merges the two.</p>
+        <p className="muted small">{t('Renames it on everyone who works here too. An existing name merges the two.')}</p>
       )}
 
       {/* Already given a stage, it stays in view. */}
       {(clients || o.stage) && (
         <section className="person-part">
-          <span className="label-text">Stage</span>
+          <span className="label-text">{t('Stage')}</span>
           <div className="chips">
             <button className={`chip${o.stage === null ? ' selected' : ''}`} onClick={() => void setStage(null)} disabled={busy}>
-              None
+              {t('None')}
             </button>
             {ACCOUNT_STAGES.map((s) => (
               <button
@@ -157,22 +167,18 @@ export function AccountSheet({
           </div>
           {o.stage && o.stageChangedAt && (
             <p className="muted small">
-              {ACCOUNT_STAGE_LABELS[o.stage]} since {dayLabel(o.stageChangedAt)}.
+              {t('{stage} since {day}.', { stage: ACCOUNT_STAGE_LABELS[o.stage], day: dayLabel(o.stageChangedAt) })}
             </p>
           )}
           {o.quiet && (
-            <p className="small due-now">
-              {quietFor ? `No contact for ${quietFor}` : 'No contact on record'},{' '}
-              {o.stage === 'proposal' ? 'with a proposal out' : 'while in talks'}. Worth a call before
-              it goes cold.
-            </p>
+            <p className="small due-now">{quietLine}</p>
           )}
         </section>
       )}
 
       <section className="person-part">
-        <span className="label-text">People there</span>
-        {o.people.length === 0 && <p className="muted small">Nobody yet.</p>}
+        <span className="label-text">{t('People there')}</span>
+        {o.people.length === 0 && <p className="muted small">{t('Nobody yet.')}</p>}
         {o.people.map((p) => (
           <div className="your-day-line" key={p.id}>
             <span>
@@ -180,23 +186,23 @@ export function AccountSheet({
                 {p.name}
               </button>
               {p.role && <span className="muted small"> · {p.role}</span>}
-              {p.reachOut && <span className="small due-now"> · time to reach out</span>}
+              {p.reachOut && <span className="small due-now"> · {t('time to reach out')}</span>}
             </span>
             {p.phone && (
               <a className="ghost tiny-btn link-btn" href={`tel:${p.phone}`} data-contact-id={p.id} data-name={p.name}>
-                Call
+                {t('Call')}
               </a>
             )}
           </div>
         ))}
         <button className="link small fit-btn" onClick={() => onAddPerson(o.name)}>
-          + Add someone who works here
+          {t('+ Add someone who works here')}
         </button>
       </section>
 
       {o.nextMeetings.length > 0 && (
         <section className="person-part">
-          <span className="label-text">Coming up</span>
+          <span className="label-text">{t('Coming up')}</span>
           {o.nextMeetings.map((m) => (
             <p key={m.id} className="person-line">
               <strong>{m.title}</strong>
@@ -211,7 +217,7 @@ export function AccountSheet({
 
       {o.waiting.length > 0 && (
         <section className="person-part">
-          <span className="label-text">Waiting on them</span>
+          <span className="label-text">{t('Waiting on them')}</span>
           {o.waiting.map((c) => {
             const isDue = new Date(c.dueAt).getTime() <= Date.now()
             return (
@@ -221,11 +227,11 @@ export function AccountSheet({
                   {waitingWhat(c)}
                   <span className={`small ${isDue ? 'due-now' : 'muted'}`}>
                     {' '}
-                    · {isDue ? 'check in now' : `check in ${dayLabel(c.dueAt)}`}
+                    · {isDue ? t('check in now') : t('check in {day}', { day: dayLabel(c.dueAt) })}
                   </span>
                 </span>
                 <button className="ghost tiny-btn" onClick={() => void close(c.id)} disabled={busy}>
-                  Got it
+                  {t('Got it')}
                 </button>
               </div>
             )
@@ -235,15 +241,15 @@ export function AccountSheet({
 
       {o.owe.length > 0 && (
         <section className="person-part">
-          <span className="label-text">You owe them</span>
+          <span className="label-text">{t('You owe them')}</span>
           {o.owe.map((c) => (
             <div className="your-day-line" key={c.id}>
               <span>
                 {c.title}
-                <span className="muted small"> · due {dayLabel(c.dueAt)}</span>
+                <span className="muted small"> · {t('due {day}', { day: dayLabel(c.dueAt) })}</span>
               </span>
               <button className="ghost tiny-btn" onClick={() => void close(c.id)} disabled={busy}>
-                Done
+                {t('Done')}
               </button>
             </div>
           ))}
@@ -252,7 +258,7 @@ export function AccountSheet({
 
       {o.pastMeetings.length > 0 && (
         <section className="person-part">
-          <span className="label-text">Recent meetings</span>
+          <span className="label-text">{t('Recent meetings')}</span>
           <ul className="plain person-followups">
             {o.pastMeetings.map((m) => (
               <li key={m.id}>
@@ -264,17 +270,17 @@ export function AccountSheet({
       )}
 
       <label>
-        Notes
+        {t('Notes')}
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
-          placeholder="Decision maker, budget, what they use today, branches…"
+          placeholder={t('Decision maker, budget, what they use today, branches…')}
         />
       </label>
       {notes.trim() !== (o.notes ?? '').trim() && (
         <button className="ghost small-btn fit-btn" onClick={() => void saveNotes()} disabled={busy}>
-          Save notes
+          {t('Save notes')}
         </button>
       )}
 
@@ -282,7 +288,7 @@ export function AccountSheet({
 
       <div className="row person-actions">
         <button className="primary small-btn" onClick={() => openAdd({ share: true, shareWith: o.name })}>
-          Share when I&rsquo;m free
+          {t('Share when I’m free')}
         </button>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import type { PlaceSuggestionDTO } from '@cue/shared'
 import { formatDateTime } from '../lib/time.ts'
+import { rich, t } from '../lib/i18n.tsx'
 
 /**
  * Turns the stored pattern into the actual time to propose: the usual gap from
@@ -19,11 +20,11 @@ export function suggestedDueAt(suggestion: PlaceSuggestionDTO): Date | null {
 }
 
 function describeGap(days: number): string {
-  if (days <= 0) return 'the same day'
-  if (days === 1) return 'the next day'
-  if (days < 14) return `after ${days} days`
-  if (days < 60) return `after about ${Math.round(days / 7)} weeks`
-  return `after about ${Math.round(days / 30)} months`
+  if (days <= 0) return t('the same day')
+  if (days === 1) return t('the next day')
+  if (days < 14) return t('after {n} days', { n: days })
+  if (days < 60) return t('after about {n} weeks', { n: Math.round(days / 7) })
+  return t('after about {n} months', { n: Math.round(days / 30) })
 }
 
 export function RepeatVisitCard({
@@ -42,43 +43,45 @@ export function RepeatVisitCard({
   const { contact, outcome, visitCount, daysSinceLast, lastCommitment } = suggestion
 
   const lastTime = [
-    contact ? `met ${contact.name}` : null,
-    outcome ? `marked it ${outcome}` : null,
+    contact ? t('met {name}', { name: contact.name }) : null,
+    outcome ? t('marked it {outcome}', { outcome }) : null,
     lastCommitment && suggestion.typicalIntervalDays !== null
-      ? `followed up ${describeGap(Math.round(suggestion.typicalIntervalDays))}`
+      ? t('followed up {gap}', { gap: describeGap(Math.round(suggestion.typicalIntervalDays)) })
       : null,
   ].filter(Boolean)
 
   return (
     <section className="card repeat-card">
       <div>
-        <h2 className="repeat-title">You&rsquo;re at {suggestion.placeName}</h2>
+        <h2 className="repeat-title">{t('You’re at {place}', { place: suggestion.placeName })}</h2>
         <p className="muted small">
-          Visit {visitCount + 1}
+          {t('Visit {n}', { n: visitCount + 1 })}
           {daysSinceLast !== null &&
-            ` · last one ${daysSinceLast === 0 ? 'today' : `${daysSinceLast} days ago`}`}
+            ` · ${daysSinceLast === 0 ? t('last one today') : t('last one {n} days ago', { n: daysSinceLast })}`}
         </p>
       </div>
 
       {lastTime.length > 0 && (
         <p className="repeat-summary">
-          Last time you {lastTime.join(', ')}.
+          {t('Last time you {list}.', { list: lastTime.join(', ') })}
         </p>
       )}
 
       {dueAt && lastCommitment && (
         <p className="muted small">
-          Repeating that books &ldquo;{lastCommitment.title}&rdquo; for{' '}
-          <strong>{formatDateTime(dueAt.toISOString())}</strong>.
+          {rich('Repeating that books “{title}” for {time}.', {
+            title: lastCommitment.title,
+            time: <strong>{formatDateTime(dueAt.toISOString())}</strong>,
+          })}
         </p>
       )}
 
       <div className="row">
         <button className="primary" onClick={onAccept} disabled={busy}>
-          {busy ? 'Saving…' : 'Same again'}
+          {busy ? t('Saving…') : t('Same again')}
         </button>
         <button className="ghost" onClick={onDismiss} disabled={busy}>
-          Something else
+          {t('Something else')}
         </button>
       </div>
     </section>

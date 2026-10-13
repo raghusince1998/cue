@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
+import { locale, t } from '../lib/i18n.tsx'
 
 /**
  * Tomorrow, already worked out.
@@ -28,7 +29,7 @@ interface Plan {
 }
 
 function clock(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return new Date(iso).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })
 }
 
 export function PlanTomorrow({ onClose, onApplied }: { onClose: () => void; onApplied: () => void }) {
@@ -65,19 +66,21 @@ export function PlanTomorrow({ onClose, onApplied }: { onClose: () => void; onAp
   }
 
   if (error) return <p className="error small">{error}</p>
-  if (!plan) return <p className="muted small">Working out tomorrow…</p>
+  if (!plan) return <p className="muted small">{t('Working out tomorrow…')}</p>
 
   if (done !== null) {
     return (
       <div className="stack tight">
         <strong>
-          {done} thing{done === 1 ? '' : 's'} scheduled for tomorrow.
+          {done === 1
+            ? t('1 thing scheduled for tomorrow.')
+            : t('{n} things scheduled for tomorrow.', { n: done })}
         </strong>
         <p className="muted small">
-          They are ordinary plans now — move or cancel any of them as usual.
+          {t('They are ordinary plans now — move or cancel any of them as usual.')}
         </p>
         <button className="primary" onClick={onClose}>
-          Good
+          {t('Good')}
         </button>
       </div>
     )
@@ -88,12 +91,18 @@ export function PlanTomorrow({ onClose, onApplied }: { onClose: () => void; onAp
   return (
     <div className="stack tight">
       <p className="muted small">
-        {plan.fixedCount} fixed thing{plan.fixedCount === 1 ? '' : 's'} tomorrow —{' '}
-        {plan.percentBooked}% of the day. Here is where the rest could go.
+        {plan.fixedCount === 1
+          ? t('1 fixed thing tomorrow — {pct}% of the day. Here is where the rest could go.', {
+              pct: plan.percentBooked,
+            })
+          : t('{n} fixed things tomorrow — {pct}% of the day. Here is where the rest could go.', {
+              n: plan.fixedCount,
+              pct: plan.percentBooked,
+            })}
       </p>
 
       {plan.proposals.length === 0 && plan.unplaceable.length === 0 && (
-        <p className="muted">Nothing is waiting for a time. Tomorrow is already settled.</p>
+        <p className="muted">{t('Nothing is waiting for a time. Tomorrow is already settled.')}</p>
       )}
 
       {plan.proposals.map((p) => {
@@ -103,7 +112,7 @@ export function PlanTomorrow({ onClose, onApplied }: { onClose: () => void; onAp
             <div>
               <strong>{p.title}</strong>
               <p className="muted small">
-                {clock(p.at)} · {p.durationMinutes} min — {p.because}
+                {clock(p.at)} · {t('{n} min', { n: p.durationMinutes })} — {p.because}
               </p>
             </div>
             <button
@@ -114,7 +123,7 @@ export function PlanTomorrow({ onClose, onApplied }: { onClose: () => void; onAp
                 )
               }
             >
-              {off ? 'Include' : 'Skip'}
+              {off ? t('Include') : t('Skip')}
             </button>
           </div>
         )
@@ -133,13 +142,15 @@ export function PlanTomorrow({ onClose, onApplied }: { onClose: () => void; onAp
       <div className="row">
         <button className="primary" onClick={() => void apply()} disabled={busy || taking.length === 0}>
           {busy
-            ? 'Scheduling…'
+            ? t('Scheduling…')
             : taking.length === 0
-              ? 'Nothing selected'
-              : `Schedule ${taking.length === plan.proposals.length ? 'all' : taking.length}`}
+              ? t('Nothing selected')
+              : taking.length === plan.proposals.length
+                ? t('Schedule all')
+                : t('Schedule {n}', { n: taking.length })}
         </button>
         <button className="ghost" onClick={onClose} disabled={busy}>
-          Not now
+          {t('Not now')}
         </button>
       </div>
     </div>

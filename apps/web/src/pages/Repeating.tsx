@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { RecurrenceDTO, ScheduleDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
+import { rich, t } from '../lib/i18n.tsx'
 import { dayLabel, relativeDay } from '../lib/time.ts'
 import { useOnChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
@@ -42,7 +43,10 @@ export default function Repeating() {
   async function stop(item: RecurrenceDTO) {
     // Worth a confirm: it removes every future occurrence in one go.
     const ok = window.confirm(
-      `Stop "${item.title}"?\n\n${item.upcomingCount} upcoming will be removed. Anything already done stays in your history.`,
+      t('Stop "{title}"?\n\n{n} upcoming will be removed. Anything already done stays in your history.', {
+        title: item.title,
+        n: item.upcomingCount,
+      }),
     )
     if (!ok) return
 
@@ -52,9 +56,11 @@ export default function Repeating() {
         method: 'DELETE',
       })
       setNote(
-        r.keptOccurrences > 0
-          ? `Stopped. ${r.keptOccurrences} past one${r.keptOccurrences === 1 ? '' : 's'} kept in your history.`
-          : 'Stopped.',
+        r.keptOccurrences > 1
+          ? t('Stopped. {n} past ones kept in your history.', { n: r.keptOccurrences })
+          : r.keptOccurrences === 1
+            ? t('Stopped. 1 past one kept in your history.')
+            : t('Stopped.'),
       )
       await load()
     } catch (err) {
@@ -66,13 +72,21 @@ export default function Repeating() {
 
   async function stopSchedule(item: ScheduleDTO) {
     const ok = window.confirm(
-      `Stop "${item.title}"?\n\nThe steps still ahead will be removed. ${item.done > 0 ? 'The ones already done stay in your history.' : ''}`,
+      item.done > 0
+        ? t('Stop "{title}"?\n\nThe steps still ahead will be removed. The ones already done stay in your history.', {
+            title: item.title,
+          })
+        : t('Stop "{title}"?\n\nThe steps still ahead will be removed.', { title: item.title }),
     )
     if (!ok) return
     setBusy(item.id)
     try {
       const r = await api<{ removed: number }>(`/schedules/${item.id}`, { method: 'DELETE' })
-      setNote(`Stopped. ${r.removed} upcoming step${r.removed === 1 ? '' : 's'} removed.`)
+      setNote(
+        r.removed === 1
+          ? t('Stopped. 1 upcoming step removed.')
+          : t('Stopped. {n} upcoming steps removed.', { n: r.removed }),
+      )
       await load()
     } catch (err) {
       setError((err as Error).message)
@@ -82,7 +96,7 @@ export default function Repeating() {
   }
 
   if (error) return <p className="error">{error}</p>
-  if (!items) return <p className="muted">Loading…</p>
+  if (!items) return <p className="muted">{t('Loading…')}</p>
 
   const active = items.filter((i) => i.status === 'active')
   const ended = items.filter((i) => i.status !== 'active')
@@ -91,11 +105,12 @@ export default function Repeating() {
   return (
     <div className="stack">
       <div className="page-head">
-        <h1 className="page-title">Repeating</h1>
+        <h1 className="page-title">{t('Repeating')}</h1>
         <span className="page-count">
-          {active.length} running{ended.length > 0 ? ` · ${ended.length} stopped` : ''}
+          {t('{n} running', { n: active.length })}
+          {ended.length > 0 ? ` · ${t('{n} stopped', { n: ended.length })}` : ''}
           {runningSchedules.length > 0
-            ? ` · ${runningSchedules.length} schedule${runningSchedules.length === 1 ? '' : 's'}`
+            ? ` · ${runningSchedules.length === 1 ? t('1 schedule') : t('{n} schedules', { n: runningSchedules.length })}`
             : ''}
         </span>
       </div>
@@ -103,10 +118,10 @@ export default function Repeating() {
       {/* The two ways a plan comes back: on a rhythm, or on a set of dates. */}
       <div className="row repeat-starts">
         <button className="primary small-btn" onClick={() => openAdd({ repeat: true })}>
-          + Repeating plan
+          + {t('Repeating plan')}
         </button>
         <button className="ghost small-btn" onClick={() => openAdd({ schedule: true })}>
-          + Schedule of dates
+          + {t('Schedule of dates')}
         </button>
       </div>
 
@@ -117,12 +132,12 @@ export default function Repeating() {
           <span className="blank-mark" aria-hidden>
             &#8635;
           </span>
-          <h3>Nothing repeats yet</h3>
+          <h3>{t('Nothing repeats yet')}</h3>
           <p>
-            <strong>Repeating plan</strong> is for a rhythm — every day, every Monday, every
-            3 months, every year. <strong>Schedule of dates</strong> is for dates that follow a
-            plan instead — a child&rsquo;s vaccinations at 6 weeks, 10 weeks, 9 months. You can
-            also just type &ldquo;standup every tuesday at 10am&rdquo; when you add something.
+            {rich(
+              '<b>Repeating plan</b> is for a rhythm — every day, every Monday, every 3 months, every year. <b>Schedule of dates</b> is for dates that follow a plan instead — a child’s vaccinations at 6 weeks, 10 weeks, 9 months. You can also just type “{example}” when you add something.',
+              { b: (s) => <strong>{s}</strong>, example: 'standup every tuesday at 10am' },
+            )}
           </p>
         </div>
       )}
@@ -142,15 +157,15 @@ export default function Repeating() {
                 <div className="tile-tags">
                   {item.nextAt ? (
                     <span className="tag is-live">
-                      Next {dayLabel(item.nextAt)} · {relativeDay(item.nextAt)}
+                      {t('Next {day} · {when}', { day: dayLabel(item.nextAt), when: relativeDay(item.nextAt) })}
                     </span>
                   ) : (
-                    <span className="tag is-warn">Nothing left ahead</span>
+                    <span className="tag is-warn">{t('Nothing left ahead')}</span>
                   )}
                   {item.upcomingCount > 0 && (
-                    <span className="tag">{item.upcomingCount} booked</span>
+                    <span className="tag">{t('{n} booked', { n: item.upcomingCount })}</span>
                   )}
-                  <span className="tag">{item.durationMinutes} min</span>
+                  <span className="tag">{t('{n} min', { n: item.durationMinutes })}</span>
                   {(item.placeName ?? item.placeLabel) && (
                     <span className="tag">{item.placeName ?? item.placeLabel}</span>
                   )}
@@ -163,7 +178,7 @@ export default function Repeating() {
                   onClick={() => void stop(item)}
                   disabled={busy === item.id}
                 >
-                  Stop
+                  {t('Stop')}
                 </button>
               </div>
             </article>
@@ -173,7 +188,7 @@ export default function Repeating() {
 
       {runningSchedules.length > 0 && (
         <section className="stack tight">
-          <h2 className="section-title">Schedules · {runningSchedules.length}</h2>
+          <h2 className="section-title">{t('Schedules · {n}', { n: runningSchedules.length })}</h2>
           <div className="tiles two-up">
             {runningSchedules.map((item) => (
               <article className="tile" key={item.id}>
@@ -183,7 +198,11 @@ export default function Repeating() {
                 <div className="tile-body">
                   <p className="tile-title">{item.title}</p>
                   <p className="tile-sub">
-                    {item.done} of {item.total} done · counting from {dayLabel(item.startsOn)}
+                    {t('{done} of {total} done · counting from {day}', {
+                      done: item.done,
+                      total: item.total,
+                      day: dayLabel(item.startsOn),
+                    })}
                   </p>
                   <div className="schedule-progress" aria-hidden>
                     <span style={{ width: `${item.total ? (item.done / item.total) * 100 : 0}%` }} />
@@ -191,11 +210,14 @@ export default function Repeating() {
                   <div className="tile-tags">
                     {item.next ? (
                       <span className="tag is-live">
-                        Next: {item.next.title.replace(`${item.title} — `, '')} ·{' '}
-                        {dayLabel(item.next.dueAt)} · {relativeDay(item.next.dueAt)}
+                        {t('Next: {step} · {day} · {when}', {
+                          step: item.next.title.replace(`${item.title} — `, ''),
+                          day: dayLabel(item.next.dueAt),
+                          when: relativeDay(item.next.dueAt),
+                        })}
                       </span>
                     ) : (
-                      <span className="tag is-warn">Nothing left ahead</span>
+                      <span className="tag is-warn">{t('Nothing left ahead')}</span>
                     )}
                   </div>
                 </div>
@@ -205,7 +227,7 @@ export default function Repeating() {
                     onClick={() => void stopSchedule(item)}
                     disabled={busy === item.id}
                   >
-                    Stop
+                    {t('Stop')}
                   </button>
                 </div>
               </article>
@@ -218,7 +240,7 @@ export default function Repeating() {
           part of the record even once the rule is switched off. */}
       {ended.length > 0 && (
         <section>
-          <h2 className="section-title muted-title">Stopped · {ended.length}</h2>
+          <h2 className="section-title muted-title">{t('Stopped · {n}', { n: ended.length })}</h2>
           <div className="tiles two-up">
             {ended.map((item) => (
               <article className="tile dimmed" key={item.id}>

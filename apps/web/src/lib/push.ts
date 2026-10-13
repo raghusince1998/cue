@@ -1,4 +1,5 @@
 import { api } from './api.ts'
+import { t } from './i18n.tsx'
 
 /** VAPID keys travel as base64url; PushManager wants raw bytes. */
 function urlBase64ToUint8Array(base64: string): Uint8Array {
@@ -44,7 +45,7 @@ async function register(): Promise<{ ok: boolean; reason?: string }> {
     '/push/public-key',
   )
   if (!configured) {
-    return { ok: false, reason: 'Server has no VAPID keys yet. Run: npm run vapid' }
+    return { ok: false, reason: t('Server has no VAPID keys yet. Run: npm run vapid') }
   }
 
   const registration = await navigator.serviceWorker.ready
@@ -77,14 +78,14 @@ export async function enablePush(): Promise<{ ok: boolean; reason?: string }> {
     return {
       ok: false,
       reason: needsHomeScreenInstall()
-        ? 'On iPhone, tap Share then "Add to Home Screen" first, then enable notifications from there.'
-        : 'This browser does not support push notifications.',
+        ? t('On iPhone, tap Share then "Add to Home Screen" first, then enable notifications from there.')
+        : t('This browser does not support push notifications.'),
     }
   }
 
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') {
-    return { ok: false, reason: 'Notification permission was declined.' }
+    return { ok: false, reason: t('Notification permission was declined.') }
   }
 
   return register()

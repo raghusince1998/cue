@@ -3,6 +3,8 @@
  * the clip is recorded, uploaded, and played back as-is.
  */
 
+import { t } from './i18n.tsx'
+
 /** Ordered by preference: opus is tiny, mp4 is what Safari will give us. */
 const CANDIDATE_TYPES = [
   'audio/webm;codecs=opus',
@@ -14,7 +16,7 @@ const CANDIDATE_TYPES = [
 
 export function pickMimeType(): string | null {
   if (typeof MediaRecorder === 'undefined') return null
-  return CANDIDATE_TYPES.find((t) => MediaRecorder.isTypeSupported(t)) ?? null
+  return CANDIDATE_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) ?? null
 }
 
 export function recordingSupported(): boolean {
@@ -39,7 +41,7 @@ export interface RecordingSession {
 
 export async function startRecording(): Promise<RecordingSession> {
   const mimeType = pickMimeType()
-  if (!mimeType) throw new Error('This browser cannot record audio.')
+  if (!mimeType) throw new Error(t('This browser cannot record audio.'))
 
   let stream: MediaStream
   try {
@@ -47,9 +49,9 @@ export async function startRecording(): Promise<RecordingSession> {
   } catch (err) {
     const name = (err as Error).name
     if (name === 'NotAllowedError') {
-      throw new Error('Microphone permission was denied. Allow it for this site and try again.')
+      throw new Error(t('Microphone permission was denied. Allow it for this site and try again.'))
     }
-    if (name === 'NotFoundError') throw new Error('No microphone found on this device.')
+    if (name === 'NotFoundError') throw new Error(t('No microphone found on this device.'))
     throw new Error((err as Error).message)
   }
 

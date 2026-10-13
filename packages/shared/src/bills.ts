@@ -4,6 +4,7 @@
  * Each has a next due date that moves on by its cycle once it is paid, and a
  * reminder some days before.
  */
+import type { Lang } from './examHindi.ts'
 
 export const BILL_CATEGORIES = [
   { key: 'rent', label: 'Rent', mark: '🏠', words: /\b(?:rent|lease)\b/i },
@@ -72,9 +73,21 @@ export function daysToDue(due: string, now = new Date()): number {
   return Math.round((parseDay(due).getTime() - today.getTime()) / 86_400_000)
 }
 
-/** "due today", "due in 3 days", "3 days overdue" — or, for a renewal, "expires …". */
-export function dueLabel(due: string, kind: 'bill' | 'renewal', now = new Date()): string {
+/**
+ * "due today", "due in 3 days", "3 days overdue" — or, for a renewal, "expires …".
+ * In Hindi: "आज देय", "3 दिन में देय", "3 दिन पहले देय था"; "3 महीने में ख़त्म".
+ */
+export function dueLabel(due: string, kind: 'bill' | 'renewal', now = new Date(), lang: Lang = 'en'): string {
   const n = daysToDue(due, now)
+  if (lang === 'hi') {
+    if (n < 0) return kind === 'renewal' ? `${-n} दिन पहले ख़त्म` : `${-n} दिन पहले देय था`
+    const what = kind === 'renewal' ? 'ख़त्म' : 'देय'
+    if (n === 0) return `आज ${what}`
+    if (n === 1) return `कल ${what}`
+    if (n < 45) return `${n} दिन में ${what}`
+    if (n < 730) return `${Math.round(n / 30.44)} महीने में ${what}`
+    return `${Math.round(n / 365.25)} साल में ${what}`
+  }
   const verb = kind === 'renewal' ? 'expires' : 'due'
   if (n < 0) return kind === 'renewal' ? `expired ${-n === 1 ? 'yesterday' : `${-n} days ago`}` : `${-n} day${n === -1 ? '' : 's'} overdue`
   if (n === 0) return `${verb} today`

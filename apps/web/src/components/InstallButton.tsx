@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { t } from '../lib/i18n.tsx'
 
 /**
  * Installing Cue to the home screen.
@@ -69,16 +70,18 @@ export function InstallButton() {
     return (
       <div className="install-row">
         <div>
-          <strong>Add Cue to your home screen</strong>
+          <strong>{t('Add Cue to your home screen')}</strong>
           <p className="muted small">
             {showIosHelp
-              ? 'Tap the Share button, then "Add to Home Screen". On iPhone this step is what lets reminders reach you at all — Safari delivers none to a tab.'
-              : 'Reminders cannot reach an iPhone until Cue is on the home screen.'}
+              ? t(
+                  'Tap the Share button, then "Add to Home Screen". On iPhone this step is what lets reminders reach you at all — Safari delivers none to a tab.',
+                )
+              : t('Reminders cannot reach an iPhone until Cue is on the home screen.')}
           </p>
         </div>
         {!showIosHelp && (
           <button className="ghost small-btn" onClick={() => setShowIosHelp(true)}>
-            How?
+            {t('How?')}
           </button>
         )}
       </div>
@@ -99,13 +102,13 @@ export function InstallButton() {
   return (
     <div className="install-row">
       <div>
-        <strong>Install Cue</strong>
+        <strong>{t('Install Cue')}</strong>
         <p className="muted small">
-          Opens from your home screen and keeps working without signal.
+          {t('Opens from your home screen and keeps working without signal.')}
         </p>
       </div>
       <button className="primary small-btn" onClick={() => void install()}>
-        Install
+        {t('Install')}
       </button>
     </div>
   )

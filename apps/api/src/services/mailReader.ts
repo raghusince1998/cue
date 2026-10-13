@@ -15,9 +15,11 @@ import {
   parseChallan,
   serviceAsBooking,
   vehicleNoticeName,
+  type Lang,
   type ParsedDelivery,
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { langOf, langsOf, localeOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
 import { freshAccessToken, type AccountRow } from './oauthConnect.ts'
 import { billFromInsurance, billFromNotice, billFromPuc } from './bills.ts'
@@ -315,15 +317,17 @@ function worthTracking(p: ParsedDelivery): boolean {
   return Boolean(p.item || p.orderRef || p.trackingUrl)
 }
 
-const dayWords = (d: Date | string) =>
-  new Date(typeof d === 'string' ? `${d}T00:00:00` : d).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+const dayWords = (d: Date | string, lang: Lang) =>
+  new Date(typeof d === 'string' ? `${d}T00:00:00` : d).toLocaleDateString(localeOf(lang), { weekday: 'short', day: 'numeric', month: 'short' })
 
 /**
  * What one message is, made into what Cue keeps: a bill, a booking, a parcel.
- * Returns what was found, in words, or null when it was none of these — or
- * already known.
+ * Returns what was found, in words — the person's language — or null when it
+ * was none of these, or already known. Only the words around what was found
+ * are translated: a bill's or a booking's own name is kept as the email gave
+ * it, since later emails are matched against it.
  */
-export async function actOn(orgId: string, userId: string, msg: MailMessage, now = new Date()): Promise<string | null> {
+export async function actOn(orgId: string, userId: string, msg: MailMessage, now = new Date(), lang: Lang = 'en'): Promise<string | null> {
   // The sender too: an insurer or a shop is often named only there.
   const body = `${msg.subject}\n${msg.from}\n${msg.text}`.slice(0, 15_000)
   const pdf = msg.pdf ? `${msg.subject}\n${msg.from}\n${msg.pdf}`.slice(0, 15_000) : null
@@ -347,18 +351,26 @@ export async function actOn(orgId: string, userId: string, msg: MailMessage, now
   const fromPdf = pdf ? found(pdf) : []
   const bookings = score(fromPdf) > score(fromBody) ? fromPdf : fromBody
 
-  const read = await readText(orgId, userId, body, bookings, now)
+  const read = await readText(orgId, userId, body, bookings, now, lang)
   // Nothing in the email itself: perhaps in its attachment — a bill, a parcel.
-  return read ?? (pdf && bookings.length === 0 ? readText(orgId, userId, pdf, [], now) : null)
+  return read ?? (pdf && bookings.length === 0 ? readText(orgId, userId, pdf, [], now, lang) : null)
 }
 
 /** One text read for what it is: a bill, the bookings already found in it, a notice, a parcel. */
-async function readText(orgId: string, userId: string, text: string, bookings: ParsedBooking[], now: Date): Promise<string | null> {
+async function readText(
+  orgId: string,
+  userId: string,
+  text: string,
+  bookings: ParsedBooking[],
+  now: Date,
+  lang: Lang,
+): Promise<string | null> {
+  const day = (d: Date | string) => dayWords(d, lang)
   // A card statement first: it can mention insurance (a card's cover plan) too.
   const notice = parseDueNotice(text)
   if (notice?.category === 'card') {
     const r = await billFromNotice(orgId, userId, notice)
-    return r ? `${notice.name}: ${formatRupees(notice.amountPaise)} due ${dayWords(notice.dueOn)}` : null
+    return r ? t(lang, '{name}: {amount} due {day}', { name: notice.name, amount: formatRupees(notice.amountPaise), day: day(notice.dueOn) }) : null
   }
 
   if (bookings.length > 0) {
@@ -367,7 +379,7 @@ async function readText(orgId: string, userId: string, text: string, bookings: P
       const city = booking.city ?? (booking.type === 'hotel' || booking.type === 'bus' ? findCity(text, await knownPlaces(userId)) : null)
       const saved = await saveFoundBooking(orgId, userId, booking, city, now)
       // Said in full where it is listed: which train, from where to where, when.
-      const when = `${dayWords(booking.startsAt)}${booking.timeKnown ? `, ${booking.startsAt.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}` : ''}`
+      const when = `${day(booking.startsAt)}${booking.timeKnown ? `, ${booking.startsAt.toLocaleTimeString(localeOf(lang), { hour: 'numeric', minute: '2-digit' })}` : ''}`
       if (saved) said.push(`${saved.title}, ${when}`)
     }
     return said.length > 0 ? said.join('; ') : null
@@ -379,41 +391,44 @@ async function readText(orgId: string, userId: string, text: string, bookings: P
   if (vehicle?.kind === 'puc') {
     const name = vehicleNoticeName(vehicle)
     const r = await billFromPuc(orgId, userId, { name, vehicle: vehicle.vehicle, dueOn: vehicle.dueOn })
-    return r ? `${name}: valid till ${dayWords(vehicle.dueOn)}` : null
+    return r ? t(lang, '{name}: valid till {day}', { name, day: day(vehicle.dueOn) }) : null
   }
   if (vehicle?.kind === 'service') {
     const service = serviceAsBooking(vehicle)
     const saved = await saveFoundBooking(orgId, userId, service, null, now)
-    return saved ? `${saved.title}: service due ${dayWords(vehicle.dueOn)}` : null
+    return saved ? t(lang, '{name}: service due {day}', { name: saved.title, day: day(vehicle.dueOn) }) : null
   }
 
   // A FASTag running low or recharged; a traffic challan issued or paid.
   const tag = parseFastag(text)
-  if (tag) return fastagFromNotice(orgId, userId, tag, now)
+  if (tag) return fastagFromNotice(orgId, userId, tag, now, lang)
   const challan = parseChallan(text)
-  if (challan) return challanFromNotice(orgId, userId, challan, now)
+  if (challan) return challanFromNotice(orgId, userId, challan, now, lang)
 
   // Car, bike, health, life: when cover ends, or a premium is due.
   const policy = parseInsurance(text)
   if (policy) {
     const r = await billFromInsurance(orgId, userId, policy)
-    return r
-      ? `${policy.name}: ${policy.kind === 'renewal' ? 'renew by' : 'premium due'} ${dayWords(policy.dueOn)}${policy.amountPaise ? ` (${formatRupees(policy.amountPaise)})` : ''}`
-      : null
+    if (!r) return null
+    const due =
+      policy.kind === 'renewal'
+        ? t(lang, '{name}: renew by {day}', { name: policy.name, day: day(policy.dueOn) })
+        : t(lang, '{name}: premium due {day}', { name: policy.name, day: day(policy.dueOn) })
+    return `${due}${policy.amountPaise ? ` (${formatRupees(policy.amountPaise)})` : ''}`
   }
 
   if (notice) {
     const r = await billFromNotice(orgId, userId, notice)
-    return r ? `${notice.name}: ${formatRupees(notice.amountPaise)} due ${dayWords(notice.dueOn)}` : null
+    return r ? t(lang, '{name}: {amount} due {day}', { name: notice.name, amount: formatRupees(notice.amountPaise), day: day(notice.dueOn) }) : null
   }
 
   const parcel = parseDelivery(text, now)
   if (parcel && worthTracking(parcel)) {
     const { delivery } = await recordDelivery(orgId, userId, parcel)
-    const what = [delivery.store, delivery.item].filter(Boolean).join(' · ') || 'A parcel'
-    return delivery.status === 'delivered'
-      ? `${what}: delivered`
-      : `${what}${delivery.expectedOn ? `, expected ${dayWords(delivery.expectedOn)}` : ''}${delivery.codPaise ? ` · keep ${formatRupees(delivery.codPaise)} ready` : ''}`
+    const what = [delivery.store, delivery.item].filter(Boolean).join(' · ') || t(lang, 'A parcel')
+    if (delivery.status === 'delivered') return t(lang, '{what}: delivered', { what })
+    const coming = delivery.expectedOn ? t(lang, '{what}, expected {day}', { what, day: day(delivery.expectedOn) }) : what
+    return `${coming}${delivery.codPaise ? ` · ${t(lang, 'keep {cod} ready', { cod: formatRupees(delivery.codPaise) })}` : ''}`
   }
   return null
 }
@@ -465,10 +480,12 @@ export async function readMail(
         : await fromGmail(access, Math.max(1, Math.ceil((now.getTime() - since.getTime()) / 86_400_000)), seen)
 
     const found: string[] = []
+    // What was found is said in the language the person reads Cue in.
+    const lang: Lang = messages.length > 0 ? await langOf(account.userId) : 'en'
     for (const msg of messages) {
       let what: string | null = null
       try {
-        what = await actOn(account.orgId, account.userId, msg, now)
+        what = await actOn(account.orgId, account.userId, msg, now, lang)
       } catch (err) {
         console.error('[mail] could not act on a message', (err as Error).message)
       }
@@ -512,12 +529,15 @@ export async function runMailReading(now = new Date()): Promise<number> {
       console.error('[mail] reading failed for an account:', (err as Error).message)
     }
   }
+  const langs = await langsOf([...byUser.keys()])
   for (const [userId, found] of byUser) {
+    const lang = langs.get(userId) ?? 'en'
     await sendToUser(userId, {
-      title: found.length === 1 ? 'Found in your email' : `${found.length} things found in your email`,
+      title: found.length === 1 ? t(lang, 'Found in your email') : t(lang, '{n} things found in your email', { n: found.length }),
       body: found.slice(0, 4).join(' · ') + (found.length > 4 ? ' …' : ''),
       url: '/',
       tag: 'mail',
+      lang,
     }).catch(() => undefined)
   }
   return [...byUser.values()].reduce((s, f) => s + f.length, 0)

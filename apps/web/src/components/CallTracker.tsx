@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { callFromLink, clearCall, onCallStarted, readCall, startCall, type PendingCall } from '../lib/calls.ts'
+import { rich, t } from '../lib/i18n.tsx'
 import { CallLog } from './CallLog.tsx'
 import { Modal } from './Modal.tsx'
 
@@ -65,14 +66,14 @@ export function CallTracker() {
       {pending && !logging && (
         <div className="call-banner" role="status">
           <span>
-            Call with <strong>{pending.name ?? pending.phone}</strong>: how did it go?
+            {rich('Call with {name}: how did it go?', { name: <strong>{pending.name ?? pending.phone}</strong> })}
           </span>
           <button className="primary small-btn" onClick={() => setLogging(pending)}>
-            Log it
+            {t('Log it')}
           </button>
           <button
             className="ghost small-btn"
-            aria-label="Dismiss"
+            aria-label={t('Dismiss')}
             onClick={() => {
               clearCall()
               setPending(null)
@@ -84,7 +85,7 @@ export function CallTracker() {
       )}
 
       {logging && (
-        <Modal title="How did the call go?" onClose={() => finish(false)}>
+        <Modal title={t('How did the call go?')} onClose={() => finish(false)}>
           <CallLog call={logging} onDone={finish} />
         </Modal>
       )}

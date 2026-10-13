@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
+import { t } from '../lib/i18n.tsx'
 
 /**
  * The list attached to a plan.
@@ -70,7 +71,7 @@ export function Checklist({ commitmentId }: { commitmentId: string }) {
     <div className="checklist">
       {items.length > 0 && (
         <p className="checklist-count muted small">
-          {done} of {items.length} done
+          {t('{done} of {total} done', { done, total: items.length })}
         </p>
       )}
 
@@ -82,7 +83,7 @@ export function Checklist({ commitmentId }: { commitmentId: string }) {
               <span>{item.text}</span>
               <button
                 className="checklist-remove"
-                aria-label={`Remove ${item.text}`}
+                aria-label={t('Remove {item}', { item: item.text })}
                 onClick={(e) => {
                   e.preventDefault()
                   void remove(item)
@@ -105,10 +106,10 @@ export function Checklist({ commitmentId }: { commitmentId: string }) {
               void add()
             }
           }}
-          placeholder={items.length === 0 ? 'Add something to the list…' : 'Add another…'}
+          placeholder={items.length === 0 ? t('Add something to the list…') : t('Add another…')}
         />
         <button className="ghost tiny-btn" onClick={() => void add()} disabled={busy || !adding.trim()}>
-          Add
+          {t('Add')}
         </button>
       </div>
     </div>

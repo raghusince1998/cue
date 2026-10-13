@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { TEMPLATE_FIELDS, fillTemplate, shortName, type MessageTemplateDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { useAuth } from '../lib/auth.tsx'
+import { t } from '../lib/i18n.tsx'
 import { waNumber } from './PersonSheet.tsx'
 
 export interface Recipient {
@@ -39,14 +40,14 @@ export function QuickMessage({
   const [error, setError] = useState<string | null>(null)
 
   const fill = useCallback(
-    (t: MessageTemplateDTO) => fillTemplate(t.body, { name: to.name, company: to.company, me: me?.name }),
+    (tpl: MessageTemplateDTO) => fillTemplate(tpl.body, { name: to.name, company: to.company, me: me?.name }),
     [to.name, to.company, me?.name],
   )
 
   const choose = useCallback(
-    (t: MessageTemplateDTO) => {
-      setChosen(t)
-      setText(fill(t))
+    (tpl: MessageTemplateDTO) => {
+      setChosen(tpl)
+      setText(fill(tpl))
       setCopied(false)
     },
     [fill],
@@ -64,7 +65,7 @@ export function QuickMessage({
 
   useEffect(() => {
     void load().then((list) => {
-      const pick = presetTemplate ?? ((suggest && list.find((t) => suggest.test(t.title))) || list[0])
+      const pick = presetTemplate ?? ((suggest && list.find((tpl) => suggest.test(tpl.title))) || list[0])
       if (pick) choose(pick)
     })
     // Once, on opening: later reloads must not undo what was picked or typed.
@@ -74,7 +75,7 @@ export function QuickMessage({
     try {
       const list = await api<MessageTemplateDTO[]>('/templates/starters', { method: 'POST' })
       setTemplates(list)
-      const pick = (suggest && list.find((t) => suggest.test(t.title))) || list[0]
+      const pick = (suggest && list.find((tpl) => suggest.test(tpl.title))) || list[0]
       if (pick) choose(pick)
     } catch (err) {
       setError((err as Error).message)
@@ -94,7 +95,7 @@ export function QuickMessage({
       setCopied(true)
       used()
     } catch {
-      setError('Could not copy — select the message and copy it yourself.')
+      setError(t('Could not copy — select the message and copy it yourself.'))
     }
   }
 
@@ -104,7 +105,7 @@ export function QuickMessage({
         onClose={() => {
           setManaging(false)
           void load().then((list) => {
-            const still = chosen && list.find((t) => t.id === chosen.id)
+            const still = chosen && list.find((tpl) => tpl.id === chosen.id)
             if (still) choose(still)
             else if (list[0]) choose(list[0])
             else {
@@ -117,22 +118,22 @@ export function QuickMessage({
     )
   }
 
-  if (templates === null) return <p className="muted small">Loading your messages…</p>
+  if (templates === null) return <p className="muted small">{t('Loading your messages…')}</p>
 
   if (templates.length === 0 && !presetTemplate) {
     return (
       <div className="stack tight">
         <p className="muted small">
-          No quick messages yet. Start from five that cover most days (thanks for meeting, missed
-          your call, sharing the details, a gentle reminder, running late) and change them to sound
-          like you.
+          {t(
+            'No quick messages yet. Start from five that cover most days (thanks for meeting, missed your call, sharing the details, a gentle reminder, running late) and change them to sound like you.',
+          )}
         </p>
         <div className="row">
           <button className="primary small-btn" onClick={() => void addStarters()}>
-            Add the starter messages
+            {t('Add the starter messages')}
           </button>
           <button className="ghost small-btn" onClick={() => setManaging(true)}>
-            Write my own
+            {t('Write my own')}
           </button>
         </div>
         {error && <p className="error small">{error}</p>}
@@ -146,9 +147,9 @@ export function QuickMessage({
   return (
     <div className="stack tight quick-message">
       <div className="chips">
-        {[...(presetTemplate ? [presetTemplate] : []), ...templates].map((t) => (
-          <button key={t.id} className={`chip${chosen?.id === t.id ? ' selected' : ''}`} onClick={() => choose(t)}>
-            {t.title}
+        {[...(presetTemplate ? [presetTemplate] : []), ...templates].map((tpl) => (
+          <button key={tpl.id} className={`chip${chosen?.id === tpl.id ? ' selected' : ''}`} onClick={() => choose(tpl)}>
+            {tpl.title}
           </button>
         ))}
       </div>
@@ -160,10 +161,10 @@ export function QuickMessage({
           setCopied(false)
         }}
         rows={Math.min(10, Math.max(4, text.split('\n').length + 1))}
-        aria-label="Message"
+        aria-label={t('Message')}
       />
       <button className="link small fit-btn" onClick={() => setManaging(true)}>
-        Edit my messages
+        {t('Edit my messages')}
       </button>
 
       <div className="row nudge-send">
@@ -176,7 +177,7 @@ export function QuickMessage({
             onDone?.()
           }}
         >
-          {to.phone && first ? `WhatsApp ${first}` : 'WhatsApp'}
+          {to.phone && first ? t('WhatsApp {name}', { name: first }) : 'WhatsApp'}
         </button>
         {to.phone && (
           <a
@@ -187,7 +188,7 @@ export function QuickMessage({
               onDone?.()
             }}
           >
-            Text
+            {t('Text')}
           </a>
         )}
         <button
@@ -203,10 +204,10 @@ export function QuickMessage({
             onDone?.()
           }}
         >
-          Email
+          {t('Email')}
         </button>
         <button className="ghost small-btn" disabled={!text.trim()} onClick={() => void copy()}>
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? t('Copied') : t('Copy')}
         </button>
       </div>
       {error && <p className="error small">{error}</p>}
@@ -231,10 +232,11 @@ export function TemplateManager({ onClose }: { onClose: () => void }) {
     void load()
   }, [load])
 
-  function open(t: MessageTemplateDTO | null) {
-    setEditing(t ? t.id : 'new')
-    setTitle(t?.title ?? '')
-    setBody(t?.body ?? 'Hi {first}, \n\n{me}')
+  function open(tpl: MessageTemplateDTO | null) {
+    setEditing(tpl ? tpl.id : 'new')
+    setTitle(tpl?.title ?? '')
+    // The fields stay as they are: they are filled in when it is sent.
+    setBody(tpl?.body ?? t('Hi {first}, \n\n{me}'))
     setError(null)
   }
 
@@ -282,32 +284,38 @@ export function TemplateManager({ onClose }: { onClose: () => void }) {
     return (
       <div className="stack tight template-form">
         <label>
-          Name
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Thanks for meeting" autoFocus />
+          {t('Name')}
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={t('e.g. Thanks for meeting')}
+            autoFocus
+          />
         </label>
         <label>
-          Message
+          {t('Message')}
           <textarea ref={bodyRef} value={body} onChange={(e) => setBody(e.target.value)} rows={6} />
         </label>
         <div className="chips">
-          <span className="muted small">Insert</span>
+          <span className="muted small">{t('Insert')}</span>
           {TEMPLATE_FIELDS.map((f) => (
             <button key={f.token} className="chip" onClick={() => insert(f.token)}>
-              {f.label}
+              {t(f.label)}
             </button>
           ))}
         </div>
         <p className="muted small">
-          Filled in when you send it: &ldquo;{'{first}'}&rdquo; becomes Ravi, or Dr. Rao for
-          someone with a title.
+          {t('Filled in when you send it: “{first}” becomes Ravi, or Dr. Rao for someone with a title.', {
+            first: '{first}',
+          })}
         </p>
         {error && <p className="error small">{error}</p>}
         <div className="row">
           <button className="primary small-btn" onClick={() => void save()} disabled={busy || !title.trim() || !body.trim()}>
-            Save
+            {t('Save')}
           </button>
           <button className="ghost small-btn" onClick={() => setEditing(null)}>
-            Cancel
+            {t('Cancel')}
           </button>
         </div>
       </div>
@@ -317,31 +325,35 @@ export function TemplateManager({ onClose }: { onClose: () => void }) {
   return (
     <div className="stack tight template-list">
       {templates === null ? (
-        <p className="muted small">Loading…</p>
+        <p className="muted small">{t('Loading…')}</p>
       ) : templates.length === 0 ? (
-        <p className="muted small">No quick messages yet.</p>
+        <p className="muted small">{t('No quick messages yet.')}</p>
       ) : (
-        templates.map((t) => (
-          <div className="your-day-line" key={t.id}>
+        templates.map((tpl) => (
+          <div className="your-day-line" key={tpl.id}>
             <span>
-              <strong>{t.title}</strong>
-              <span className="muted small"> · {t.body.split('\n')[0]!.slice(0, 70)}</span>
+              <strong>{tpl.title}</strong>
+              <span className="muted small"> · {tpl.body.split('\n')[0]!.slice(0, 70)}</span>
             </span>
-            {confirming === t.id ? (
+            {confirming === tpl.id ? (
               <span className="row">
-                <button className="danger-btn tiny-btn" onClick={() => void remove(t.id)} disabled={busy}>
-                  Delete
+                <button className="danger-btn tiny-btn" onClick={() => void remove(tpl.id)} disabled={busy}>
+                  {t('Delete')}
                 </button>
                 <button className="ghost tiny-btn" onClick={() => setConfirming(null)}>
-                  Keep
+                  {t('Keep')}
                 </button>
               </span>
             ) : (
               <span className="row">
-                <button className="ghost tiny-btn" onClick={() => open(t)}>
-                  Edit
+                <button className="ghost tiny-btn" onClick={() => open(tpl)}>
+                  {t('Edit')}
                 </button>
-                <button className="ghost tiny-btn" onClick={() => setConfirming(t.id)} aria-label={`Delete ${t.title}`}>
+                <button
+                  className="ghost tiny-btn"
+                  onClick={() => setConfirming(tpl.id)}
+                  aria-label={t('Delete {title}', { title: tpl.title })}
+                >
                   &times;
                 </button>
               </span>
@@ -351,10 +363,10 @@ export function TemplateManager({ onClose }: { onClose: () => void }) {
       )}
       <div className="row">
         <button className="ghost small-btn" onClick={() => open(null)}>
-          + New message
+          {t('+ New message')}
         </button>
         <button className="primary small-btn" onClick={onClose}>
-          Done
+          {t('Done')}
         </button>
       </div>
     </div>

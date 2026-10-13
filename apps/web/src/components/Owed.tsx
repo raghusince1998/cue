@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { formatRupees, owedMessage } from '@cue/shared'
 import { api } from '../lib/api.ts'
+import { rich, t } from '../lib/i18n.tsx'
 import { dayLabel, relativeDay } from '../lib/time.ts'
 import { waNumber } from './PersonSheet.tsx'
 
@@ -89,7 +90,7 @@ export function OwedRow({
   }
 
   async function remove(id: string) {
-    if (!window.confirm('Remove this? It will no longer be counted as owed.')) return
+    if (!window.confirm(t('Remove this? It will no longer be counted as owed.'))) return
     setBusy(true)
     try {
       await api(`/owed/${id}`, { method: 'DELETE' })
@@ -101,16 +102,18 @@ export function OwedRow({
     }
   }
 
-  const asked = person.lastAskedAt ? `reminded ${relativeDay(person.lastAskedAt)}` : null
+  const asked = person.lastAskedAt ? t('reminded {when}', { when: relativeDay(person.lastAskedAt) }) : null
   return (
     <div className={`owed-row${open ? ' is-open' : ''}`}>
       <button className="owed-main" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <span className="owed-name">{compact ? `${formatRupees(person.totalPaise)} owed to you` : person.name}</span>
+        <span className="owed-name">
+          {compact ? t('{amount} owed to you', { amount: formatRupees(person.totalPaise) }) : person.name}
+        </span>
         <span className="owed-sub">
           {[
             !compact && person.organization,
-            `since ${dayLabel(person.since)}`,
-            person.items.length > 1 && `${person.items.length} things`,
+            t('since {day}', { day: dayLabel(person.since) }),
+            person.items.length > 1 && t('{n} things', { n: person.items.length }),
             asked,
           ]
             .filter(Boolean)
@@ -120,10 +123,10 @@ export function OwedRow({
       {!compact && <strong className="owed-amount">{formatRupees(person.totalPaise)}</strong>}
       <div className="owed-actions">
         <button className="ghost tiny-btn" onClick={() => void remind()} disabled={busy}>
-          {person.phone ? 'Remind' : 'Remind…'}
+          {person.phone ? t('Remind') : t('Remind…')}
         </button>
         <button className="ghost tiny-btn" onClick={() => void settle(person.items.map((i) => i.id))} disabled={busy}>
-          Paid
+          {t('Paid')}
         </button>
       </div>
       {open && (
@@ -131,17 +134,17 @@ export function OwedRow({
           {person.items.map((i) => (
             <li key={i.id}>
               <span>
-                {dayLabel(i.on)} · {i.note ?? (i.expenseId ? 'Their share' : 'Lent')}
+                {dayLabel(i.on)} · {i.note ?? (i.expenseId ? t('Their share') : t('Lent'))}
               </span>
               <span className="owed-item-side">
                 <strong>{formatRupees(i.amountPaise)}</strong>
                 {person.items.length > 1 && (
                   <button className="link small" onClick={() => void settle([i.id])} disabled={busy}>
-                    Paid
+                    {t('Paid')}
                   </button>
                 )}
                 <button className="link small danger-text" onClick={() => void remove(i.id)} disabled={busy}>
-                  Remove
+                  {t('Remove')}
                 </button>
               </span>
             </li>
@@ -196,7 +199,7 @@ export function OwedCard({
     e.preventDefault()
     const paise = rupeesToPaise(amount)
     if (!name.trim() || !paise) {
-      setError('Who, and how much?')
+      setError(t('Who, and how much?'))
       return
     }
     const match = contacts.find((c) => c.name.toLowerCase() === name.trim().toLowerCase())
@@ -226,7 +229,7 @@ export function OwedCard({
       setUpiId(p.upiId)
       setEditingUpi(false)
     } catch (err) {
-      setError((err as Error).message.includes('UPI') ? (err as Error).message : 'A UPI ID looks like name@okaxis.')
+      setError((err as Error).message.includes('UPI') ? (err as Error).message : t('A UPI ID looks like name@okaxis.'))
     }
   }
 
@@ -234,15 +237,17 @@ export function OwedCard({
   return (
     <section className={`card owed-card${highlight ? ' is-highlit' : ''}`} id="owed">
       <div className="row owed-head">
-        <h2 className="section-title">Owed to you</h2>
+        <h2 className="section-title">{t('Owed to you')}</h2>
         {data && data.totalPaise > 0 && <strong>{formatRupees(data.totalPaise)}</strong>}
       </div>
 
       {data && people.length === 0 && !adding && (
         <p className="muted small">
-          Nobody owes you anything. Split an expense with someone, or note money you lent, and it waits here until
-          they pay you back.
-          {data.paidRecentlyPaise > 0 && ` ${formatRupees(data.paidRecentlyPaise)} paid back this month.`}
+          {t(
+            'Nobody owes you anything. Split an expense with someone, or note money you lent, and it waits here until they pay you back.',
+          )}
+          {data.paidRecentlyPaise > 0 &&
+            ` ${t('{amount} paid back this month.', { amount: formatRupees(data.paidRecentlyPaise) })}`}
         </p>
       )}
 
@@ -261,29 +266,41 @@ export function OwedCard({
               className="grow"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Who? e.g. Ravi"
-              aria-label="Who owes you"
+              placeholder={t('Who? e.g. Ravi')}
+              aria-label={t('Who owes you')}
               list="owed-people"
               autoFocus
             />
             <label className="amount-field small-amount">
               <span aria-hidden>₹</span>
-              <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="0" aria-label="How much" />
+              <input
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                inputMode="decimal"
+                placeholder="0"
+                aria-label={t('How much')}
+              />
             </label>
           </div>
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What for? (optional)" aria-label="What for" maxLength={300} />
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={t('What for? (optional)')}
+            aria-label={t('What for')}
+            maxLength={300}
+          />
           <div className="row">
             <button className="primary small-btn" type="submit" disabled={busy}>
-              Save
+              {t('Save')}
             </button>
             <button className="ghost small-btn" type="button" onClick={() => setAdding(false)}>
-              Cancel
+              {t('Cancel')}
             </button>
           </div>
         </form>
       ) : (
         <button className="link small fit-btn" onClick={() => setAdding(true)}>
-          + Someone owes you
+          {t('+ Someone owes you')}
         </button>
       )}
       <datalist id="owed-people">
@@ -300,14 +317,14 @@ export function OwedCard({
             value={upiDraft}
             onChange={(e) => setUpiDraft(e.target.value)}
             placeholder="yourname@okaxis"
-            aria-label="Your UPI ID"
+            aria-label={t('Your UPI ID')}
             autoFocus
           />
           <button className="primary small-btn" onClick={() => void saveUpi()}>
-            Save
+            {t('Save')}
           </button>
           <button className="ghost small-btn" onClick={() => setEditingUpi(false)}>
-            Cancel
+            {t('Cancel')}
           </button>
         </div>
       ) : (
@@ -315,10 +332,10 @@ export function OwedCard({
           <p className="muted small">
             {upiId ? (
               <>
-                Reminders include your UPI ID, <strong>{upiId}</strong>.{' '}
+                {rich('Reminders include your UPI ID, {upi}.', { upi: <strong>{upiId}</strong> })}{' '}
               </>
             ) : (
-              'Add your UPI ID and reminders say where to send it. '
+              `${t('Add your UPI ID and reminders say where to send it.')} `
             )}
             <button
               className="link small"
@@ -327,7 +344,7 @@ export function OwedCard({
                 setEditingUpi(true)
               }}
             >
-              {upiId ? 'Change' : 'Add UPI ID'}
+              {upiId ? t('Change') : t('Add UPI ID')}
             </button>
           </p>
         )

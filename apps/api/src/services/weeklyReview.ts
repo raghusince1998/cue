@@ -5,7 +5,8 @@ import { canBeOverdue, managedByCue, takesTime } from './overdue.ts'
 import { listAccounts } from './accounts.ts'
 import { orgOf } from './keepInTouch.ts'
 import { weekTargets } from './targets.ts'
-import type { TargetProgress } from '@cue/shared'
+import type { Lang, TargetProgress } from '@cue/shared'
+import { langOf, localeOf, t } from '../i18n.ts'
 
 /**
  * The weekly review.
@@ -214,18 +215,18 @@ export async function weekReview(userId: string, now = new Date()): Promise<Week
   }
 }
 
-function hours(minutes: number): string {
+function hours(minutes: number, lang: Lang): string {
   const h = minutes / 60
-  return `${h % 1 === 0 ? h : h.toFixed(1)}h`
+  return t(lang, '{n}h', { n: h % 1 === 0 ? h : h.toFixed(1) })
 }
 
-function weekday(ymdValue: string): string {
+function weekday(ymdValue: string, lang: Lang): string {
   const [y, m, d] = ymdValue.split('-').map(Number)
-  return new Date(y!, m! - 1, d!).toLocaleDateString('en-IN', { weekday: 'long' })
+  return new Date(y!, m! - 1, d!).toLocaleDateString(localeOf(lang), { weekday: 'long' })
 }
 
 /** The Friday notification, or null when the week had nothing in it either way. */
-export function composeReview(r: WeekReview): { title: string; body: string; url: string } | null {
+export function composeReview(r: WeekReview, lang: Lang = 'en'): { title: string; body: string; url: string } | null {
   const empty =
     r.done.total === 0 &&
     r.meetings.count === 0 &&
@@ -235,25 +236,41 @@ export function composeReview(r: WeekReview): { title: string; body: string; url
     r.quiet.length === 0
   if (empty) return null
 
-  const head = [`${r.done.total} done`, r.slipped > 0 ? `${r.slipped} slipped` : null].filter(Boolean)
+  const head = [
+    r.done.total === 1 ? t(lang, '1 done') : t(lang, '{n} done', { n: r.done.total }),
+    r.slipped === 1 ? t(lang, '1 slipped') : r.slipped > 1 ? t(lang, '{n} slipped', { n: r.slipped }) : null,
+  ].filter(Boolean)
   const lines: string[] = []
   if (r.meetings.count > 0) {
-    lines.push(`${r.meetings.count} meeting${r.meetings.count === 1 ? '' : 's'} (${hours(r.meetings.minutes)}).`)
+    const time = hours(r.meetings.minutes, lang)
+    lines.push(
+      r.meetings.count === 1
+        ? t(lang, '1 meeting ({time}).', { time })
+        : t(lang, '{n} meetings ({time}).', { n: r.meetings.count, time }),
+    )
   }
-  if (r.focus.minutes > 0) lines.push(`${hours(r.focus.minutes)} of focus time.`)
+  if (r.focus.minutes > 0) lines.push(t(lang, '{time} of focus time.', { time: hours(r.focus.minutes, lang) }))
   if (r.targets.length > 0) {
-    const hit = r.targets.filter((t) => t.status === 'done').length
-    lines.push(`Hit ${hit} of ${r.targets.length} target${r.targets.length === 1 ? '' : 's'}.`)
+    const hit = r.targets.filter((x) => x.status === 'done').length
+    lines.push(
+      r.targets.length === 1
+        ? t(lang, 'Hit {hit} of 1 target.', { hit })
+        : t(lang, 'Hit {hit} of {n} targets.', { hit, n: r.targets.length }),
+    )
   }
-  if (r.waiting.count > 0) lines.push(`${r.waiting.count} still waiting on others.`)
+  if (r.waiting.count > 0) lines.push(t(lang, '{n} still waiting on others.', { n: r.waiting.count }))
   if (r.quiet.length > 0) {
     const [first, ...rest] = r.quiet.map((q) => q.name)
-    lines.push(`Gone quiet: ${first}${rest.length ? ` and ${rest.length} more` : ''}.`)
+    lines.push(
+      rest.length
+        ? t(lang, 'Gone quiet: {name} and {n} more.', { name: first!, n: rest.length })
+        : t(lang, 'Gone quiet: {name}.', { name: first! }),
+    )
   }
-  if (r.nextWeek.busiest) lines.push(`Next week's busiest day: ${weekday(r.nextWeek.busiest)}.`)
-  lines.push('Two minutes to review it.')
+  if (r.nextWeek.busiest) lines.push(t(lang, "Next week's busiest day: {day}.", { day: weekday(r.nextWeek.busiest, lang) }))
+  lines.push(t(lang, 'Two minutes to review it.'))
 
-  return { title: `Your week: ${head.join(', ')}`, body: lines.join(' '), url: '/?review=1' }
+  return { title: t(lang, 'Your week: {list}', { list: head.join(', ') }), body: lines.join(' '), url: '/?review=1' }
 }
 
 export async function markReviewed(userId: string, now = new Date()): Promise<void> {
@@ -282,9 +299,10 @@ export async function usersDueForReview(now = new Date()): Promise<DueUser[]> {
 }
 
 export async function sendReviewTo(userId: string, now = new Date()) {
-  const brief = composeReview(await weekReview(userId, now))
+  const lang = await langOf(userId)
+  const brief = composeReview(await weekReview(userId, now), lang)
   if (!brief) return null
-  const delivered = await sendToUser(userId, { ...brief, tag: 'weekly-review' })
+  const delivered = await sendToUser(userId, { ...brief, tag: 'weekly-review', lang })
   return { delivered, title: brief.title, body: brief.body }
 }
 

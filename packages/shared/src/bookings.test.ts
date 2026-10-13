@@ -120,3 +120,12 @@ test('a typed hotel check-in has a name, a city and no stray words', () => {
   assert.equal(stay.city, 'Jaipur')
   assert.equal(local(stay.startsAt), '2026-11-10 14:00')
 })
+
+test('leadLabel in Hindi', async () => {
+  const { leadLabel } = await import('./bookings.ts')
+  assert.equal(leadLabel(180, 'hi'), '3 घंटे पहले')
+  assert.equal(leadLabel(90, 'hi'), '90 मिनट पहले')
+  assert.equal(leadLabel(300, 'hi'), 'उसी सुबह')
+  assert.equal(leadLabel(60), '1 hour before')
+  assert.equal(leadLabel(300), 'that morning')
+})

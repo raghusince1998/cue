@@ -7,6 +7,7 @@ import {
   extractPlace,
   findMalformedTime,
 } from './textCleanup.ts'
+import type { Lang } from './examHindi.ts'
 
 /**
  * Why a sentence did not become a plan.
@@ -35,7 +36,14 @@ export interface Diagnosis {
   message: string
 }
 
-export function diagnose(input: string): Diagnosis | null {
+/** The message in Hindi: what is still needed, then the time that could not be read. */
+function messageHi(month: string | null, weekday: boolean, malformed: string | null): string {
+  const missing = [month ? `${month} की तारीख` : weekday ? 'एक तारीख' : null, malformed ? 'एक सही समय' : null].filter(Boolean)
+  if (missing.length === 0) return 'इसमें मुझे कोई तारीख या समय नहीं मिला।'
+  return `बस थोड़ा और — अभी ${missing.join(', और ')} चाहिए।${malformed ? ` "${malformed}" को मैं समय की तरह नहीं पढ़ पाया।` : ''}`
+}
+
+export function diagnose(input: string, lang: Lang = 'en'): Diagnosis | null {
   const text = input.trim()
   if (text.length < 8) return null
 
@@ -59,9 +67,11 @@ export function diagnose(input: string): Diagnosis | null {
   if (missing.length === 0 && !title) return null
 
   const message =
-    missing.length > 0
-      ? `Almost — I still need ${missing.join(', and ')}.`
-      : 'I could not find a date or time in that.'
+    lang === 'hi'
+      ? messageHi(month ? month[1]! : null, Boolean(weekday), malformed)
+      : missing.length > 0
+        ? `Almost — I still need ${missing.join(', and ')}.`
+        : 'I could not find a date or time in that.'
 
   return {
     ...(month ? { monthWithoutDay: month[1] } : {}),

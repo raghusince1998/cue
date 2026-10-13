@@ -1,3 +1,5 @@
+import { t } from './i18n.tsx'
+
 export interface Fix {
   lat: number
   lng: number
@@ -12,7 +14,7 @@ export interface Fix {
  */
 export async function getFix(timeoutMs = 15_000): Promise<Fix> {
   if (!('geolocation' in navigator)) {
-    throw new Error('This device has no location support.')
+    throw new Error(t('This device has no location support.'))
   }
 
   return new Promise((resolve, reject) => {
@@ -25,9 +27,9 @@ export async function getFix(timeoutMs = 15_000): Promise<Fix> {
         }),
       (err) => {
         const messages: Record<number, string> = {
-          1: 'Location permission was denied. Enable it for this site and try again.',
-          2: 'Could not get a fix. Move somewhere with a clearer sky view.',
-          3: 'Location timed out. Try again.',
+          1: t('Location permission was denied. Enable it for this site and try again.'),
+          2: t('Could not get a fix. Move somewhere with a clearer sky view.'),
+          3: t('Location timed out. Try again.'),
         }
         reject(new Error(messages[err.code] ?? err.message))
       },

@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm'
-import { categoryOfBill, dueLabel, formatRupees, nextDue, type BillDTO, type Repeat } from '@cue/shared'
+import { categoryOfBill, daysToDue, dueLabel, formatRupees, nextDue, type BillDTO, type Lang, type Repeat } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { langsOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
 
 /**
@@ -254,11 +255,36 @@ export async function billsToRemind(now = new Date()): Promise<DueBill[]> {
   return rows as unknown as DueBill[]
 }
 
+/**
+ * "due today", "due in 3 days", "3 days overdue", "expires …": the shared
+ * dueLabel in English, and the same in the person's language.
+ */
+export function dueSaid(due: string, kind: 'bill' | 'renewal', now: Date, lang: Lang): string {
+  if (lang === 'en') return dueLabel(due, kind, now)
+  const n = daysToDue(due, now)
+  const months = Math.round(n / 30.44)
+  const years = Math.round(n / 365.25)
+  if (kind === 'renewal') {
+    if (n < 0) return n === -1 ? t(lang, 'expired yesterday') : t(lang, 'expired {n} days ago', { n: -n })
+    if (n === 0) return t(lang, 'expires today')
+    if (n === 1) return t(lang, 'expires tomorrow')
+    if (n < 45) return t(lang, 'expires in {n} days', { n })
+    if (n < 730) return t(lang, 'expires in {n} months', { n: months })
+    return t(lang, 'expires in {n} years', { n: years })
+  }
+  if (n < 0) return n === -1 ? t(lang, '1 day overdue') : t(lang, '{n} days overdue', { n: -n })
+  if (n === 0) return t(lang, 'due today')
+  if (n === 1) return t(lang, 'due tomorrow')
+  if (n < 45) return t(lang, 'due in {n} days', { n })
+  if (n < 730) return t(lang, 'due in {n} months', { n: months })
+  return t(lang, 'due in {n} years', { n: years })
+}
+
 /** What a reminder says about one bill: "Rent ₹15,000 due tomorrow". */
-function line(x: DueBill): string {
+function line(x: DueBill, lang: Lang): string {
   const today = new Date(`${x.local_date}T12:00:00`)
   const amount = x.amount_paise ? ` ${formatRupees(Number(x.amount_paise))}` : ''
-  return `${x.name}${amount} ${dueLabel(x.due_on, x.kind, today)}`
+  return `${x.name}${amount} ${dueSaid(x.due_on, x.kind, today, lang)}`
 }
 
 /** One notification per person, however many bills: marked before it goes. */
@@ -266,16 +292,18 @@ export async function runBillReminders(now = new Date()): Promise<number> {
   const due = await billsToRemind(now)
   const byUser = new Map<string, DueBill[]>()
   for (const x of due) byUser.set(x.user_id, [...(byUser.get(x.user_id) ?? []), x])
+  const langs = await langsOf([...byUser.keys()])
   let sent = 0
   for (const [userId, list] of byUser) {
     try {
+      const lang = langs.get(userId) ?? 'en'
       await db
         .update(b)
         .set({ lastRemindedOn: list[0]!.local_date })
         .where(inArray(b.id, list.map((x) => x.id)))
-      const title = list.length === 1 ? line(list[0]!) : `${list.length} bills and renewals coming up`
-      const body = list.length === 1 ? 'Tap to mark it paid when it is done.' : list.map(line).join(' · ')
-      await sendToUser(userId, { title, body, url: '/bills', tag: 'bills' })
+      const title = list.length === 1 ? line(list[0]!, lang) : t(lang, '{n} bills and renewals coming up', { n: list.length })
+      const body = list.length === 1 ? t(lang, 'Tap to mark it paid when it is done.') : list.map((x) => line(x, lang)).join(' · ')
+      await sendToUser(userId, { title, body, url: '/bills', tag: 'bills', lang })
       sent += 1
     } catch (err) {
       console.error('[bills] failed for user', userId, (err as Error).message)

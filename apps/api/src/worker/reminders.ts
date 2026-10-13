@@ -1,6 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm'
-import { examLineHi, splitExamStep } from '@cue/shared'
-import { langOf } from '../services/exams.ts'
+import { examLineHi, splitExamStep, type Lang } from '@cue/shared'
+import { langOf, localeOf, msg, t } from '../i18n.ts'
 import { db, schema } from '../db/index.ts'
 import { env } from '../env.ts'
 import { sendToUser } from '../push.ts'
@@ -34,28 +34,47 @@ async function claimDue(limit: number): Promise<ClaimedReminder[]> {
   return rows as unknown as ClaimedReminder[]
 }
 
+/** A booking's start, said three ways: now, within the next hour and a half, or on a day. */
+const BOOKING_WHEN = {
+  leaves: { now: msg('Leaves now'), soon: msg('Leaves in {minutes} min, at {time}'), later: msg('Leaves {day} at {time}') },
+  checkIn: { now: msg('Check-in now'), soon: msg('Check-in in {minutes} min, at {time}'), later: msg('Check-in {day} at {time}') },
+  starts: { now: msg('Starts now'), soon: msg('Starts in {minutes} min, at {time}'), later: msg('Starts {day} at {time}') },
+}
+
 /** "Leaves tomorrow at 5:00 pm from Mumbai Central · PNR 2345678901 · 3A · B2 45" */
 function bookingLine(
   dueAt: Date,
   booking: { type: string; from: string | null },
   notes: string | null,
+  lang: Lang,
 ): string {
-  const time = dueAt.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+  const time = dueAt.toLocaleTimeString(localeOf(lang), { hour: 'numeric', minute: '2-digit' })
   const minutes = Math.round((dueAt.getTime() - Date.now()) / 60_000)
   const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
   const days = Math.round((startOf(dueAt) - startOf(new Date())) / 86_400_000)
   if (booking.type === 'service') {
-    return `Service due ${days <= 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`}: book a slot${notes ? ` · ${notes}` : ''}`
+    const due =
+      days <= 0
+        ? t(lang, 'Service due today: book a slot')
+        : days === 1
+          ? t(lang, 'Service due tomorrow: book a slot')
+          : t(lang, 'Service due in {days} days: book a slot', { days })
+    return `${due}${notes ? ` · ${notes}` : ''}`
   }
-  const verb = ['train', 'flight', 'bus'].includes(booking.type) ? 'Leaves' : booking.type === 'hotel' ? 'Check-in' : 'Starts'
-  const day = days <= 0 ? 'today' : days === 1 ? 'tomorrow' : dueAt.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+  const said = BOOKING_WHEN[['train', 'flight', 'bus'].includes(booking.type) ? 'leaves' : booking.type === 'hotel' ? 'checkIn' : 'starts']
+  const day =
+    days <= 0
+      ? t(lang, 'today')
+      : days === 1
+        ? t(lang, 'tomorrow')
+        : dueAt.toLocaleDateString(localeOf(lang), { weekday: 'short', day: 'numeric', month: 'short' })
   const when =
     minutes <= 0
-      ? `${verb} now`
+      ? t(lang, said.now)
       : minutes < 90
-        ? `${verb} in ${minutes} min, at ${time}`
-        : `${verb} ${day} at ${time}`
-  const from = booking.from && booking.type !== 'hotel' ? ` from ${booking.from}` : ''
+        ? t(lang, said.soon, { minutes, time })
+        : t(lang, said.later, { day, time })
+  const from = booking.from && booking.type !== 'hotel' ? t(lang, ' from {place}', { place: booking.from }) : ''
   return `${when}${from}${notes ? ` · ${notes}` : ''}`
 }
 
@@ -89,12 +108,12 @@ function examLine(dueAt: Date, step: string, place: string | null): string {
   }
 }
 
-function describe(dueAt: Date, escalation: number): string {
+function describe(dueAt: Date, escalation: number, lang: Lang): string {
   const overdueMin = Math.round((Date.now() - dueAt.getTime()) / 60_000)
-  if (escalation === 0) return 'Due now'
-  if (overdueMin < 60) return `Still open — ${overdueMin} min overdue`
+  if (escalation === 0) return t(lang, 'Due now')
+  if (overdueMin < 60) return t(lang, 'Still open — {n} min overdue', { n: overdueMin })
   const hours = Math.floor(overdueMin / 60)
-  return `Still open — ${hours}h overdue`
+  return t(lang, 'Still open — {n}h overdue', { n: hours })
 }
 
 async function processOne(claim: ClaimedReminder) {
@@ -169,21 +188,26 @@ async function processOne(claim: ClaimedReminder) {
     }
   }
 
+  const lang = await langOf(commitment.userId)
   await sendToUser(commitment.userId, {
     title: commitment.title,
     body: focusing
-      ? `Focus time starts now — reminders will wait until ${new Date(
-          commitment.dueAt.getTime() + commitment.durationMinutes * 60_000,
-        ).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}.`
+      ? t(lang, 'Focus time starts now — reminders will wait until {time}.', {
+          time: new Date(commitment.dueAt.getTime() + commitment.durationMinutes * 60_000).toLocaleTimeString(
+            localeOf(lang),
+            { hour: 'numeric', minute: '2-digit' },
+          ),
+        })
       : waiting
-      ? 'Time to check in. Tap to send a nudge.'
+      ? t(lang, 'Time to check in. Tap to send a nudge.')
       : booked
-      ? bookingLine(commitment.dueAt, commitment.booking!, commitment.notes)
+      ? bookingLine(commitment.dueAt, commitment.booking!, commitment.notes, lang)
       : exam
-      ? (await langOf(commitment.userId)) === 'hi'
+      ? lang === 'hi'
         ? examLineHi(commitment.dueAt, examStep, commitment.placeLabel ?? row.placeName)
         : examLine(commitment.dueAt, commitment.examStep!, commitment.placeLabel ?? row.placeName)
-      : `${mirrored ? 'Starting now' : describe(commitment.dueAt, claim.attempt)}${suffix}`,
+      : `${mirrored ? t(lang, 'Starting now') : describe(commitment.dueAt, claim.attempt, lang)}${suffix}`,
+    lang,
     tag: `commitment-${commitment.id}`,
     // Lets the notification offer a Call button instead of only a nag.
     phone: row.contactPhone ?? undefined,

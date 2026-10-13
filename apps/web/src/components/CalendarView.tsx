@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { CommitmentDTO } from '@cue/shared'
+import type { CommitmentDTO, TimeWindow } from '@cue/shared'
 import { api } from '../lib/api.ts'
+import { locale, msg, t } from '../lib/i18n.tsx'
 
 export type CalendarMode = 'month' | 'week'
 
@@ -28,8 +29,23 @@ interface DayEntry {
   commitment: CommitmentDTO | null
 }
 
-const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const WEEKDAY_LETTER = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+/**
+ * Sunday first, in the reader's language: 'Sun' or 'रवि'. Hindi has no
+ * one-letter day names — शुक्र and शनि would both be श — so narrow is short.
+ */
+function weekdayNames(weekday: 'short' | 'narrow'): string[] {
+  const form = locale() ? 'short' : weekday
+  // 1 Jan 2023 was a Sunday.
+  return Array.from({ length: 7 }, (_, i) => new Date(2023, 0, 1 + i).toLocaleDateString(locale(), { weekday: form }))
+}
+
+/** A flexible item's chip says which part of the day, in small letters. */
+const WINDOW_WORD: Record<TimeWindow, string> = {
+  morning: msg('morning'),
+  afternoon: msg('afternoon'),
+  evening: msg('evening'),
+  night: msg('night'),
+}
 
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
@@ -88,9 +104,9 @@ function daysCovered(c: CommitmentDTO): string[] {
 }
 
 function timeLabel(c: CommitmentDTO): string {
-  if (c.allDay) return 'All day'
-  if (c.flexibility === 'flexible' && c.preferredWindow) return c.preferredWindow
-  return new Date(c.dueAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  if (c.allDay) return t('All day')
+  if (c.flexibility === 'flexible' && c.preferredWindow) return t(WINDOW_WORD[c.preferredWindow] ?? c.preferredWindow)
+  return new Date(c.dueAt).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })
 }
 
 /** What colours a chip: why it matters, in priority order. */
@@ -181,6 +197,8 @@ export function CalendarView({
   const narrow = measuredNarrow || compact
   const now = new Date()
   const { from, to } = useMemo(() => windowFor(mode, anchor), [mode, anchor])
+  const weekdayShort = useMemo(() => weekdayNames('short'), [])
+  const weekdayLetter = useMemo(() => weekdayNames('narrow'), [])
 
   useEffect(() => {
     let cancelled = false
@@ -234,7 +252,7 @@ export function CalendarView({
           title: trip.placeLabel,
           isTrip: true,
           tone: 'trip',
-          timeLabel: 'Trip',
+          timeLabel: t('Trip'),
           commitment: null,
         })
       }
@@ -270,8 +288,8 @@ export function CalendarView({
 
   const heading =
     mode === 'week'
-      ? `${from.toLocaleDateString([], { day: 'numeric', month: 'short' })} – ${addDays(from, 6).toLocaleDateString([], { day: 'numeric', month: 'short' })}`
-      : anchor.toLocaleDateString([], { month: 'long', year: 'numeric' })
+      ? `${from.toLocaleDateString(locale(), { day: 'numeric', month: 'short' })} – ${addDays(from, 6).toLocaleDateString(locale(), { day: 'numeric', month: 'short' })}`
+      : anchor.toLocaleDateString(locale(), { month: 'long', year: 'numeric' })
 
   const selectedItems = selected ? (byDay.get(selected) ?? []) : []
 
@@ -286,14 +304,14 @@ export function CalendarView({
             setSelected(null)
           }}
         >
-          Today
+          {t('Today')}
         </button>
         {/* Paired, because they are one control: step through time. */}
         <span className="cal-steps">
-          <button className="cal-nav" onClick={() => step(-1)} aria-label="Previous">
+          <button className="cal-nav" onClick={() => step(-1)} aria-label={t('Previous')}>
             ‹
           </button>
-          <button className="cal-nav" onClick={() => step(1)} aria-label="Next">
+          <button className="cal-nav" onClick={() => step(1)} aria-label={t('Next')}>
             ›
           </button>
         </span>
@@ -311,7 +329,7 @@ export function CalendarView({
                 className={`cal-dayrow${sameDay(day, now) ? ' is-today' : ''}`}
               >
                 <div className="cal-dayrow-head">
-                  <span className="cal-dayrow-dow">{WEEKDAY_SHORT[day.getDay()]}</span>
+                  <span className="cal-dayrow-dow">{weekdayShort[day.getDay()]}</span>
                   <span className="cal-dayrow-num">{day.getDate()}</span>
                 </div>
                 {list.length === 0 ? (
@@ -339,7 +357,7 @@ export function CalendarView({
       <div
         className={`cal-grid${mode === 'week' ? ' is-week' : ''}${narrow ? ' is-dots' : ''}${loading ? ' is-loading' : ''}`}
       >
-        {(mode === 'week' && !compact ? WEEKDAY_SHORT : WEEKDAY_LETTER).map((label, i) => (
+        {(mode === 'week' && !compact ? weekdayShort : weekdayLetter).map((label, i) => (
           <div className="cal-dow" key={i}>
             {label}
           </div>
@@ -384,7 +402,7 @@ export function CalendarView({
                 ))
               )}
               {!narrow && list.length > visible.length && (
-                <span className="cal-more">+{list.length - visible.length} more</span>
+                <span className="cal-more">{t('+{n} more', { n: list.length - visible.length })}</span>
               )}
             </button>
           )
@@ -393,7 +411,7 @@ export function CalendarView({
       )}
 
       {narrow && !selected && (mode === 'month' || compact) && (
-        <p className="muted small cal-hint">Tap a day to see what is on it.</p>
+        <p className="muted small cal-hint">{t('Tap a day to see what is on it.')}</p>
       )}
 
       {selected && (
@@ -403,10 +421,10 @@ export function CalendarView({
               Number(selected.split('-')[0]),
               Number(selected.split('-')[1]),
               Number(selected.split('-')[2]),
-            ).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}
+            ).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })}
           </strong>
           {selectedItems.length === 0 ? (
-            <p className="muted small">Nothing planned.</p>
+            <p className="muted small">{t('Nothing planned.')}</p>
           ) : (
             <ul className="plain">
               {selectedItems.map((e) => (
@@ -432,13 +450,13 @@ export function CalendarView({
 
       {!compact && (
       <p className="muted small cal-legend">
-        <span className="cal-dot tone-overdue" /> overdue
-        <span className="cal-dot tone-critical" /> critical
-        <span className="cal-dot tone-repeat" /> repeats
-        <span className="cal-dot tone-trip" /> away
-        <span className="cal-dot tone-feed" /> from a calendar
-        <span className="cal-dot tone-done" /> done
-        <span className="cal-dot tone-cancelled" /> cancelled
+        <span className="cal-dot tone-overdue" /> {t('overdue')}
+        <span className="cal-dot tone-critical" /> {t('critical')}
+        <span className="cal-dot tone-repeat" /> {t('repeats')}
+        <span className="cal-dot tone-trip" /> {t('away')}
+        <span className="cal-dot tone-feed" /> {t('from a calendar')}
+        <span className="cal-dot tone-done" /> {t('done')}
+        <span className="cal-dot tone-cancelled" /> {t('cancelled')}
       </p>
       )}
     </div>

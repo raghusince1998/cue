@@ -29,6 +29,7 @@ import { ShareAvailability } from './ShareAvailability.tsx'
 import { QuickAdd } from './QuickAdd.tsx'
 import { DictateButton } from './DictateButton.tsx'
 import { announceChange } from '../lib/changes.ts'
+import { t } from '../lib/i18n.tsx'
 
 /**
  * Everything there is to add, in the sheet the header's Add button opens.
@@ -376,7 +377,7 @@ export function AddPanel({
         }
         setConflict(report)
         setDismissedSuggestion(true)
-        setError('Your usual time is taken — pick another below.')
+        setError(t('Your usual time is taken — pick another below.'))
         return
       }
 
@@ -399,7 +400,7 @@ export function AddPanel({
       await runConflictCheck()
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setError('That time does not fit the other commitment either — pick another slot.')
+        setError(t('That time does not fit the other commitment either — pick another slot.'))
         return
       }
       setError((err as Error).message)
@@ -479,7 +480,7 @@ export function AddPanel({
         // Pressing save is choosing the time, so from here a clash blocks.
         setTimeChosen(true)
         setConflict(err.data as ConflictReport)
-        setError('That slot was taken while you were filling this in.')
+        setError(t('That slot was taken while you were filling this in.'))
         return
       }
 
@@ -491,7 +492,7 @@ export function AddPanel({
           finish()
           return
         } catch {
-          setError('Could not reach the server and could not save locally either.')
+          setError(t('Could not reach the server and could not save locally either.'))
           return
         }
       }
@@ -514,10 +515,10 @@ export function AddPanel({
           className={mode === 'upcoming' ? 'selected' : ''}
           onClick={() => setMode('upcoming')}
         >
-          Coming up
+          {t('Coming up')}
         </button>
         <button className={mode === 'past' ? 'selected' : ''} onClick={() => setMode('past')}>
-          Already happened
+          {t('Already happened')}
         </button>
       </div>
     </>
@@ -539,7 +540,7 @@ export function AddPanel({
         {sharing ? (
           <>
             <button className="quick-more" onClick={() => setSharing(false)}>
-              Back to adding something
+              {t('Back to adding something')}
             </button>
             <ShareAvailability onDone={onDone} initialWith={initialShareWith} />
           </>
@@ -555,7 +556,7 @@ export function AddPanel({
         ) : fullForm ? (
           <>
             <button className="quick-more" onClick={() => setFullForm(false)}>
-              Back to one line
+              {t('Back to one line')}
             </button>
             <UpcomingForm
               key={quickSaves}
@@ -577,10 +578,10 @@ export function AddPanel({
             />
             <div className="row quick-more-row">
               <button className="quick-more" onClick={() => setFullForm(true)}>
-                Set it up in detail instead
+                {t('Set it up in detail instead')}
               </button>
               <button className="quick-more" onClick={() => setSharing(true)}>
-                Share when I&rsquo;m free
+                {t('Share when I’m free')}
               </button>
             </div>
           </>
@@ -605,25 +606,25 @@ export function AddPanel({
 
       {/* ---------------------------------------------------------- where */}
       <section className="card">
-        <h2 className="section-title">Where? (optional)</h2>
+        <h2 className="section-title">{t('Where? (optional)')}</h2>
 
         {!fix && (
           <>
             <button className="primary" onClick={locate} disabled={locating}>
-              {locating ? 'Getting your location…' : 'Use my location'}
+              {locating ? t('Getting your location…') : t('Use my location')}
             </button>
             {locationError && <p className="error small">{locationError}</p>}
             <p className="muted small">
-              Or pick one below. Leave it blank for a call or a video meeting.
+              {t('Or pick one below. Leave it blank for a call or a video meeting.')}
             </p>
           </>
         )}
 
         {fix && (
           <p className="muted small">
-            Fix accurate to {formatDistance(fix.accuracyM)}.{' '}
+            {t('Fix accurate to {distance}.', { distance: formatDistance(fix.accuracyM) })}{' '}
             <button className="link" onClick={locate}>
-              Retry
+              {t('Retry')}
             </button>
           </p>
         )}
@@ -639,7 +640,7 @@ export function AddPanel({
                   <span>{p.name}</span>
                   <span className="muted small">
                     {p.distanceM !== undefined ? formatDistance(p.distanceM) : ''}
-                    {p.withinRadius ? ' · you are here' : ''}
+                    {p.withinRadius ? ` · ${t('you are here')}` : ''}
                   </span>
                 </button>
               </li>
@@ -649,9 +650,9 @@ export function AddPanel({
 
         {!creatingPlace && allPlaces.length > 0 && (
           <label>
-            {matches ? 'Or another saved place' : 'Saved place'}
+            {matches ? t('Or another saved place') : t('Saved place')}
             <select value={placeId ?? ''} onChange={(e) => setPlaceId(e.target.value || null)}>
-              <option value="">— none —</option>
+              <option value="">{t('— none —')}</option>
               {allPlaces.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -664,7 +665,7 @@ export function AddPanel({
         {nearby && nearby.length > 0 && !creatingPlace && (
           <>
             <span className="label-text">
-              Businesses registered at this location ({lookupProvider})
+              {t('Businesses registered at this location ({provider})', { provider: lookupProvider ?? '' })}
             </span>
             <ul className="choices">
               {nearby.slice(0, 6).map((c) => (
@@ -680,15 +681,17 @@ export function AddPanel({
               ))}
             </ul>
             <p className="muted small">
-              Pick one to prefill the details. Nothing is saved until you save the visit.
+              {t('Pick one to prefill the details. Nothing is saved until you save the visit.')}
             </p>
           </>
         )}
 
         {nearby && nearby.length === 0 && !creatingPlace && (
           <p className="muted small">
-            No businesses found here in {lookupProvider === 'osm' ? 'OpenStreetMap' : 'the map data'}
-            . Add the place manually below — it will be recognised on every visit after that.
+            {t(
+              'No businesses found here in {source}. Add the place manually below — it will be recognised on every visit after that.',
+              { source: lookupProvider === 'osm' ? 'OpenStreetMap' : t('the map data') },
+            )}
           </p>
         )}
 
@@ -700,50 +703,50 @@ export function AddPanel({
               setPlaceId(null)
             }}
           >
-            + This is a new place
+            {t('+ This is a new place')}
           </button>
         ) : (
           <>
             <label>
-              New place name
+              {t('New place name')}
               <input
                 value={newPlaceName}
                 onChange={(e) => setNewPlaceName(e.target.value)}
-                placeholder="e.g. City Centre Mall"
+                placeholder={t('e.g. City Centre Mall')}
               />
             </label>
             <label>
-              Type
+              {t('Type')}
               <input
                 value={newPlaceKind}
                 onChange={(e) => setNewPlaceKind(e.target.value)}
-                placeholder="office, shop, gym, home…"
+                placeholder={t('office, shop, gym, home…')}
               />
             </label>
             <label>
-              Address
+              {t('Address')}
               <input
                 value={newPlaceAddress}
                 onChange={(e) => setNewPlaceAddress(e.target.value)}
-                placeholder="Optional"
+                placeholder={t('Optional')}
               />
             </label>
             <label>
-              Reception phone
+              {t('Reception phone')}
               <input
                 type="tel"
                 value={newPlacePhone}
                 onChange={(e) => setNewPlacePhone(e.target.value)}
-                placeholder="Optional"
+                placeholder={t('Optional')}
               />
             </label>
             {!fix && (
               <p className="error small">
-                Get your location first so this place can be recognised next time.
+                {t('Get your location first so this place can be recognised next time.')}
               </p>
             )}
             <button className="link" onClick={() => setCreatingPlace(false)}>
-              Cancel
+              {t('Cancel')}
             </button>
           </>
         )}
@@ -751,13 +754,13 @@ export function AddPanel({
 
       {/* -------------------------------------------------------- purpose */}
       <section className="card">
-        <h2 className="section-title">What kind of thing was it?</h2>
+        <h2 className="section-title">{t('What kind of thing was it?')}</h2>
         <div className="row">
           <button
             className={`choice big${purpose === 'business' ? ' selected' : ''}`}
             onClick={() => setPurpose('business')}
           >
-            Business
+            {t('Business')}
           </button>
           <button
             className={`choice big${purpose === 'personal' ? ' selected' : ''}`}
@@ -766,12 +769,12 @@ export function AddPanel({
               setHasNextStep(null)
             }}
           >
-            Personal
+            {t('Personal')}
           </button>
         </div>
         {purpose === 'personal' && (
           <p className="muted small">
-            Logged and left alone — no follow-up questions, no reminders.
+            {t('Logged and left alone — no follow-up questions, no reminders.')}
           </p>
         )}
       </section>
@@ -780,8 +783,8 @@ export function AddPanel({
       {purpose !== 'personal' && (
         <>
           <section className="card">
-            <h2 className="section-title">How did it go? (optional)</h2>
-            <span className="label-text">Who was it with?</span>
+            <h2 className="section-title">{t('How did it go? (optional)')}</h2>
+            <span className="label-text">{t('Who was it with?')}</span>
             {!creatingContact ? (
               <>
                 {contactsHere.length > 0 && (
@@ -793,7 +796,7 @@ export function AddPanel({
                       setContactName(contacts.find((c) => c.id === id)?.name ?? '')
                     }}
                   >
-                    <option value="">— pick someone —</option>
+                    <option value="">{t('— pick someone —')}</option>
                     {contactsHere.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
@@ -811,13 +814,13 @@ export function AddPanel({
                     setContactName('')
                   }}
                 >
-                  + Someone new
+                  {t('+ Someone new')}
                 </button>
               </>
             ) : (
               <>
                 <label>
-                  Name
+                  {t('Name')}
                   <input
                     value={contactName}
                     onChange={(e) => setContactName(e.target.value)}
@@ -825,15 +828,15 @@ export function AddPanel({
                   />
                 </label>
                 <label>
-                  Role
+                  {t('Role')}
                   <input
                     value={newContactRole}
                     onChange={(e) => setNewContactRole(e.target.value)}
-                    placeholder="Dermatologist, owner…"
+                    placeholder={t('Dermatologist, owner…')}
                   />
                 </label>
                 <label>
-                  Phone — so you can call straight from the reminder
+                  {t('Phone — so you can call straight from the reminder')}
                   <input
                     type="tel"
                     value={newContactPhone}
@@ -842,7 +845,7 @@ export function AddPanel({
                   />
                 </label>
                 <button className="link" onClick={() => setCreatingContact(false)}>
-                  Pick an existing person instead
+                  {t('Pick an existing person instead')}
                 </button>
               </>
             )}
@@ -858,42 +861,42 @@ export function AddPanel({
               ))}
             </div>
             <label>
-              Notes
+              {t('Notes')}
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
-                placeholder="What was discussed, what they asked for…"
+                placeholder={t('What was discussed, what they asked for…')}
               />
             </label>
             <div className="row">
               <DictateButton value={notes} onChange={setNotes} />
             </div>
 
-            <span className="label-text">Voice note</span>
+            <span className="label-text">{t('Voice note')}</span>
             <p className="muted small">
-              Faster than typing in a car park, and it keeps what they actually said.
+              {t('Faster than typing in a car park, and it keeps what they actually said.')}
             </p>
             <VoiceNotes onIdsChange={setVoiceNoteIds} onPendingClipsChange={setPendingClips} />
           </section>
 
           <section className="card">
-            <h2 className="section-title">Anything to follow up?</h2>
+            <h2 className="section-title">{t('Anything to follow up?')}</h2>
             <p className="muted small">
-              A callback, a next appointment, anything you said you would do.
+              {t('A callback, a next appointment, anything you said you would do.')}
             </p>
             <div className="row">
               <button
                 className={`choice big${hasNextStep === true ? ' selected' : ''}`}
                 onClick={() => setHasNextStep(true)}
               >
-                Yes
+                {t('Yes')}
               </button>
               <button
                 className={`choice big${hasNextStep === false ? ' selected' : ''}`}
                 onClick={() => setHasNextStep(false)}
               >
-                No
+                {t('No')}
               </button>
             </div>
 
@@ -912,11 +915,11 @@ export function AddPanel({
                 </div>
 
                 <label>
-                  What exactly?
+                  {t('What exactly?')}
                   <input value={title} onChange={(e) => setTitle(e.target.value)} />
                 </label>
 
-                <span className="label-text">When?</span>
+                <span className="label-text">{t('When?')}</span>
                 <div className="chips">
                   {duePresets.map((preset) => {
                     const at = preset.at()
@@ -927,14 +930,14 @@ export function AddPanel({
                         className={`chip${selected ? ' selected' : ''}`}
                         onClick={() => setDueAt(at)}
                       >
-                        {preset.label}
+                        {t(preset.label)}
                       </button>
                     )
                   })}
                 </div>
 
                 <label>
-                  Exact time
+                  {t('Exact time')}
                   <input
                     type="datetime-local"
                     value={toLocalInputValue(dueAt)}
@@ -945,7 +948,7 @@ export function AddPanel({
                   />
                 </label>
 
-                <span className="label-text">How long will it block?</span>
+                <span className="label-text">{t('How long will it block?')}</span>
                 <div className="chips">
                   {DURATION_CHOICES.map((minutes) => (
                     <button
@@ -953,13 +956,13 @@ export function AddPanel({
                       className={`chip${durationMinutes === minutes ? ' selected' : ''}`}
                       onClick={() => setDurationMinutes(minutes)}
                     >
-                      {minutes < 60 ? `${minutes} min` : `${minutes / 60}h`}
+                      {minutes < 60 ? t('{n} min', { n: minutes }) : t('{n}h', { n: minutes / 60 })}
                     </button>
                   ))}
                 </div>
 
                 {/* ------------------------------------------- clash warning */}
-                {checking && <p className="muted small">Checking that slot…</p>}
+                {checking && <p className="muted small">{t('Checking that slot…')}</p>}
 
                 {conflict && (
                   <ConflictWarning
@@ -973,8 +976,9 @@ export function AddPanel({
                 )}
 
                 <p className="muted small">
-                  You will be reminded at {formatDateTime(dueAt.toISOString())}, then chased every
-                  15 minutes until you mark it done.
+                  {t('You will be reminded at {time}, then chased every 15 minutes until you mark it done.', {
+                    time: formatDateTime(dueAt.toISOString()),
+                  })}
                 </p>
               </div>
             )}
@@ -987,12 +991,12 @@ export function AddPanel({
       <div className="form-actions">
         <button className="primary" onClick={save} disabled={!canSave || saving}>
           {saving
-            ? 'Saving…'
+            ? t('Saving…')
             : blockedByConflict
-              ? 'Resolve the clash above'
+              ? t('Resolve the clash above')
               : online
-                ? 'Save'
-                : 'Save on this device'}
+                ? t('Save')
+                : t('Save on this device')}
         </button>
       </div>
     </div>

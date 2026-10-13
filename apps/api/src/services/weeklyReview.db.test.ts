@@ -114,3 +114,17 @@ test('it goes on Friday at the chosen hour, once, and finishing is remembered', 
   await svc.markReviewed(me.userId, NOW)
   assert.equal((await svc.weekReview(me.userId, NOW)).reviewedAt, NOW.toISOString())
 })
+
+test('someone who reads Hindi gets the Friday note in Hindi', async () => {
+  await add('File the expenses', at(6, 17), { status: 'done', completedAt: at(6, 18) })
+  await add('Board prep', at(13, 10), { kind: 'meeting', minutes: 120 })
+  await h.sql`update users set language = 'hi' where id = ${me.userId}`
+  try {
+    const sent = await svc.sendReviewTo(me.userId, NOW)
+    assert.equal(sent?.title, 'आपका हफ़्ता: 1 पूरा हुआ')
+    assert.match(sent!.body, /अगले हफ़्ते का सबसे व्यस्त दिन: मंगलवार।/)
+    assert.match(sent!.body, /देखने में बस दो मिनट लगेंगे।$/)
+  } finally {
+    await h.sql`update users set language = 'en' where id = ${me.userId}`
+  }
+})

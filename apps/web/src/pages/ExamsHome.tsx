@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { EXAMS, EXAM_GROUPS, examGroup } from '@cue/shared'
 import { SITE } from '../lib/site.ts'
 import { enterExamsMode, setSignupLanguage, signupLanguage } from '../lib/appMode.ts'
+import { setLanguage } from '../lib/i18n.tsx'
 
 /**
  * Cue Exams, before anyone signs in: what it does for an aspirant, in Hindi
@@ -73,6 +74,8 @@ export default function ExamsHome() {
   const t = T[lang]
   useEffect(() => {
     enterExamsMode()
+    // The rest of the website — signing up, the privacy policy — follows the language picked here.
+    setLanguage(lang)
     document.title = lang === 'hi' ? 'Cue Exams — फॉर्म से परिणाम तक' : 'Cue Exams — from the form to the result'
     // Installed from here, it is Cue Exams.
     document.querySelector('link[rel="manifest"]')?.setAttribute('href', '/exams.webmanifest')

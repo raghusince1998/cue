@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth.tsx'
 import { ApiError, api } from '../lib/api.ts'
 import { appMode, signupLanguage } from '../lib/appMode.ts'
+import { language, rich, t } from '../lib/i18n.tsx'
 
 export default function Login({ initialMode = 'login' }: { initialMode?: 'login' | 'register' }) {
   const { login, register } = useAuth()
@@ -36,11 +37,12 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
       else await register({ name, email, password }, exams ? { uses: ['exams'], language: signupLanguage() } : undefined)
     } catch (err) {
       const messages: Record<string, string> = {
-        invalid_credentials: 'That email and password do not match.',
-        email_taken: 'An account already exists for that email.',
-        invalid_input: 'Check the fields — password must be at least 8 characters.',
-        mail_not_configured:
+        invalid_credentials: t('That email and password do not match.'),
+        email_taken: t('An account already exists for that email.'),
+        invalid_input: t('Check the fields — password must be at least 8 characters.'),
+        mail_not_configured: t(
           'This server cannot send email yet, so password resets are unavailable. Ask whoever runs it.',
+        ),
       }
       // Only claim the server is unreachable when it genuinely did not answer.
       // An ApiError means it did — saying otherwise sends people to check logs
@@ -49,8 +51,10 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
       setError(
         messages[code] ??
           (err instanceof ApiError
-            ? `Sign-in failed (${err.status}${code ? `: ${code}` : ''}).`
-            : 'Could not reach the server. Is the API running?'),
+            ? code
+              ? t('Sign-in failed ({status}: {code}).', { status: err.status, code })
+              : t('Sign-in failed ({status}).', { status: err.status })
+            : t('Could not reach the server. Is the API running?')),
       )
     } finally {
       setBusy(false)
@@ -64,29 +68,29 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
           <img className="brand-mark" src={exams ? '/brand/cue-exams-mark.svg' : '/brand/cue-mark.svg'} alt="" />
           {exams ? 'Cue Exams' : 'Cue'}
         </div>
-        <p className="muted" lang={hindi ? 'hi' : 'en'}>
+        <p className="muted" lang={hindi || language() === 'hi' ? 'hi' : 'en'}>
           {exams
             ? hindi
               ? mode === 'register'
                 ? 'मुफ़्त। हर परीक्षा, फॉर्म से परिणाम तक — हर तारीख समय पर याद।'
                 : 'फिर से स्वागत है। आपकी परीक्षाएँ और उनकी तारीखें यहीं हैं।'
               : mode === 'register'
-                ? 'Free. Every exam, from the form to the result — every date on time.'
-                : 'Welcome back. Your exams and their dates are waiting.'
+                ? t('Free. Every exam, from the form to the result — every date on time.')
+                : t('Welcome back. Your exams and their dates are waiting.')
             : mode === 'register'
-              ? 'Free to use. Plans, reminders, bills and bookings — say it once, Cue remembers the rest.'
-              : 'Welcome back. Your plans, reminders and everything Cue found for you are waiting.'}
+              ? t('Free to use. Plans, reminders, bills and bookings — say it once, Cue remembers the rest.')
+              : t('Welcome back. Your plans, reminders and everything Cue found for you are waiting.')}
         </p>
 
         {mode === 'register' && (
           <label>
-            Your name
+            {t('Your name')}
             <input value={name} onChange={(e) => setName(e.target.value)} required />
           </label>
         )}
 
         <label>
-          Email
+          {t('Email')}
           <input
             type="email"
             value={email}
@@ -98,7 +102,7 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
 
         {mode !== 'forgot' && (
         <label>
-          Password
+          {t('Password')}
           <input
             type="password"
             value={password}
@@ -117,19 +121,18 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
             who does, which is a gift to anyone working through a leaked list. */}
         {sent && (
           <p className="muted small">
-            If there is an account for that address, a link is on its way. It works once and
-            expires in an hour.
+            {t('If there is an account for that address, a link is on its way. It works once and expires in an hour.')}
           </p>
         )}
 
         <button className="primary" disabled={busy}>
           {busy
-            ? 'Working…'
+            ? t('Working…')
             : mode === 'login'
-              ? 'Sign in'
+              ? t('Sign in')
               : mode === 'register'
-                ? 'Create account'
-                : 'Email me a link'}
+                ? t('Create account')
+                : t('Email me a link')}
         </button>
 
         {mode === 'login' && (
@@ -142,7 +145,7 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
               setSent(false)
             }}
           >
-            Forgot your password?
+            {t('Forgot your password?')}
           </button>
         )}
 
@@ -157,16 +160,18 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
             navigate(next === 'register' ? '/register' : '/login', { replace: true })
           }}
         >
-          {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}
+          {mode === 'login' ? t('New here? Create an account') : t('Already have an account? Sign in')}
         </button>
         {mode === 'register' && (
           <p className="muted small center-text">
-            By creating an account you agree to the <Link to="/terms">terms</Link> and the{' '}
-            <Link to="/privacy">privacy policy</Link>.
+            {rich('By creating an account you agree to the <terms>terms</terms> and the <privacy>privacy policy</privacy>.', {
+              terms: (s) => <Link to="/terms">{s}</Link>,
+              privacy: (s) => <Link to="/privacy">{s}</Link>,
+            })}
           </p>
         )}
         <Link to="/" className="link center auth-home">
-          ← About Cue
+          {t('← About Cue')}
         </Link>
       </form>
     </div>

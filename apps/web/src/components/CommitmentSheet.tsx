@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { KIND_LABELS, PRIORITY_LABELS, WINDOW_LABELS, hasWork, type CommitmentDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { useAuth } from '../lib/auth.tsx'
+import { locale, t } from '../lib/i18n.tsx'
 import { dayLabel, formatSpan, overdueBy, relativeDay } from '../lib/time.ts'
 import { readNotes } from '../lib/sample.ts'
 import { reopenPlan } from '../lib/reopen.ts'
@@ -16,9 +17,9 @@ import { Nudge } from './Nudge.tsx'
 export type SheetMode = 'view' | 'edit' | 'wrapup' | 'nudge'
 
 function lengthLabel(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`
+  if (minutes < 60) return t('{n} min', { n: minutes })
   const hours = minutes / 60
-  return `${hours % 1 === 0 ? hours : hours.toFixed(1)} h`
+  return t('{n} h', { n: hours % 1 === 0 ? hours : hours.toFixed(1) })
 }
 
 /** Mirrors canBeOverdue on the server: never calendar history, never an all-day calendar entry. */
@@ -29,23 +30,23 @@ function isOverdue(c: CommitmentDTO): boolean {
 }
 
 function StatusLine({ c }: { c: CommitmentDTO }) {
-  if (c.status === 'done') return <span className="status-pill is-done">Done</span>
-  if (c.status === 'cancelled') return <span className="status-pill is-cancelled">Cancelled</span>
+  if (c.status === 'done') return <span className="status-pill is-done">{t('Done')}</span>
+  if (c.status === 'cancelled') return <span className="status-pill is-cancelled">{t('Cancelled')}</span>
   // Not in CommitmentStatus, but a deleted plan is still a row with that status.
   if ((c.status as string) === 'deleted') {
-    return <span className="status-pill is-cancelled">Deleted</span>
+    return <span className="status-pill is-cancelled">{t('Deleted')}</span>
   }
   if (c.history) {
     return (
       <span className="status-pill">
-        No status · from your calendar, before Cue was reading it
+        {t('No status · from your calendar, before Cue was reading it')}
       </span>
     )
   }
   if (isOverdue(c)) {
-    return <span className="status-pill is-late">{overdueBy(c.dueAt)} late</span>
+    return <span className="status-pill is-late">{t('{span} late', { span: overdueBy(c.dueAt) })}</span>
   }
-  return <span className="status-pill is-open">Open</span>
+  return <span className="status-pill is-open">{t('Still open')}</span>
 }
 
 /**
@@ -178,7 +179,7 @@ export function CommitmentSheet({
 
   if (mode === 'nudge' && c) {
     return (
-      <Modal title="Nudge" onClose={onClose}>
+      <Modal title={t('Nudge')} onClose={onClose}>
         <Nudge
           item={c}
           onDone={() => {
@@ -192,7 +193,7 @@ export function CommitmentSheet({
 
   if (mode === 'wrapup' && c) {
     return (
-      <Modal title="Wrap up" onClose={onClose} closeOnBackdrop={false}>
+      <Modal title={t('Wrap up')} onClose={onClose} closeOnBackdrop={false}>
         <WrapUp
           meeting={c}
           onDone={() => {
@@ -206,7 +207,7 @@ export function CommitmentSheet({
 
   if (mode === 'edit') {
     return (
-      <Modal title="Edit" onClose={onClose} closeOnBackdrop={false}>
+      <Modal title={t('Edit')} onClose={onClose} closeOnBackdrop={false}>
         <CommitmentEditor
           commitmentId={commitmentId}
           notice={notice}
@@ -234,24 +235,29 @@ export function CommitmentSheet({
   const when = !c
     ? ''
     : c.flexibility === 'flexible' && c.preferredWindow
-      ? `${new Date(c.dueAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} · ${WINDOW_LABELS[c.preferredWindow]}, no set time`
+      ? t('{day} · {window}, no set time', {
+          day: new Date(c.dueAt).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' }),
+          window: t(WINDOW_LABELS[c.preferredWindow]),
+        })
       : formatSpan(c.dueAt, c.endsAt, c.allDay)
 
   return (
-    <Modal title="Details" onClose={onClose}>
+    <Modal title={t('Details')} onClose={onClose}>
       {!c ? (
-        error ? <p className="error small">{error}</p> : <p className="muted small">Opening…</p>
+        error ? <p className="error small">{error}</p> : <p className="muted small">{t('Opening…')}</p>
       ) : (
         <div className="details">
           <div className="details-head">
             <h3 className="details-title">
               {c.title}
-              {sample && <span className="sample-tag">Sample</span>}
+              {sample && <span className="sample-tag">{t('Sample')}</span>}
             </h3>
             <p className="details-when">
               {when}
               {/* "in 3 days" helps next to a date, not next to "Today". */}
-              {!/^(today|tomorrow|yesterday)/i.test(when) && (
+              {![t('Today'), t('Tomorrow'), t('Yesterday')].some((w) =>
+                when.toLowerCase().startsWith(w.toLowerCase()),
+              ) && (
                 <span className="muted"> · {relativeDay(c.dueAt)}</span>
               )}
             </p>
@@ -263,10 +269,13 @@ export function CommitmentSheet({
           {c.kind === 'meeting' && prep?.last && (
             <section className="prep">
               <span className="label-text">
-                From last time · {prep.last.title} · {dayLabel(prep.last.dueAt)}
+                {t('From last time · {title} · {day}', {
+                  title: prep.last.title,
+                  day: dayLabel(prep.last.dueAt),
+                })}
               </span>
               {prep.open.length === 0 ? (
-                <p className="muted small">Nothing left open from earlier meetings like this.</p>
+                <p className="muted small">{t('Nothing left open from earlier meetings like this.')}</p>
               ) : (
                 <ul className="prep-list">
                   {prep.open.map((o) => (
@@ -276,9 +285,12 @@ export function CommitmentSheet({
                         <span>{o.waitingOn ? o.title.replace(/^Waiting on [^:]+:\s*/i, '') : o.title}</span>
                         <span className="muted small">
                           {' '}
-                          · {o.waitingOn ? 'check in' : 'due'} {dayLabel(o.dueAt)}
+                          ·{' '}
+                          {o.waitingOn
+                            ? t('check in {day}', { day: dayLabel(o.dueAt) })
+                            : t('due {day}', { day: dayLabel(o.dueAt) })}
                           {o.fromTitle && prep.last && o.fromTitle !== prep.last.title
-                            ? ` · from ${o.fromTitle}`
+                            ? ` · ${t('from {title}', { title: o.fromTitle })}`
                             : ''}
                         </span>
                       </button>
@@ -287,7 +299,7 @@ export function CommitmentSheet({
                         onClick={() => void closeOther(o.id)}
                         disabled={busy}
                       >
-                        {o.waitingOn ? 'Got it' : 'Done'}
+                        {o.waitingOn ? t('Got it') : t('Done')}
                       </button>
                     </li>
                   ))}
@@ -295,7 +307,7 @@ export function CommitmentSheet({
               )}
               {prep.doneSinceLast.length > 0 && (
                 <p className="muted small prep-done">
-                  Done since: {prep.doneSinceLast.map((d) => d.title).join(' · ')}
+                  {t('Done since: {titles}', { titles: prep.doneSinceLast.map((d) => d.title).join(' · ') })}
                 </p>
               )}
             </section>
@@ -303,26 +315,26 @@ export function CommitmentSheet({
 
           <dl className="details-facts">
             <div>
-              <dt>Type</dt>
-              <dd>{KIND_LABELS[c.kind]}</dd>
+              <dt>{t('Type')}</dt>
+              <dd>{t(KIND_LABELS[c.kind])}</dd>
             </div>
             {!c.allDay && c.flexibility !== 'flexible' && (
               <div>
-                <dt>Length</dt>
+                <dt>{t('Length')}</dt>
                 <dd>{lengthLabel(c.durationMinutes)}</dd>
               </div>
             )}
             {c.priority !== 'normal' && (
               <div>
-                <dt>Priority</dt>
-                <dd>{PRIORITY_LABELS[c.priority]}</dd>
+                <dt>{t('Priority')}</dt>
+                <dd>{t(PRIORITY_LABELS[c.priority])}</dd>
               </div>
             )}
             {/* Work or personal: as its words read, and one tap to say otherwise. */}
             {working && (
               <div>
-                <dt>Part of</dt>
-                <dd className="sphere-pick" role="group" aria-label="Work or personal">
+                <dt>{t('Part of')}</dt>
+                <dd className="sphere-pick" role="group" aria-label={t('Work or personal')}>
                   {(['work', 'personal'] as const).map((s) => (
                     <button
                       key={s}
@@ -331,7 +343,7 @@ export function CommitmentSheet({
                       disabled={busy}
                       onClick={() => void setSphere(c.sphere === s && c.sphereSaid ? null : s)}
                     >
-                      {s === 'work' ? 'Work' : 'Personal'}
+                      {s === 'work' ? t('Work') : t('Personal')}
                     </button>
                   ))}
                 </dd>
@@ -339,13 +351,13 @@ export function CommitmentSheet({
             )}
             {(c.placeName || c.placeLabel) && (
               <div>
-                <dt>Where</dt>
+                <dt>{t('Where')}</dt>
                 <dd>{[c.placeName, c.placeLabel].filter(Boolean).join(' · ')}</dd>
               </div>
             )}
             {c.contactName && (
               <div>
-                <dt>With</dt>
+                <dt>{t('With')}</dt>
                 <dd>
                   {c.contactName}
                   {c.contactPhone && (
@@ -358,7 +370,7 @@ export function CommitmentSheet({
                         data-commitment-id={c.id}
                         data-commitment-title={c.title}
                       >
-                        Call {c.contactPhone}
+                        {t('Call {phone}', { phone: c.contactPhone })}
                       </a>
                     </>
                   )}
@@ -367,43 +379,45 @@ export function CommitmentSheet({
             )}
             {c.recurrenceId && (
               <div>
-                <dt>Repeats</dt>
+                <dt>{t('Repeats')}</dt>
                 <dd>
-                  One of a repeating plan · <Link to="/repeating">See the series</Link>
+                  {t('One of a repeating plan')} · <Link to="/repeating">{t('See the series')}</Link>
                 </dd>
               </div>
             )}
             {c.waitingOn && (
               <div>
-                <dt>Waiting on</dt>
-                <dd>{c.waitingOn} — a check-in, not time on your calendar</dd>
+                <dt>{t('Waiting on')}</dt>
+                <dd>{t('{who} — a check-in, not time on your calendar', { who: c.waitingOn })}</dd>
               </div>
             )}
             {c.fromTitle && (
               <div>
-                <dt>From</dt>
-                <dd>The meeting &ldquo;{c.fromTitle}&rdquo;</dd>
+                <dt>{t('Came from')}</dt>
+                <dd>{t('The meeting “{title}”', { title: c.fromTitle })}</dd>
               </div>
             )}
             {c.scheduleTitle && (
               <div>
-                <dt>Part of</dt>
+                <dt>{t('Part of')}</dt>
                 <dd>
-                  {c.scheduleTitle} · <Link to="/repeating">See the schedule</Link>
+                  {c.scheduleTitle} · <Link to="/repeating">{t('See the schedule')}</Link>
                 </dd>
               </div>
             )}
             {c.feedId && (
               <div>
-                <dt>From</dt>
-                <dd>Your connected calendar</dd>
+                <dt>{t('Came from')}</dt>
+                <dd>{t('Your connected calendar')}</dd>
               </div>
             )}
             {c.escalationCount > 0 && c.status === 'pending' && (
               <div>
-                <dt>Reminders</dt>
+                <dt>{t('Reminders')}</dt>
                 <dd>
-                  Chased {c.escalationCount} {c.escalationCount === 1 ? 'time' : 'times'}
+                  {c.escalationCount === 1
+                    ? t('Chased 1 time')
+                    : t('Chased {n} times', { n: c.escalationCount })}
                 </dd>
               </div>
             )}
@@ -411,7 +425,7 @@ export function CommitmentSheet({
 
           {notes && (
             <div className="details-notes">
-              <span className="label-text">Notes</span>
+              <span className="label-text">{t('Notes')}</span>
               <p>{notes}</p>
             </div>
           )}
@@ -421,10 +435,10 @@ export function CommitmentSheet({
           {((c.status === 'pending' && !c.history) || c.checklistCount > 0) && (
             <div className="details-todo">
               <div className="details-todo-head">
-                <span className="label-text">Things to do</span>
+                <span className="label-text">{t('Things to do')}</span>
                 {c.status === 'pending' && !c.history && (
                   <button className="link small" onClick={() => setPicking((p) => !p)}>
-                    {picking ? 'Close wishlist' : 'Add from wishlist'}
+                    {picking ? t('Close wishlist') : t('Add from wishlist')}
                   </button>
                 )}
               </div>
@@ -446,11 +460,11 @@ export function CommitmentSheet({
 
           <div className="form-actions details-actions">
             <button className="primary" onClick={() => setMode('edit')} disabled={busy}>
-              Edit
+              {t('Edit')}
             </button>
             {c.status === 'pending' && c.waitingOn && (
               <button className="ghost" onClick={() => setMode('nudge')} disabled={busy}>
-                Nudge
+                {t('Nudge')}
               </button>
             )}
             {c.status === 'pending' &&
@@ -459,17 +473,17 @@ export function CommitmentSheet({
               !c.allDay &&
               new Date(c.dueAt).getTime() < Date.now() && (
                 <button className="ghost" onClick={() => setMode('wrapup')} disabled={busy}>
-                  Add follow-ups
+                  {t('Add follow-ups')}
                 </button>
               )}
             {c.status === 'pending' && !c.history && (
               <button className="ghost" onClick={() => void markDone()} disabled={busy}>
-                {busy ? 'Saving…' : 'Mark done'}
+                {busy ? t('Saving…') : t('Mark done')}
               </button>
             )}
             {(c.status === 'done' || c.status === 'cancelled') && (
               <button className="ghost" onClick={() => void reopen()} disabled={busy}>
-                {busy ? 'Reopening…' : 'Reopen'}
+                {busy ? t('Reopening…') : t('Reopen')}
               </button>
             )}
           </div>

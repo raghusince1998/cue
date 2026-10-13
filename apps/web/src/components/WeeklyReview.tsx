@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ACCOUNT_STAGE_LABELS, type AccountStage, type TargetProgress } from '@cue/shared'
 import { TargetBar, statusText } from './Targets.tsx'
 import { api } from '../lib/api.ts'
+import { locale, t } from '../lib/i18n.tsx'
 import { dayLabel, relativeDay, spanLabel } from '../lib/time.ts'
 
 interface WeekReview {
@@ -26,13 +27,13 @@ interface WeekReview {
 }
 
 function hours(minutes: number): string {
-  if (minutes === 0) return '0h'
+  if (minutes === 0) return t('{n}h', { n: 0 })
   const h = minutes / 60
-  return `${h % 1 === 0 ? h : h.toFixed(1)}h`
+  return t('{n}h', { n: h % 1 === 0 ? h : h.toFixed(1) })
 }
 
 function weekdayOf(ymd: string, style: 'short' | 'long' = 'short'): string {
-  return new Date(`${ymd}T00:00:00`).toLocaleDateString([], { weekday: style })
+  return new Date(`${ymd}T00:00:00`).toLocaleDateString(locale(), { weekday: style })
 }
 
 /**
@@ -76,21 +77,21 @@ export function WeeklyReview({
   }
 
   if (error) return <p className="error small">{error}</p>
-  if (!r) return <p className="muted small">Looking back over the week…</p>
+  if (!r) return <p className="muted small">{t('Looking back over the week…')}</p>
 
   if (finished) {
     return (
       <div className="stack tight">
-        <strong>Week reviewed.</strong>
+        <strong>{t('Week reviewed.')}</strong>
         <p className="muted small">
           {r.nextWeek.busiest
-            ? `Next week's busiest day is ${weekdayOf(r.nextWeek.busiest, 'long')}. `
+            ? `${t('Next week\'s busiest day is {day}.', { day: weekdayOf(r.nextWeek.busiest, 'long') })} `
             : ''}
-          Enjoy the weekend.
+          {t('Enjoy the weekend.')}
         </p>
         <div className="form-actions">
           <button className="primary" onClick={onDone}>
-            Done
+            {t('Done')}
           </button>
         </div>
       </div>
@@ -103,50 +104,56 @@ export function WeeklyReview({
   return (
     <div className="stack review">
       <div className="your-day-head">
-        <strong>Week of {spanLabel(r.week.from, r.week.to)}</strong>
+        <strong>{t('Week of {span}', { span: spanLabel(r.week.from, r.week.to) })}</strong>
         {reviewedThisWeek && (
-          <span className="muted small">Already reviewed {dayLabel(r.reviewedAt!)} — here it is again.</span>
+          <span className="muted small">
+            {t('Already reviewed {day} — here it is again.', { day: dayLabel(r.reviewedAt!) })}
+          </span>
         )}
       </div>
 
       <section className="review-part">
-        <span className="label-text">This week</span>
+        <span className="label-text">{t('This week')}</span>
         <div className="review-stats">
           <div>
             <strong>{r.done.total}</strong>
             <span>
-              done
-              {r.done.total > 0
-                ? ` · ${r.done.meetings} meeting${r.done.meetings === 1 ? '' : 's'}, ${r.done.tasks} other`
-                : ''}
+              {r.done.total === 0
+                ? t('done')
+                : r.done.meetings === 1
+                  ? t('done · 1 meeting, {tasks} other', { tasks: r.done.tasks })
+                  : t('done · {meetings} meetings, {tasks} other', { meetings: r.done.meetings, tasks: r.done.tasks })}
             </span>
           </div>
           <div>
             <strong>{r.meetings.count}</strong>
             <span>
-              meeting{r.meetings.count === 1 ? '' : 's'} · {hours(r.meetings.minutes)}
+              {r.meetings.count === 1
+                ? t('meeting · {hours}', { hours: hours(r.meetings.minutes) })
+                : t('meetings · {hours}', { hours: hours(r.meetings.minutes) })}
             </span>
           </div>
           <div>
             <strong>{r.followUps}</strong>
-            <span>follow-ups captured</span>
+            <span>{t('follow-ups captured')}</span>
           </div>
         </div>
         {(r.focus?.minutes ?? 0) > 0 && (
           <p className="muted small">
-            Focus time: {hours(r.focus!.minutes)} in {r.focus!.blocks} block
-            {r.focus!.blocks === 1 ? '' : 's'}.
+            {r.focus!.blocks === 1
+              ? t('Focus time: {hours} in 1 block.', { hours: hours(r.focus!.minutes) })
+              : t('Focus time: {hours} in {n} blocks.', { hours: hours(r.focus!.minutes), n: r.focus!.blocks })}
           </p>
         )}
         {r.done.titles.length > 0 && (
           <details className="review-done">
-            <summary>What got done</summary>
+            <summary>{t('What got done')}</summary>
             <ul>
-              {r.done.titles.map((t, i) => (
-                <li key={i}>{t}</li>
+              {r.done.titles.map((title, i) => (
+                <li key={i}>{title}</li>
               ))}
               {r.done.total > r.done.titles.length && (
-                <li className="muted">and {r.done.total - r.done.titles.length} more</li>
+                <li className="muted">{t('and {n} more', { n: r.done.total - r.done.titles.length })}</li>
               )}
             </ul>
           </details>
@@ -154,58 +161,67 @@ export function WeeklyReview({
       </section>
 
       <section className="review-part">
-        <span className="label-text">What slipped</span>
+        <span className="label-text">{t('What slipped')}</span>
         {r.slipped > 0 ? (
           <div className="review-action">
             <span>
               {r.slipped === 1
-                ? '1 thing is past its time. Decide it now so it does not follow you into next week.'
-                : `${r.slipped} things are past their time. Decide each one now so they do not follow you into next week.`}
+                ? t('1 thing is past its time. Decide it now so it does not follow you into next week.')
+                : t('{n} things are past their time. Decide each one now so they do not follow you into next week.', {
+                    n: r.slipped,
+                  })}
             </span>
             <button className="primary small-btn" onClick={onDecideSlipped}>
-              Decide each
+              {t('Decide each')}
             </button>
           </div>
         ) : (
-          <p className="muted small">Nothing slipped.</p>
+          <p className="muted small">{t('Nothing slipped.')}</p>
         )}
       </section>
 
       <section className="review-part">
-        <span className="label-text">Waiting on others</span>
+        <span className="label-text">{t('Waiting on others')}</span>
         {r.waiting.count > 0 ? (
           <div className="review-action">
             <span>
-              {r.waiting.count} open
-              {r.waiting.names.length > 0 ? ` with ${r.waiting.names.slice(0, 3).join(', ')}` : ''}
+              {r.waiting.names.length > 0
+                ? t('{n} open with {names}', { n: r.waiting.count, names: r.waiting.names.slice(0, 3).join(', ') })
+                : t('{n} open', { n: r.waiting.count })}
               {r.waiting.oldest
-                ? `. Oldest: ${r.waiting.oldest.title} from ${r.waiting.oldest.who}, check-in ${dayLabel(r.waiting.oldest.dueAt)}.`
+                ? `. ${t('Oldest: {title} from {who}, check-in {day}.', {
+                    title: r.waiting.oldest.title,
+                    who: r.waiting.oldest.who,
+                    day: dayLabel(r.waiting.oldest.dueAt),
+                  })}`
                 : '.'}
             </span>
             <button className="ghost small-btn" onClick={onGoToWaiting}>
-              Go through them
+              {t('Go through them')}
             </button>
           </div>
         ) : (
-          <p className="muted small">Nobody owes you anything right now.</p>
+          <p className="muted small">{t('Nobody owes you anything right now.')}</p>
         )}
       </section>
 
       {(r.quiet ?? []).length > 0 && (
         <section className="review-part">
-          <span className="label-text">Gone quiet</span>
+          <span className="label-text">{t('Gone quiet')}</span>
           <div className="review-action">
             <span>
               {r.quiet!
                 .slice(0, 3)
                 .map(
                   (q) =>
-                    `${q.name} (${ACCOUNT_STAGE_LABELS[q.stage].toLowerCase()}, ${
-                      q.lastContact ? `last contact ${relativeDay(q.lastContact)}` : 'no contact on record'
+                    `${q.name} (${t(ACCOUNT_STAGE_LABELS[q.stage]).toLowerCase()}, ${
+                      q.lastContact
+                        ? t('last contact {when}', { when: relativeDay(q.lastContact) })
+                        : t('no contact on record')
                     })`,
                 )
                 .join('; ')}
-              {r.quiet!.length > 3 ? ` and ${r.quiet!.length - 3} more` : ''}.
+              {r.quiet!.length > 3 ? ` ${t('and {n} more', { n: r.quiet!.length - 3 })}` : ''}.
             </span>
             <button
               className="ghost small-btn"
@@ -214,7 +230,7 @@ export function WeeklyReview({
                 navigate('/people?view=accounts')
               }}
             >
-              See accounts
+              {t('See accounts')}
             </button>
           </div>
         </section>
@@ -223,15 +239,18 @@ export function WeeklyReview({
       {(r.targets ?? []).length > 0 && (
         <section className="review-part">
           <span className="label-text">
-            Targets · hit {r.targets!.filter((t) => t.status === 'done').length} of {r.targets!.length}
+            {t('Targets · hit {hit} of {n}', {
+              hit: r.targets!.filter((m) => m.status === 'done').length,
+              n: r.targets!.length,
+            })}
           </span>
-          {r.targets!.map((t) => (
-            <div className="review-target" key={t.key}>
+          {r.targets!.map((m) => (
+            <div className="review-target" key={m.key}>
               <span className="small">
-                {t.label}: {t.done} of {t.target}
-                <span className={`target-status is-${t.status}`}> · {statusText(t)}</span>
+                {t('{label}: {done} of {target}', { label: t(m.label), done: m.done, target: m.target ?? '' })}
+                <span className={`target-status is-${m.status}`}> · {statusText(m)}</span>
               </span>
-              <TargetBar m={t} small />
+              <TargetBar m={m} small />
             </div>
           ))}
           <button
@@ -241,19 +260,27 @@ export function WeeklyReview({
               navigate('/?targets=1')
             }}
           >
-            Change targets
+            {t('Change targets')}
           </button>
         </section>
       )}
 
       <section className="review-part">
-        <span className="label-text">Next week</span>
-        <div className="week-bars" role="img" aria-label="Booked time each day next week">
+        <span className="label-text">{t('Next week')}</span>
+        <div className="week-bars" role="img" aria-label={t('Booked time each day next week')}>
           {r.nextWeek.days.map((d) => (
             <div
               key={d.date}
               className={`week-bar${d.date === r.nextWeek.busiest ? ' is-busiest' : ''}`}
-              title={`${weekdayOf(d.date, 'long')}: ${hours(d.minutes)} booked, ${d.meetings} meeting${d.meetings === 1 ? '' : 's'}`}
+              title={
+                d.meetings === 1
+                  ? t('{day}: {hours} booked, 1 meeting', { day: weekdayOf(d.date, 'long'), hours: hours(d.minutes) })
+                  : t('{day}: {hours} booked, {n} meetings', {
+                      day: weekdayOf(d.date, 'long'),
+                      hours: hours(d.minutes),
+                      n: d.meetings,
+                    })
+              }
             >
               <span className="week-bar-value">{d.minutes > 0 ? hours(d.minutes) : ''}</span>
               <span
@@ -265,16 +292,23 @@ export function WeeklyReview({
           ))}
         </div>
         <p className="muted small">
-          {hours(r.nextWeek.meetingMinutes)} in meetings · {r.nextWeek.items} thing
-          {r.nextWeek.items === 1 ? '' : 's'} booked · {hours(r.nextWeek.freeMinutes)} free in
-          working hours (8 am–9 pm, Mon–Fri)
-          {r.nextWeek.busiest ? ` · busiest: ${weekdayOf(r.nextWeek.busiest, 'long')}` : ''}
+          {r.nextWeek.items === 1
+            ? t('{meetings} in meetings · 1 thing booked · {free} free in working hours (8 am–9 pm, Mon–Fri)', {
+                meetings: hours(r.nextWeek.meetingMinutes),
+                free: hours(r.nextWeek.freeMinutes),
+              })
+            : t('{meetings} in meetings · {n} things booked · {free} free in working hours (8 am–9 pm, Mon–Fri)', {
+                meetings: hours(r.nextWeek.meetingMinutes),
+                n: r.nextWeek.items,
+                free: hours(r.nextWeek.freeMinutes),
+              })}
+          {r.nextWeek.busiest ? ` · ${t('busiest: {day}', { day: weekdayOf(r.nextWeek.busiest, 'long') })}` : ''}
         </p>
       </section>
 
       <div className="form-actions">
         <button className="primary" onClick={() => void finish()} disabled={busy}>
-          {busy ? 'Saving…' : 'Finish review'}
+          {busy ? t('Saving…') : t('Finish review')}
         </button>
       </div>
     </div>

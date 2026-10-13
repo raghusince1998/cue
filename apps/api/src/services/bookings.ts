@@ -1,6 +1,7 @@
 import { and, eq, ne, sql } from 'drizzle-orm'
 import { type ParsedBooking } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { langOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
 import { cancelPendingReminders, scheduleFirstReminder } from './reminders.ts'
 import { tripForBooking, wishesFor } from './tripAssembly.ts'
@@ -202,11 +203,23 @@ export async function saveFoundBooking(
   if (saved.trip?.created) {
     const wishes = await wishesFor(userId, saved.trip.placeLabel)
     if (wishes.length > 0) {
+      const lang = await langOf(userId)
+      const place = saved.trip.placeLabel
+      const list = `${wishes.slice(0, 3).join(', ')}${wishes.length > 3 ? '…' : ''}`
       await sendToUser(userId, {
-        title: `Trip to ${saved.trip.placeLabel}`,
-        body: `Found in your email: ${b.title}. You saved ${wishes.length === 1 ? 'something' : `${wishes.length} things`} for ${saved.trip.placeLabel}: ${wishes.slice(0, 3).join(', ')}${wishes.length > 3 ? '…' : ''}.`,
+        title: t(lang, 'Trip to {place}', { place }),
+        body:
+          wishes.length === 1
+            ? t(lang, 'Found in your email: {title}. You saved something for {place}: {list}.', { title: b.title, place, list })
+            : t(lang, 'Found in your email: {title}. You saved {n} things for {place}: {list}.', {
+                title: b.title,
+                n: wishes.length,
+                place,
+                list,
+              }),
         tag: `trip-${saved.trip.tripId}`,
         url: '/trips',
+        lang,
       }).catch(() => 0)
     }
   }

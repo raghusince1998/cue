@@ -212,3 +212,10 @@ test('an empty day proposes nothing rather than inventing work', async () => {
   assert.deepEqual(plan.unplaceable, [])
   assert.equal(plan.loose, 0)
 })
+
+test('the reasons are said in Hindi to someone who reads Hindi', async () => {
+  await loose('Morning run', 30, 'morning')
+  const plan = await svc.planTomorrow(me.userId, NOW, 'hi')
+  assert.match(plan.proposals[0]!.because, /^सुबह का पहला खाली समय, .+ से .+ तक।$/)
+  assert.match((await svc.planTomorrow(me.userId, NOW)).proposals[0]!.because, /^Your first free morning stretch/)
+})

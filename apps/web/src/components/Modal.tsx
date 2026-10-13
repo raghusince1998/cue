@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useAuth } from '../lib/auth.tsx'
+import { t } from '../lib/i18n.tsx'
 
 /**
  * Open modals, oldest first. Escape closes only the newest: the Add sheet can
@@ -28,7 +28,6 @@ export function Modal({
   // Read through a ref so the effect below runs once per modal: re-running it
   // on every render would move this modal to the top of the stack each time
   // its parent re-rendered.
-  const { me } = useAuth()
   const close = useRef(onClose)
   close.current = onClose
 
@@ -72,7 +71,7 @@ export function Modal({
         <header className="modal-head">
           <h2 className="modal-title">{title}</h2>
           <button className="link" onClick={onClose}>
-            {me?.language === 'hi' ? 'बंद करें' : 'Close'}
+            {t('Close')}
           </button>
         </header>
         <div className="modal-body">{children}</div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { CommitmentDTO, PlaceDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { formatDateTime } from '../lib/time.ts'
+import { t } from '../lib/i18n.tsx'
 
 interface Interaction {
   id: string
@@ -38,10 +39,11 @@ export default function Places() {
   if (places.length === 0) {
     return (
       <div className="empty">
-        <p>No places yet.</p>
+        <p>{t('No places yet.')}</p>
         <p className="muted small">
-          The first time you log a visit somewhere new, it gets saved here and recognised
-          automatically on every visit after that.
+          {t(
+            'The first time you log a visit somewhere new, it gets saved here and recognised automatically on every visit after that.',
+          )}
         </p>
       </div>
     )
@@ -58,7 +60,7 @@ export default function Places() {
             >
               <div>
                 <p className="commitment-title">{p.name}</p>
-                <p className="muted small">{p.kind ?? 'place'}</p>
+                <p className="muted small">{p.kind ?? t('place')}</p>
               </div>
               <span className="muted">{openId === p.id ? '−' : '+'}</span>
             </button>
@@ -67,7 +69,7 @@ export default function Places() {
               <div className="detail">
                 {detail.commitments.filter((c) => c.status === 'pending').length > 0 && (
                   <>
-                    <h3 className="section-title small-title">Open with this place</h3>
+                    <h3 className="section-title small-title">{t('Open with this place')}</h3>
                     <ul className="plain">
                       {detail.commitments
                         .filter((c) => c.status === 'pending')
@@ -80,16 +82,16 @@ export default function Places() {
                   </>
                 )}
 
-                <h3 className="section-title small-title">History</h3>
+                <h3 className="section-title small-title">{t('History')}</h3>
                 {detail.interactions.length === 0 ? (
-                  <p className="muted small">No visits recorded yet.</p>
+                  <p className="muted small">{t('No visits recorded yet.')}</p>
                 ) : (
                   <ul className="plain">
                     {detail.interactions.map((i) => (
                       <li key={i.id}>
                         <span className="muted small">{formatDateTime(i.startedAt)}</span>
                         {' — '}
-                        {i.outcome ?? i.purpose}
+                        {t(i.outcome ?? i.purpose)}
                         {i.contactName ? ` · ${i.contactName}` : ''}
                         {i.notes && <p className="notes">{i.notes}</p>}
                       </li>

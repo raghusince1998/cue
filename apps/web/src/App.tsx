@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './lib/auth.tsx'
+import { language, msg, t } from './lib/i18n.tsx'
 import { startSyncLoop } from './lib/online.ts'
 import { SyncStatus } from './components/SyncStatus.tsx'
 import { Modal } from './components/Modal.tsx'
@@ -31,46 +32,18 @@ import { appMode } from './lib/appMode.ts'
 import { groupSections, tabsFor, type Section } from '@cue/shared'
 import { UsesPicker } from './components/UsesPicker.tsx'
 
-/** The app's own words in Hindi: tabs, the menu, the header. The pages themselves come in turn. */
-const NAV_HI: Record<string, string> = {
-  Today: 'आज',
-  People: 'लोग',
-  History: 'इतिहास',
-  Trips: 'यात्राएँ',
-  Repeating: 'दोहराने वाले',
-  Expenses: 'खर्च',
-  Jobs: 'नौकरियाँ',
-  Hiring: 'भर्ती',
-  Deals: 'डील',
-  Bills: 'बिल',
-  Exams: 'परीक्षाएँ',
-  More: 'और',
-  Add: 'जोड़ें',
-  Search: 'खोजें',
-  Settings: 'सेटिंग्स',
-  'Sign out': 'साइन आउट',
-  'What I use Cue for…': 'Cue किस काम के लिए…',
-  'Review exam notices': 'परीक्षा सूचनाएँ जाँचें',
-}
-
-/** A word of the app's own, in the person's language. */
-function useNavWord() {
-  const { me } = useAuth()
-  return (word: string) => (me?.language === 'hi' ? (NAV_HI[word] ?? word) : word)
-}
-
 /** Every section that has a page, and where it lives. */
 const SECTION_LINKS: Partial<Record<Section, { to: string; label: string }>> = {
-  people: { to: '/people', label: 'People' },
-  history: { to: '/history', label: 'History' },
-  trips: { to: '/trips', label: 'Trips' },
-  repeating: { to: '/repeating', label: 'Repeating' },
-  expenses: { to: '/expenses', label: 'Expenses' },
-  jobs: { to: '/jobs', label: 'Jobs' },
-  hiring: { to: '/hiring', label: 'Hiring' },
-  deals: { to: '/deals', label: 'Deals' },
-  bills: { to: '/bills', label: 'Bills' },
-  exams: { to: '/exams', label: 'Exams' },
+  people: { to: '/people', label: msg('People') },
+  history: { to: '/history', label: msg('History') },
+  trips: { to: '/trips', label: msg('Trips') },
+  repeating: { to: '/repeating', label: msg('Repeating') },
+  expenses: { to: '/expenses', label: msg('Expenses') },
+  jobs: { to: '/jobs', label: msg('Jobs') },
+  hiring: { to: '/hiring', label: msg('Hiring') },
+  deals: { to: '/deals', label: msg('Deals') },
+  bills: { to: '/bills', label: msg('Bills') },
+  exams: { to: '/exams', label: msg('Exams') },
 }
 const AVAILABLE = Object.keys(SECTION_LINKS) as Section[]
 
@@ -79,7 +52,6 @@ const AVAILABLE = Object.keys(SECTION_LINKS) as Section[]
  * what is on the bar, and whether Jobs, Hiring and Deals are here at all.
  */
 function MoreMenu({ sections, onChangeUses, admin }: { sections: Section[]; onChangeUses: () => void; admin: boolean }) {
-  const say = useNavWord()
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const ref = useRef<HTMLDivElement>(null)
@@ -103,24 +75,24 @@ function MoreMenu({ sections, onChangeUses, admin }: { sections: Section[]; onCh
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        {say('More')}
+        {t('More')}
       </button>
       {open && (
         <div className="tabs-menu" role="menu">
           {/* Under headings once there is more than one kind of thing in it. */}
           {groupSections(sections).map((g, _, groups) => (
-            <div key={g.label} className="tabs-menu-group" role="group" aria-label={g.label}>
-              {groups.length > 1 && <span className="tabs-menu-heading">{g.label}</span>}
+            <div key={g.label} className="tabs-menu-group" role="group" aria-label={t(g.label)}>
+              {groups.length > 1 && <span className="tabs-menu-heading">{t(g.label)}</span>}
               {g.sections.map((s) => (
                 <NavLink key={s} to={SECTION_LINKS[s]!.to} role="menuitem">
-                  {say(SECTION_LINKS[s]!.label)}
+                  {t(SECTION_LINKS[s]!.label)}
                 </NavLink>
               ))}
             </div>
           ))}
           {admin && (
             <NavLink to="/admin/notices" role="menuitem" className="tabs-menu-admin">
-              {say('Review exam notices')}
+              {t('Review exam notices')}
             </NavLink>
           )}
           <button
@@ -131,7 +103,7 @@ function MoreMenu({ sections, onChangeUses, admin }: { sections: Section[]; onCh
               onChangeUses()
             }}
           >
-            {say('What I use Cue for…')}
+            {t('What I use Cue for…')}
           </button>
         </div>
       )}
@@ -149,7 +121,6 @@ function Nav({
   onOpenAdd: () => void
 }) {
   const { logout, me } = useAuth()
-  const say = useNavWord()
   const [choosingUses, setChoosingUses] = useState(false)
   const { main, more } = tabsFor(me?.uses ?? [], AVAILABLE, me?.filled ?? [])
 
@@ -172,7 +143,7 @@ function Nav({
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            <span>{say('Add')}</span>
+            <span>{t('Add')}</span>
           </button>
           {/* A bordered control rather than a fourth text link. Search was
               there all along and nobody could find it, because next to
@@ -182,14 +153,14 @@ function Nav({
               <circle cx="11" cy="11" r="7" />
               <line x1="16.5" y1="16.5" x2="21" y2="21" />
             </svg>
-            <span>{say('Search')}</span>
+            <span>{t('Search')}</span>
             <kbd>Ctrl K</kbd>
           </button>
           <button className="link" onClick={onOpenSettings}>
-            {say('Settings')}
+            {t('Settings')}
           </button>
           <button className="link" onClick={logout}>
-            {say('Sign out')}
+            {t('Sign out')}
           </button>
         </div>
       </header>
@@ -198,18 +169,18 @@ function Nav({
         {/* No Add tab: it went to the same place as the Add button beside
             the logo, so it was one destination taking two slots. */}
         <NavLink to="/" end>
-          {say('Today')}
+          {t('Today')}
         </NavLink>
         {main.map((s) => (
           <NavLink key={s} to={SECTION_LINKS[s]!.to}>
-            {say(SECTION_LINKS[s]!.label)}
+            {t(SECTION_LINKS[s]!.label)}
           </NavLink>
         ))}
         <MoreMenu sections={more} onChangeUses={() => setChoosingUses(true)} admin={Boolean(me?.isAdmin)} />
       </nav>
 
       {choosingUses && (
-        <Modal title="What do you use Cue for?" onClose={() => setChoosingUses(false)}>
+        <Modal title={t('What do you use Cue for?')} onClose={() => setChoosingUses(false)}>
           <UsesPicker onDone={() => setChoosingUses(false)} />
         </Modal>
       )}
@@ -347,11 +318,12 @@ export default function App() {
   if (location.pathname === '/privacy') return <PrivacyPage />
   if (location.pathname === '/terms') return <TermsPage />
 
+  // Keyed on the language, so choosing Hindi in Settings redraws every screen in it.
   return (
-    <div className="app">
+    <div className="app" key={language()}>
       {me.isDemo && (
         <div className="demo-banner">
-          <span>You’re trying Cue with a sample week. It’s deleted after a day.</span>
+          <span>{t('You’re trying Cue with a sample week. It’s deleted after a day.')}</span>
           <button
             className="primary small-btn"
             onClick={() => {
@@ -359,7 +331,7 @@ export default function App() {
               navigate('/register')
             }}
           >
-            Create your free account
+            {t('Create your free account')}
           </button>
         </div>
       )}
@@ -398,7 +370,7 @@ export default function App() {
       <CallTracker />
 
       {addOpen && (
-        <Modal title="Add" onClose={() => setAddOpen(false)} closeOnBackdrop={false}>
+        <Modal title={t('Add')} onClose={() => setAddOpen(false)} closeOnBackdrop={false}>
           <AddPanel
             initialMode={addOptions.mode}
             initialFull={addOptions.full || addOptions.repeat}
@@ -413,13 +385,13 @@ export default function App() {
       )}
 
       {searchOpen && (
-        <Modal title="Search" onClose={() => setSearchOpen(false)}>
+        <Modal title={t('Search')} onClose={() => setSearchOpen(false)}>
           <Search onClose={() => setSearchOpen(false)} />
         </Modal>
       )}
 
       {settingsOpen && (
-        <Modal title="Settings" onClose={() => setSettingsOpen(false)}>
+        <Modal title={t('Settings')} onClose={() => setSettingsOpen(false)}>
           <Settings onClose={() => setSettingsOpen(false)} />
         </Modal>
       )}

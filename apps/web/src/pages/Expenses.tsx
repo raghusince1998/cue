@@ -11,6 +11,7 @@ import {
 } from '@cue/shared'
 import { api, apiFetchBlobUrl, BASE, getToken } from '../lib/api.ts'
 import { useOnChange } from '../lib/changes.ts'
+import { locale, msg, rich, t } from '../lib/i18n.tsx'
 import { dayLabel, spanLabel } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { waNumber } from '../components/PersonSheet.tsx'
@@ -37,9 +38,9 @@ interface Recipient {
 }
 
 const STATUS_WORD: Record<ExpenseDTO['claimStatus'], string> = {
-  unclaimed: 'To claim',
-  claimed: 'Claimed',
-  reimbursed: 'Paid back',
+  unclaimed: msg('To claim'),
+  claimed: msg('Claimed'),
+  reimbursed: msg('Paid back'),
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -55,7 +56,7 @@ function shiftMonth(month: string, by: number): string {
 function monthName(month: string): string {
   const [y, m] = month.split('-').map(Number)
   const d = new Date(y!, m! - 1, 1)
-  return d.toLocaleDateString([], {
+  return d.toLocaleDateString(locale(), {
     month: 'long',
     ...(y === new Date().getFullYear() ? {} : { year: 'numeric' }),
   })
@@ -84,10 +85,10 @@ async function toReceiptJpeg(file: File): Promise<Blob> {
     canvas.width = Math.round(bitmap.width * scale)
     canvas.height = Math.round(bitmap.height * scale)
     const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('This browser cannot resize images.')
+    if (!ctx) throw new Error(t('This browser cannot resize images.'))
     ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
     return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not read that image.'))), 'image/jpeg', 0.8)
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error(t('Could not read that image.')))), 'image/jpeg', 0.8)
     })
   } finally {
     bitmap.close()
@@ -102,7 +103,7 @@ async function uploadReceipt(id: string, file: File): Promise<void> {
     headers: { 'content-type': 'image/jpeg', ...(token ? { authorization: `Bearer ${token}` } : {}) },
     body: blob,
   })
-  if (!res.ok) throw new Error(res.status === 413 ? 'That photo is too large.' : 'The receipt did not save. Try again.')
+  if (!res.ok) throw new Error(res.status === 413 ? t('That photo is too large.') : t('The receipt did not save. Try again.'))
 }
 
 /**
@@ -195,12 +196,17 @@ export default function Expenses() {
   const awaitingTotal = awaiting.reduce((s, x) => s + x.claimablePaise, 0)
   const thisMonth = monthOf(new Date())
   const older = toClaim.filter((x) => x.spentOn < `${thisMonth}-01`).length
-  const olderNote =
-    older === 0
-      ? ''
-      : older === toClaim.length
-        ? `, ${older === 1 ? '' : 'all '}from before this month`
-        : `, ${older} from before this month`
+  const n = toClaim.length
+  const notClaimedLine =
+    n === 1
+      ? older
+        ? t('1 expense not claimed yet, from before this month.')
+        : t('1 expense not claimed yet.')
+      : older === 0
+        ? t('{n} expenses not claimed yet.', { n })
+        : older === n
+          ? t('{n} expenses not claimed yet, all from before this month.', { n })
+          : t('{n} expenses not claimed yet, {older} from before this month.', { n, older })
   const cats = data
     ? EXPENSE_CATEGORIES.filter((c) => data.totals.byCategory[c.key]).sort(
         (a, b) => data.totals.byCategory[b.key]! - data.totals.byCategory[a.key]!,
@@ -213,8 +219,12 @@ export default function Expenses() {
   return (
     <div className="stack expenses-page">
       <div className="page-head">
-        <h1 className="page-title">Expenses</h1>
-        {data && <span className="page-count">{formatRupees(data.totals.all)} in {monthName(month)}</span>}
+        <h1 className="page-title">{t('Expenses')}</h1>
+        {data && (
+          <span className="page-count">
+            {t('{amount} in {month}', { amount: formatRupees(data.totals.all), month: monthName(month) })}
+          </span>
+        )}
       </div>
 
       <div className="expense-top">
@@ -222,8 +232,16 @@ export default function Expenses() {
           accounts={accounts}
           people={people}
           onSaved={(x) => {
+            const said = { amount: formatRupees(x.amountPaise), trip: x.tripLabel ?? '', month: monthName(x.spentOn.slice(0, 7)) }
+            const sameMonth = x.spentOn.startsWith(month)
             setNote(
-              `Saved ${formatRupees(x.amountPaise)}${x.tripLabel ? ` on your ${x.tripLabel} trip` : ''}${x.spentOn.startsWith(month) ? '' : `, in ${monthName(x.spentOn.slice(0, 7))}`}.`,
+              x.tripLabel
+                ? sameMonth
+                  ? t('Saved {amount} on your {trip} trip.', said)
+                  : t('Saved {amount} on your {trip} trip, in {month}.', said)
+                : sameMonth
+                  ? t('Saved {amount}.', said)
+                  : t('Saved {amount}, in {month}.', said),
             )
             void load()
           }}
@@ -231,22 +249,20 @@ export default function Expenses() {
 
         <div className="stack expense-side-col">
         <section className="card expense-claims">
-          <h2 className="section-title">Claims</h2>
+          <h2 className="section-title">{t('Claims')}</h2>
           {toClaim.length === 0 && awaiting.length === 0 ? (
             <p className="muted small">
-              Nothing waiting. Everything you log stays here until you claim it, then until it is paid back.
+              {t('Nothing waiting. Everything you log stays here until you claim it, then until it is paid back.')}
             </p>
           ) : (
             <>
               <button className="primary claim-btn" disabled={toClaim.length === 0} onClick={() => setSheet('claim')}>
-                {toClaim.length ? `Make a claim · ${formatRupees(claimTotal)}` : 'Nothing to claim'}
+                {toClaim.length ? t('Make a claim · {amount}', { amount: formatRupees(claimTotal) }) : t('Nothing to claim')}
               </button>
-              <p className="muted small">
-                {toClaim.length ? `${toClaim.length} expense${toClaim.length === 1 ? '' : 's'} not claimed yet${olderNote}.` : 'Everything is claimed.'}
-              </p>
+              <p className="muted small">{toClaim.length ? notClaimedLine : t('Everything is claimed.')}</p>
               {awaiting.length > 0 && (
                 <button className="ghost small-btn fit-btn" onClick={() => setSheet('paid')}>
-                  {formatRupees(awaitingTotal)} claimed, waiting to be paid back
+                  {t('{amount} claimed, waiting to be paid back', { amount: formatRupees(awaitingTotal) })}
                 </button>
               )}
             </>
@@ -260,7 +276,7 @@ export default function Expenses() {
       {note && <p className="muted small">{note}</p>}
 
       <div className="month-switch">
-        <button className="ghost small-btn" onClick={() => setMonth((m) => shiftMonth(m, -1))} aria-label="Previous month">
+        <button className="ghost small-btn" onClick={() => setMonth((m) => shiftMonth(m, -1))} aria-label={t('Previous month')}>
           ‹
         </button>
         <strong>{monthName(month)}</strong>
@@ -268,17 +284,17 @@ export default function Expenses() {
           className="ghost small-btn"
           onClick={() => setMonth((m) => shiftMonth(m, 1))}
           disabled={month >= thisMonth}
-          aria-label="Next month"
+          aria-label={t('Next month')}
         >
           ›
         </button>
         {data && data.totals.all > 0 && (
           <span className="muted small month-split">
             {[
-              data.totals.unclaimed && `${formatRupees(data.totals.unclaimed)} to claim`,
-              data.totals.claimed && `${formatRupees(data.totals.claimed)} claimed`,
-              data.totals.people && `${formatRupees(data.totals.people)} from people`,
-              data.totals.reimbursed && `${formatRupees(data.totals.reimbursed)} paid back`,
+              data.totals.unclaimed && t('{amount} to claim', { amount: formatRupees(data.totals.unclaimed) }),
+              data.totals.claimed && t('{amount} claimed', { amount: formatRupees(data.totals.claimed) }),
+              data.totals.people && t('{amount} from people', { amount: formatRupees(data.totals.people) }),
+              data.totals.reimbursed && t('{amount} paid back', { amount: formatRupees(data.totals.reimbursed) }),
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -295,10 +311,12 @@ export default function Expenses() {
           <span className="blank-mark" aria-hidden>
             &#129534;
           </span>
-          <h3>Nothing spent in {monthName(month)}</h3>
+          <h3>{t('Nothing spent in {month}', { month: monthName(month) })}</h3>
           <p>
-            Log a cab, a meal or a hotel as you spend it, and claim the month back in one go. Quickest from the
-            box on Today: type <strong>₹450 cab to the airport</strong>.
+            {rich(
+              'Log a cab, a meal or a hotel as you spend it, and claim the month back in one go. Quickest from the box on Today: type {example}.',
+              { example: <strong>₹450 cab to the airport</strong> },
+            )}
           </p>
         </div>
       ) : (
@@ -313,7 +331,7 @@ export default function Expenses() {
                 aria-pressed={filter === c.key}
               >
                 <span className="expense-cat-name">
-                  <span aria-hidden>{c.mark}</span> {c.label}
+                  <span aria-hidden>{c.mark}</span> {t(c.label)}
                 </span>
                 <span className="expense-cat-bar">
                   <span style={{ width: `${Math.max(4, (data.totals.byCategory[c.key]! / biggest) * 100)}%` }} />
@@ -325,7 +343,7 @@ export default function Expenses() {
 
           {filter && (
             <button className="link small fit-btn" onClick={() => setFilter(null)}>
-              Show everything
+              {t('Show everything')}
             </button>
           )}
 
@@ -346,7 +364,7 @@ export default function Expenses() {
       )}
 
       {editing && (
-        <Modal title="Edit expense" onClose={() => setEditing(null)} closeOnBackdrop={false}>
+        <Modal title={t('Edit expense')} onClose={() => setEditing(null)} closeOnBackdrop={false}>
           <ExpenseForm
             initial={editing}
             accounts={accounts}
@@ -358,7 +376,7 @@ export default function Expenses() {
             }}
             onDeleted={() => {
               setEditing(null)
-              setNote('Deleted.')
+              setNote(t('Deleted.'))
               void load()
             }}
           />
@@ -366,7 +384,7 @@ export default function Expenses() {
       )}
 
       {viewing && (
-        <Modal title="Receipt" onClose={() => setViewing(null)}>
+        <Modal title={t('Receipt')} onClose={() => setViewing(null)}>
           <ReceiptView
             x={viewing}
             onChanged={() => {
@@ -378,7 +396,7 @@ export default function Expenses() {
       )}
 
       {sheet === 'claim' && (
-        <Modal title="Make a claim" onClose={() => setSheet(null)}>
+        <Modal title={t('Make a claim')} onClose={() => setSheet(null)}>
           <ClaimSheet
             items={toClaim}
             onClaimed={() => void load()}
@@ -388,7 +406,7 @@ export default function Expenses() {
       )}
 
       {sheet === 'paid' && (
-        <Modal title="Waiting to be paid back" onClose={() => setSheet(null)}>
+        <Modal title={t('Waiting to be paid back')} onClose={() => setSheet(null)}>
           <PaidSheet items={awaiting} onChanged={() => void load()} />
         </Modal>
       )}
@@ -404,15 +422,21 @@ function ExpenseRow({ x, onEdit, onReceipt }: { x: ExpenseDTO; onEdit: () => voi
       <span className="expense-mark" aria-hidden>
         {c.mark}
       </span>
-      <button className="expense-main" onClick={onEdit} aria-label={`Edit ${x.note ?? c.label}`}>
-        <span className="expense-title">{x.note ?? c.label}</span>
+      <button className="expense-main" onClick={onEdit} aria-label={t('Edit {name}', { name: x.note ?? t(c.label) })}>
+        <span className="expense-title">{x.note ?? t(c.label)}</span>
         <span className="expense-sub">
-          {[x.note ? c.label : null, x.tripLabel && `${x.tripLabel} trip`, who && `for ${who}`].filter(Boolean).join(' · ')}
+          {[x.note ? t(c.label) : null, x.tripLabel && t('{trip} trip', { trip: x.tripLabel }), who && t('for {who}', { who })]
+            .filter(Boolean)
+            .join(' · ')}
         </span>
         {x.shares.length > 0 && (
           <span className="expense-sub expense-shares">
             {x.shares
-              .map((s) => `${shortName(s.name)} ${s.status === 'paid' ? 'paid back' : 'owes'} ${formatRupees(s.amountPaise)}`)
+              .map((s) =>
+                s.status === 'paid'
+                  ? t('{name} paid back {amount}', { name: shortName(s.name), amount: formatRupees(s.amountPaise) })
+                  : t('{name} owes {amount}', { name: shortName(s.name), amount: formatRupees(s.amountPaise) }),
+              )
               .join(' · ')}
           </span>
         )}
@@ -420,15 +444,15 @@ function ExpenseRow({ x, onEdit, onReceipt }: { x: ExpenseDTO; onEdit: () => voi
       <div className="expense-side">
         <strong>{formatRupees(x.amountPaise)}</strong>
         {x.claimablePaise > 0 ? (
-          <span className={`expense-status is-${x.claimStatus}`}>{STATUS_WORD[x.claimStatus]}</span>
+          <span className={`expense-status is-${x.claimStatus}`}>{t(STATUS_WORD[x.claimStatus])}</span>
         ) : x.shares.every((s) => s.status === 'paid') ? (
-          <span className="expense-status is-reimbursed">Paid back</span>
+          <span className="expense-status is-reimbursed">{t('Paid back')}</span>
         ) : (
-          <span className="expense-status is-people">Owed to you</span>
+          <span className="expense-status is-people">{t('Owed to you')}</span>
         )}
       </div>
       <button className="link small expense-receipt" onClick={onReceipt}>
-        {x.hasReceipt ? 'Receipt' : '+ Receipt'}
+        {x.hasReceipt ? t('Receipt') : t('+ Receipt')}
       </button>
     </article>
   )
@@ -486,7 +510,7 @@ function ExpenseForm({
   async function save(e: FormEvent) {
     e.preventDefault()
     if (!paise) {
-      setError('How much? Just the number, e.g. 450.')
+      setError(t('How much? Just the number, e.g. 450.'))
       return
     }
     const shareList = shares
@@ -496,7 +520,7 @@ function ExpenseForm({
         return { contactId: match?.id ?? x.contactId, personName: x.name.trim(), amountPaise: rupeesToPaise(x.amount)! }
       })
     if (sharedTotal(shareList) + sharedTotal(paidShares) > paise) {
-      setError(`Their parts come to more than the ${formatRupees(paise)} spent.`)
+      setError(t('Their parts come to more than the {amount} spent.', { amount: formatRupees(paise) }))
       return
     }
     setBusy(true)
@@ -520,7 +544,7 @@ function ExpenseForm({
           await uploadReceipt(saved.id, file)
           saved.hasReceipt = true
         } catch (err) {
-          setError(`Saved, but ${(err as Error).message.toLowerCase()}`)
+          setError(t('Saved, but {problem}', { problem: (err as Error).message.toLowerCase() }))
         }
       }
       if (!initial) {
@@ -542,7 +566,7 @@ function ExpenseForm({
   }
 
   async function remove() {
-    if (!initial || !window.confirm('Delete this expense?')) return
+    if (!initial || !window.confirm(t('Delete this expense?'))) return
     setBusy(true)
     try {
       await api(`/expenses/${initial.id}`, { method: 'DELETE' })
@@ -555,7 +579,7 @@ function ExpenseForm({
 
   return (
     <form className={`stack tight expense-form${initial ? '' : ' card'}`} onSubmit={(e) => void save(e)}>
-      {!initial && <h2 className="section-title">Add an expense</h2>}
+      {!initial && <h2 className="section-title">{t('Add an expense')}</h2>}
       <div className="expense-amount-row">
         <label className="amount-field">
           <span aria-hidden>₹</span>
@@ -565,7 +589,7 @@ function ExpenseForm({
             onChange={(e) => setAmount(e.target.value)}
             inputMode="decimal"
             placeholder="0"
-            aria-label="Amount in rupees"
+            aria-label={t('Amount in rupees')}
             autoFocus={Boolean(initial)}
           />
         </label>
@@ -573,13 +597,13 @@ function ExpenseForm({
           className="grow"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="What for? e.g. cab to the airport"
-          aria-label="What it was for"
+          placeholder={t('What for? e.g. cab to the airport')}
+          aria-label={t('What it was for')}
           maxLength={300}
         />
       </div>
 
-      <div className="chips expense-chips" role="group" aria-label="Category">
+      <div className="chips expense-chips" role="group" aria-label={t('Category')}>
         {EXPENSE_CATEGORIES.map((c) => (
           <button
             type="button"
@@ -588,22 +612,22 @@ function ExpenseForm({
             onClick={() => setPicked((p) => (p === c.key ? null : c.key))}
             aria-pressed={category === c.key}
           >
-            <span aria-hidden>{c.mark}</span> {c.label}
+            <span aria-hidden>{c.mark}</span> {t(c.label)}
           </button>
         ))}
       </div>
 
       <div className="expense-meta">
         <label className="field">
-          <span className="muted small">Date</span>
+          <span className="muted small">{t('Date')}</span>
           <input type="date" value={spentOn} max={today} onChange={(e) => setSpentOn(e.target.value || today)} />
         </label>
         <label className="field grow">
-          <span className="muted small">For (optional)</span>
+          <span className="muted small">{t('For (optional)')}</span>
           <input
             value={account}
             onChange={(e) => setAccount(e.target.value)}
-            placeholder="Client or company"
+            placeholder={t('Client or company')}
             list="expense-accounts"
             maxLength={200}
           />
@@ -618,7 +642,7 @@ function ExpenseForm({
       {sharing ? (
         <div className="share-box">
           <div className="row share-head">
-            <span className="label-text">Who pays you back?</span>
+            <span className="label-text">{t('Who pays you back?')}</span>
             {paise && shares.length > 0 && (
               <span className="row">
                 <button
@@ -629,7 +653,7 @@ function ExpenseForm({
                     setShares((list) => list.map((x, i) => ({ ...x, amount: String(parts[i]! / 100) })))
                   }}
                 >
-                  Split equally
+                  {t('Split equally')}
                 </button>
                 {shares.length === 1 && paidShares.length === 0 && (
                   <button
@@ -637,7 +661,7 @@ function ExpenseForm({
                     className="link small"
                     onClick={() => setShares((list) => [{ ...list[0]!, amount: String(paise / 100) }])}
                   >
-                    They pay it all
+                    {t('They pay it all')}
                   </button>
                 )}
               </span>
@@ -652,8 +676,8 @@ function ExpenseForm({
                   const name = e.target.value
                   setShares((list) => list.map((y, j) => (j === i ? { ...y, name, contactId: null } : y)))
                 }}
-                placeholder="Who? e.g. Ravi"
-                aria-label="Who pays back"
+                placeholder={t('Who? e.g. Ravi')}
+                aria-label={t('Who pays back')}
                 list="share-people"
                 autoFocus={i === shares.length - 1 && !x.name}
               />
@@ -667,14 +691,14 @@ function ExpenseForm({
                   }}
                   inputMode="decimal"
                   placeholder="0"
-                  aria-label="Their part"
+                  aria-label={t('Their part')}
                 />
               </label>
               <button
                 type="button"
                 className="link small danger-text"
                 onClick={() => setShares((list) => list.filter((_, j) => j !== i))}
-                aria-label="Remove"
+                aria-label={t('Remove')}
               >
                 ✕
               </button>
@@ -682,19 +706,19 @@ function ExpenseForm({
           ))}
           {paidShares.map((x) => (
             <p key={x.id} className="muted small">
-              {x.name} paid back {formatRupees(x.amountPaise)}.
+              {t('{name} paid back {amount}.', { name: x.name, amount: formatRupees(x.amountPaise) })}
             </p>
           ))}
           <button type="button" className="link small fit-btn" onClick={() => setShares((list) => [...list, BLANK_SHARE])}>
-            + Add a person
+            {t('+ Add a person')}
           </button>
           {paise && (
             <p className="muted small">
               {(() => {
                 const theirs = sharedTotal(shares.map((x) => ({ amountPaise: rupeesToPaise(x.amount) ?? 0 }))) + sharedTotal(paidShares)
-                if (theirs > paise) return `Their parts come to more than the ${formatRupees(paise)} spent.`
-                if (theirs === paise) return 'Nothing left to claim from the company.'
-                return `You claim ${formatRupees(paise - theirs)} from the company.`
+                if (theirs > paise) return t('Their parts come to more than the {amount} spent.', { amount: formatRupees(paise) })
+                if (theirs === paise) return t('Nothing left to claim from the company.')
+                return t('You claim {amount} from the company.', { amount: formatRupees(paise - theirs) })
               })()}
             </p>
           )}
@@ -713,13 +737,13 @@ function ExpenseForm({
             setShares([BLANK_SHARE])
           }}
         >
-          + Split it, or someone pays you back
+          {t('+ Split it, or someone pays you back')}
         </button>
       )}
 
       <div className="row expense-actions">
         <label className="ghost small-btn file-btn">
-          {file ? `📎 ${file.name.length > 18 ? `${file.name.slice(0, 15)}…` : file.name}` : '📎 Receipt photo'}
+          {file ? `📎 ${file.name.length > 18 ? `${file.name.slice(0, 15)}…` : file.name}` : t('📎 Receipt photo')}
           <input
             type="file"
             accept="image/*"
@@ -732,24 +756,24 @@ function ExpenseForm({
         </label>
         {file && (
           <button type="button" className="link small" onClick={() => setFile(null)}>
-            Remove
+            {t('Remove')}
           </button>
         )}
         <span className="grow" />
         {onCancel && (
           <button type="button" className="ghost small-btn" onClick={onCancel}>
-            Cancel
+            {t('Cancel')}
           </button>
         )}
         <button type="submit" className="primary small-btn" disabled={busy || !amount.trim()}>
-          {busy ? 'Saving…' : initial ? 'Save' : paise ? `Save ${formatRupees(paise)}` : 'Save'}
+          {busy ? t('Saving…') : initial ? t('Save') : paise ? t('Save {amount}', { amount: formatRupees(paise) }) : t('Save')}
         </button>
       </div>
 
       {initial && (
         <div className="row">
           <button type="button" className="link small danger-text" onClick={() => void remove()} disabled={busy}>
-            Delete this expense
+            {t('Delete this expense')}
           </button>
         </div>
       )}
@@ -773,7 +797,7 @@ function ReceiptView({ x, onChanged }: { x: ExpenseDTO; onChanged: () => void })
         if (cancelled) URL.revokeObjectURL(u)
         else setSrc(u)
       })
-      .catch(() => !cancelled && setError('Could not load the receipt.'))
+      .catch(() => !cancelled && setError(t('Could not load the receipt.')))
     return () => {
       cancelled = true
       if (url) URL.revokeObjectURL(url)
@@ -793,7 +817,7 @@ function ReceiptView({ x, onChanged }: { x: ExpenseDTO; onChanged: () => void })
   }
 
   async function remove() {
-    if (!window.confirm('Remove this receipt?')) return
+    if (!window.confirm(t('Remove this receipt?'))) return
     setBusy(true)
     try {
       await api(`/expenses/${x.id}/receipt`, { method: 'DELETE' })
@@ -807,11 +831,11 @@ function ReceiptView({ x, onChanged }: { x: ExpenseDTO; onChanged: () => void })
   return (
     <div className="stack tight">
       <p className="muted small">
-        {formatRupees(x.amountPaise)} · {x.note ?? categoryInfo(x.category).label} · {dayLabel(x.spentOn)}
+        {formatRupees(x.amountPaise)} · {x.note ?? t(categoryInfo(x.category).label)} · {dayLabel(x.spentOn)}
       </p>
       {x.hasReceipt ? (
         src ? (
-          <img className="receipt-image" src={src} alt="Receipt" />
+          <img className="receipt-image" src={src} alt={t('Receipt')} />
         ) : (
           !error && (
             <div className="boot">
@@ -820,11 +844,11 @@ function ReceiptView({ x, onChanged }: { x: ExpenseDTO; onChanged: () => void })
           )
         )
       ) : (
-        <p className="muted small">No photo yet. One taken now is kept with the expense for the claim.</p>
+        <p className="muted small">{t('No photo yet. One taken now is kept with the expense for the claim.')}</p>
       )}
       <div className="row">
         <label className={`${x.hasReceipt ? 'ghost' : 'primary'} small-btn file-btn`}>
-          {busy ? 'Saving…' : x.hasReceipt ? 'Replace photo' : '📎 Add a photo'}
+          {busy ? t('Saving…') : x.hasReceipt ? t('Replace photo') : t('📎 Add a photo')}
           <input
             type="file"
             accept="image/*"
@@ -839,7 +863,7 @@ function ReceiptView({ x, onChanged }: { x: ExpenseDTO; onChanged: () => void })
         </label>
         {x.hasReceipt && (
           <button className="ghost small-btn danger-text" onClick={() => void remove()} disabled={busy}>
-            Remove
+            {t('Remove')}
           </button>
         )}
       </div>
@@ -850,37 +874,47 @@ function ReceiptView({ x, onChanged }: { x: ExpenseDTO; onChanged: () => void })
 
 /** "15 Oct" — a claim lists dates, not weekdays. */
 const shortDate = (day: string) =>
-  new Date(`${day}T00:00:00`).toLocaleDateString([], { day: 'numeric', month: 'short' })
+  new Date(`${day}T00:00:00`).toLocaleDateString(locale(), { day: 'numeric', month: 'short' })
 
 function composeClaim(items: ExpenseDTO[], toName: string | null): string {
   const total = items.reduce((s, x) => s + x.claimablePaise, 0)
   const days = items.map((x) => x.spentOn).sort()
   const lines: string[] = []
-  if (toName?.trim()) lines.push(`Hi ${toName.trim().split(/\s+/)[0]},`, '')
+  if (toName?.trim()) lines.push(t('Hi {name},', { name: toName.trim().split(/\s+/)[0]! }), '')
+  const head = { span: spanLabel(days[0]!, days.at(-1)!), total: formatRupees(total), n: items.length }
   lines.push(
-    `Expense claim for ${spanLabel(days[0]!, days.at(-1)!)}: ${formatRupees(total)} (${items.length} item${items.length === 1 ? '' : 's'})`,
+    items.length === 1
+      ? t('Expense claim for {span}: {total} (1 item)', head)
+      : t('Expense claim for {span}: {total} ({n} items)', head),
     '',
   )
   const byCat = new Map<string, number>()
   for (const x of items) byCat.set(x.category, (byCat.get(x.category) ?? 0) + x.claimablePaise)
   for (const [key, paise] of [...byCat].sort((a, b) => b[1] - a[1])) {
-    lines.push(`• ${categoryInfo(key).label}: ${formatRupees(paise)}`)
+    lines.push(`• ${t(categoryInfo(key).label)}: ${formatRupees(paise)}`)
   }
-  lines.push('', 'Details:')
+  lines.push('', t('Details:'))
   for (const x of [...items].sort((a, b) => a.spentOn.localeCompare(b.spentOn))) {
     const who = forWhom(x)
     const what = [
-      x.note ?? categoryInfo(x.category).label,
-      x.tripLabel && `${x.tripLabel} trip`,
-      who && `for ${who}`,
-      x.shares.length > 0 && `my part of ${formatRupees(x.amountPaise)}`,
+      x.note ?? t(categoryInfo(x.category).label),
+      x.tripLabel && t('{trip} trip', { trip: x.tripLabel }),
+      who && t('for {who}', { who }),
+      x.shares.length > 0 && t('my part of {amount}', { amount: formatRupees(x.amountPaise) }),
     ]
       .filter(Boolean)
       .join(', ')
     lines.push(`${shortDate(x.spentOn)} · ${what} · ${formatRupees(x.claimablePaise)}`)
   }
   const receipts = items.filter((x) => x.hasReceipt).length
-  if (receipts) lines.push('', `I have receipts for ${receipts === items.length ? 'all of these' : `${receipts} of these`}.`)
+  if (receipts) {
+    lines.push(
+      '',
+      receipts === items.length
+        ? t('I have receipts for all of these.')
+        : t('I have receipts for {n} of these.', { n: receipts }),
+    )
+  }
   return lines.join('\n')
 }
 
@@ -891,22 +925,24 @@ function cell(value: string): string {
 }
 
 function toCsv(items: ExpenseDTO[]): string {
-  const rows = [['Date', 'Category', 'What for', 'Trip', 'For', 'Paid (INR)', 'Shared with', 'Amount (INR)', 'Receipt']]
+  const rows = [
+    [t('Date'), t('Category'), t('What for'), t('Trip'), t('For'), t('Paid (INR)'), t('Shared with'), t('Amount (INR)'), t('Receipt')],
+  ]
   for (const x of [...items].sort((a, b) => a.spentOn.localeCompare(b.spentOn))) {
     rows.push([
       x.spentOn,
-      categoryInfo(x.category).label,
+      t(categoryInfo(x.category).label),
       x.note ?? '',
       x.tripLabel ?? '',
       forWhom(x) ?? '',
       (x.amountPaise / 100).toFixed(2),
       x.shares.map((y) => y.name).join('; '),
       (x.claimablePaise / 100).toFixed(2),
-      x.hasReceipt ? 'Yes' : 'No',
+      x.hasReceipt ? t('Yes') : t('No'),
     ])
   }
   const total = items.reduce((s, x) => s + x.claimablePaise, 0)
-  rows.push(['', '', '', '', '', '', 'Total', (total / 100).toFixed(2), ''])
+  rows.push(['', '', '', '', '', '', t('Total'), (total / 100).toFixed(2), ''])
   return rows.map((r) => r.map(cell).join(',')).join('\r\n')
 }
 
@@ -948,7 +984,9 @@ function ClaimSheet({ items, onClaimed, onClose }: { items: ExpenseDTO[]; onClai
   }
 
   const days = chosen.map((x) => x.spentOn).sort()
-  const subject = chosen.length ? `Expense claim: ${spanLabel(days[0]!, days.at(-1)!)}, ${formatRupees(total)}` : ''
+  const subject = chosen.length
+    ? t('Expense claim: {span}, {total}', { span: spanLabel(days[0]!, days.at(-1)!), total: formatRupees(total) })
+    : ''
   const first = to.reportToName?.trim().split(/\s+/)[0] ?? null
   const text = encodeURIComponent(message)
 
@@ -968,7 +1006,7 @@ function ClaimSheet({ items, onClaimed, onClose }: { items: ExpenseDTO[]; onClai
       await navigator.clipboard.writeText(message)
       setCopied(true)
     } catch {
-      setError('Could not copy — select the message and copy it yourself.')
+      setError(t('Could not copy — select the message and copy it yourself.'))
     }
   }
 
@@ -990,23 +1028,26 @@ function ClaimSheet({ items, onClaimed, onClose }: { items: ExpenseDTO[]; onClai
     return (
       <div className="stack tight">
         <p>
-          <strong>{formatRupees(done)}</strong> marked as claimed. When the money arrives, mark it paid back from
-          the Expenses page.
+          {rich('{amount} marked as claimed. When the money arrives, mark it paid back from the Expenses page.', {
+            amount: <strong>{formatRupees(done)}</strong>,
+          })}
         </p>
         <div className="row">
           <button className="primary small-btn" onClick={onClose}>
-            Done
+            {t('Done')}
           </button>
         </div>
       </div>
     )
   }
 
-  if (items.length === 0) return <p className="muted">Nothing left to claim.</p>
+  if (items.length === 0) return <p className="muted">{t('Nothing left to claim.')}</p>
 
   return (
     <div className="stack tight claim-sheet">
-      <p className="muted small">Everything not claimed yet, from any month. Untick what is not part of this claim.</p>
+      <p className="muted small">
+        {t('Everything not claimed yet, from any month. Untick what is not part of this claim.')}
+      </p>
 
       <div className="claim-list">
         {items.map((x) => (
@@ -1014,7 +1055,7 @@ function ClaimSheet({ items, onClaimed, onClose }: { items: ExpenseDTO[]; onClai
             <input type="checkbox" checked={selected.has(x.id)} onChange={() => toggle(x.id)} />
             <span className="claim-date">{shortDate(x.spentOn)}</span>
             <span className="claim-what">
-              <span aria-hidden>{categoryInfo(x.category).mark}</span> {x.note ?? categoryInfo(x.category).label}
+              <span aria-hidden>{categoryInfo(x.category).mark}</span> {x.note ?? t(categoryInfo(x.category).label)}
               {x.hasReceipt && <span className="muted"> · 📎</span>}
             </span>
             <strong>{formatRupees(x.claimablePaise)}</strong>
@@ -1025,7 +1066,7 @@ function ClaimSheet({ items, onClaimed, onClose }: { items: ExpenseDTO[]; onClai
         <span>
           <strong>{formatRupees(total)}</strong>{' '}
           <span className="muted small">
-            · {chosen.length} of {items.length}
+            · {t('{n} of {total}', { n: chosen.length, total: items.length })}
           </span>
         </span>
         <button
@@ -1035,7 +1076,7 @@ function ClaimSheet({ items, onClaimed, onClose }: { items: ExpenseDTO[]; onClai
             setSelected(chosen.length === items.length ? new Set() : new Set(items.map((x) => x.id)))
           }}
         >
-          {chosen.length === items.length ? 'Select none' : 'Select all'}
+          {chosen.length === items.length ? t('Select none') : t('Select all')}
         </button>
       </div>
 
@@ -1050,12 +1091,14 @@ function ClaimSheet({ items, onClaimed, onClose }: { items: ExpenseDTO[]; onClai
               setEdited(true)
               setCopied(false)
             }}
-            aria-label="Claim message"
+            aria-label={t('Claim message')}
           />
           <p className="muted small">
             {to.reportToName || to.reportToEmail || to.reportToPhone
-              ? `Goes to ${to.reportToName ?? to.reportToEmail ?? to.reportToPhone}, the same person as your daily report.`
-              : 'Set who you report to in the daily report on Today, and this goes to them in one tap.'}
+              ? t('Goes to {name}, the same person as your daily report.', {
+                  name: to.reportToName ?? to.reportToEmail ?? to.reportToPhone ?? '',
+                })
+              : t('Set who you report to in the daily report on Today, and this goes to them in one tap.')}
           </p>
           <div className="row nudge-send">
             <button
@@ -1068,7 +1111,7 @@ function ClaimSheet({ items, onClaimed, onClose }: { items: ExpenseDTO[]; onClai
                 )
               }
             >
-              {to.reportToPhone && first ? `WhatsApp ${first}` : 'WhatsApp'}
+              {to.reportToPhone && first ? t('WhatsApp {name}', { name: first }) : 'WhatsApp'}
             </button>
             <button
               className="ghost small-btn"
@@ -1080,18 +1123,22 @@ function ClaimSheet({ items, onClaimed, onClose }: { items: ExpenseDTO[]; onClai
                 )
               }
             >
-              {to.reportToEmail && first ? `Email ${first}` : 'Email'}
+              {to.reportToEmail && first ? t('Email {name}', { name: first }) : t('Email')}
             </button>
             <button className="ghost small-btn" onClick={download}>
-              Spreadsheet
+              {t('Spreadsheet')}
             </button>
             <button className="ghost small-btn" onClick={() => void copy()}>
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? t('Copied') : t('Copy')}
             </button>
           </div>
 
           <button className="primary" disabled={busy} onClick={() => void markClaimed()}>
-            {busy ? 'Saving…' : `Mark ${chosen.length === 1 ? 'it' : `these ${chosen.length}`} as claimed`}
+            {busy
+              ? t('Saving…')
+              : chosen.length === 1
+                ? t('Mark it as claimed')
+                : t('Mark these {n} as claimed', { n: chosen.length })}
           </button>
         </>
       )}
@@ -1133,7 +1180,7 @@ function PaidSheet({ items, onChanged }: { items: ExpenseDTO[]; onChanged: () =>
     }
   }
 
-  if (left.length === 0) return <p className="muted">All paid back.</p>
+  if (left.length === 0) return <p className="muted">{t('All paid back.')}</p>
 
   return (
     <div className="stack">
@@ -1141,14 +1188,14 @@ function PaidSheet({ items, onChanged }: { items: ExpenseDTO[]; onChanged: () =>
         <section key={g.day} className="card paid-group">
           <div className="row paid-head">
             <span>
-              Claimed {dayLabel(g.day)} · <strong>{formatRupees(g.total)}</strong>
+              {rich('Claimed {day} · {amount}', { day: dayLabel(g.day), amount: <strong>{formatRupees(g.total)}</strong> })}
             </span>
           </div>
           <ul className="paid-items">
             {g.items.map((x) => (
               <li key={x.id}>
                 <span>
-                  {shortDate(x.spentOn)} · {x.note ?? categoryInfo(x.category).label}
+                  {shortDate(x.spentOn)} · {x.note ?? t(categoryInfo(x.category).label)}
                 </span>
                 <span>{formatRupees(x.claimablePaise)}</span>
               </li>
@@ -1160,14 +1207,14 @@ function PaidSheet({ items, onChanged }: { items: ExpenseDTO[]; onChanged: () =>
               disabled={busy === g.day}
               onClick={() => void mark(g.day, g.items.map((x) => x.id), 'reimbursed')}
             >
-              Paid back
+              {t('Paid back')}
             </button>
             <button
               className="link small"
               disabled={busy === g.day}
               onClick={() => void mark(g.day, g.items.map((x) => x.id), 'unclaimed')}
             >
-              Not claimed after all
+              {t('Not claimed after all')}
             </button>
           </div>
         </section>

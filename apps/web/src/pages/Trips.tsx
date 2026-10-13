@@ -10,19 +10,20 @@ import {
   type TripStrictness,
 } from '@cue/shared'
 import { api } from '../lib/api.ts'
-import { spanLabel, toDateInputValue } from '../lib/time.ts'
+import { locale, t } from '../lib/i18n.tsx'
+import { dayLabel, spanLabel, toDateInputValue } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { TripDetail } from '../components/TripDetail.tsx'
 import { useOnChange } from '../lib/changes.ts'
 
 function whenLabel(trip: TripDTO): string {
   const { daysUntil, nights } = trip
-  const length = nights === 0 ? 'day trip' : `${nights + 1} days`
-  if (daysUntil > 1) return `in ${daysUntil} days · ${length}`
-  if (daysUntil === 1) return `tomorrow · ${length}`
-  if (daysUntil === 0) return `starts today · ${length}`
+  const length = nights === 0 ? t('day trip') : t('{n} days', { n: nights + 1 })
+  if (daysUntil > 1) return t('in {n} days · {length}', { n: daysUntil, length })
+  if (daysUntil === 1) return t('tomorrow · {length}', { length })
+  if (daysUntil === 0) return t('starts today · {length}', { length })
   const ended = new Date(`${trip.endsOn}T23:59:59`) < new Date()
-  return ended ? `finished · ${length}` : `you are there now · ${length}`
+  return ended ? t('finished · {length}', { length }) : t('you are there now · {length}', { length })
 }
 
 function NewTrip({
@@ -70,7 +71,11 @@ function NewTrip({
   if (found) {
     return (
       <Modal
-        title={`${found.waiting.length} things saved for ${found.trip.placeLabel}`}
+        title={
+          found.waiting.length === 1
+            ? t('1 thing saved for {place}', { place: found.trip.placeLabel })
+            : t('{n} things saved for {place}', { n: found.waiting.length, place: found.trip.placeLabel })
+        }
         onClose={() => {
           setFound(null)
           setOpen(false)
@@ -79,7 +84,7 @@ function NewTrip({
       >
         <div className="stack tight">
           <p className="muted small">
-            You wanted these whenever you next went. Open the trip to schedule them.
+            {t('You wanted these whenever you next went. Open the trip to schedule them.')}
           </p>
           <ul className="plain">
             {found.waiting.map((w) => (
@@ -87,8 +92,8 @@ function NewTrip({
                 <span className="commitment-title">{w.title}</span>
                 <br />
                 <span className="muted small">
-                  {w.preferredWindow ? WINDOW_LABELS[w.preferredWindow] : 'Any time'} ·{' '}
-                  {w.durationMinutes} min
+                  {w.preferredWindow ? t(WINDOW_LABELS[w.preferredWindow]) : t('Any time')} ·{' '}
+                  {t('{n} min', { n: w.durationMinutes })}
                 </span>
               </li>
             ))}
@@ -101,7 +106,7 @@ function NewTrip({
               onCreated()
             }}
           >
-            Got it
+            {t('OK')}
           </button>
         </div>
       </Modal>
@@ -111,7 +116,7 @@ function NewTrip({
   if (!open) {
     return (
       <button className="primary fit-btn" onClick={() => setOpen(true)}>
-        Plan a trip
+        {t('Plan a trip')}
       </button>
     )
   }
@@ -119,7 +124,7 @@ function NewTrip({
   return (
     <section className="card">
       <label>
-        Where are you going?
+        {t('Where are you going?')}
         <input
           value={placeLabel}
           onChange={(e) => setPlaceLabel(e.target.value)}
@@ -129,11 +134,11 @@ function NewTrip({
       </label>
       <div className="row">
         <label className="grow">
-          From
+          {t('From')}
           <input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />
         </label>
         <label className="grow">
-          To
+          {t('To')}
           <input
             type="date"
             min={startsOn}
@@ -143,7 +148,7 @@ function NewTrip({
         </label>
       </div>
 
-      <span className="label-text">How fixed is being there?</span>
+      <span className="label-text">{t('How fixed is being there?')}</span>
       <div className="chips">
         {TRIP_STRICTNESS.map((s) => (
           <button
@@ -151,13 +156,14 @@ function NewTrip({
             className={`chip${strictness === s ? ' selected' : ''}`}
             onClick={() => setStrictness(s)}
           >
-            {STRICTNESS_LABELS[s]}
+            {t(STRICTNESS_LABELS[s])}
           </button>
         ))}
       </div>
       <p className="muted small">
-        This decides how loudly the app objects when something elsewhere lands in the middle of
-        the trip.
+        {t(
+          'This decides how loudly the app objects when something elsewhere lands in the middle of the trip.',
+        )}
       </p>
 
       <div className="row">
@@ -166,10 +172,10 @@ function NewTrip({
           onClick={create}
           disabled={busy || !placeLabel.trim() || endsOn < startsOn}
         >
-          {busy ? 'Saving…' : 'Save trip'}
+          {busy ? t('Saving…') : t('Save trip')}
         </button>
         <button className="ghost" onClick={() => setOpen(false)}>
-          Cancel
+          {t('Cancel')}
         </button>
       </div>
     </section>
@@ -212,7 +218,7 @@ function Wishlist({
   // Several at once: one per line, or separated by commas.
   const titles = what
     .split(/\n|,|;/)
-    .map((t) => t.trim())
+    .map((line) => line.trim())
     .filter(Boolean)
   const place = placeLabel.trim()
 
@@ -225,14 +231,28 @@ function Wishlist({
         method: 'POST',
         body: { placeLabel: place || null, titles, preferredWindow: window },
       })
-      const n = titles.length === 1 ? 'Saved' : `${titles.length} saved`
+      const n = titles.length
+      const one = n === 1
       setWhat('')
       setNote(
         !place
-          ? `${n} for any time. Add them to a plan from its details when it suits.`
+          ? one
+            ? t('Saved for any time. Add them to a plan from its details when it suits.')
+            : t('{n} saved for any time. Add them to a plan from its details when it suits.', { n })
           : r.matchingTrips.length > 0
-            ? `${n}, and you already have a trip to ${place} on ${r.matchingTrips[0]!.startsOn}.`
-            : `${n}. They will show up when you plan a trip to ${place}.`,
+            ? one
+              ? t('Saved, and you already have a trip to {place} on {date}.', {
+                  place,
+                  date: dayLabel(r.matchingTrips[0]!.startsOn),
+                })
+              : t('{n} saved, and you already have a trip to {place} on {date}.', {
+                  n,
+                  place,
+                  date: dayLabel(r.matchingTrips[0]!.startsOn),
+                })
+            : one
+              ? t('Saved. They will show up when you plan a trip to {place}.', { place })
+              : t('{n} saved. They will show up when you plan a trip to {place}.', { n, place }),
       )
       await load()
       onChanged()
@@ -257,23 +277,24 @@ function Wishlist({
   const places = groups.filter(([p]) => p !== '').length
 
   const tripTo = (p: string) =>
-    upcoming.find((t) => t.placeLabel.trim().toLowerCase() === p.trim().toLowerCase()) ?? null
+    upcoming.find((trip) => trip.placeLabel.trim().toLowerCase() === p.trim().toLowerCase()) ?? null
 
   return (
     <section className="card saved-for-trip">
       <div className="saved-intro">
         <div className="wish-head">
-          <h2 className="section-title">Wishlist</h2>
+          <h2 className="section-title">{t('Wishlist')}</h2>
           {items.length > 0 && (
             <span className="page-count">
-              {items.length} {items.length === 1 ? 'wish' : 'wishes'}
-              {places > 0 ? ` · ${places} ${places === 1 ? 'place' : 'places'}` : ''}
+              {items.length === 1 ? t('1 wish') : t('{n} wishes', { n: items.length })}
+              {places > 0 ? ` · ${places === 1 ? t('1 place') : t('{n} places', { n: places })}` : ''}
             </span>
           )}
         </div>
         <p className="muted small">
-          What you want to do, somewhere or any time. Wishes for a place wait for a trip there and
-          go on it together; the rest wait for a plan to add them to.
+          {t(
+            'What you want to do, somewhere or any time. Wishes for a place wait for a trip there and go on it together; the rest wait for a plan to add them to.',
+          )}
         </p>
       </div>
 
@@ -283,13 +304,13 @@ function Wishlist({
           onChange={(e) => setWhat(e.target.value)}
           rows={3}
           placeholder={'Visit Hawa Mahal\nBuy lakh chudi'}
-          aria-label="What do you want to do?"
+          aria-label={t('What do you want to do?')}
         />
         <input
           value={placeLabel}
           onChange={(e) => setPlaceLabel(e.target.value)}
-          placeholder="Where? (optional) e.g. Jaipur"
-          aria-label="Where"
+          placeholder={t('Where? (optional) e.g. {example}', { example: 'Jaipur' })}
+          aria-label={t('Where')}
           list="wish-places"
         />
         <datalist id="wish-places">
@@ -299,7 +320,7 @@ function Wishlist({
               <option key={p} value={p} />
             ))}
         </datalist>
-        <p className="muted small">One per line, or separate them with commas.</p>
+        <p className="muted small">{t('One per line, or separate them with commas.')}</p>
         <div className="chips">
           {TIME_WINDOWS.map((w) => (
             <button
@@ -307,16 +328,18 @@ function Wishlist({
               className={`chip${window === w ? ' selected' : ''}`}
               onClick={() => setWindow(window === w ? null : w)}
             >
-              {WINDOW_LABELS[w]}
+              {t(WINDOW_LABELS[w])}
             </button>
           ))}
         </div>
         <button className="primary small-btn fit-btn" disabled={busy || titles.length === 0} onClick={add}>
           {titles.length > 1
-            ? `Save ${titles.length} ${place ? `for ${place}` : 'for any time'}`
+            ? place
+              ? t('Save {n} for {place}', { n: titles.length, place })
+              : t('Save {n} for any time', { n: titles.length })
             : place
-              ? `Save it for ${place}`
-              : 'Save it'}
+              ? t('Save it for {place}', { place })
+              : t('Save it')}
         </button>
         {note && <p className="muted small">{note}</p>}
       </div>
@@ -324,8 +347,9 @@ function Wishlist({
       <div className="saved-list">
         {groups.length === 0 && (
           <p className="muted small">
-            Nothing yet. Add a few above, or type &ldquo;Jaipur: visit Hawa Mahal, buy lakh
-            chudi&rdquo; in the box on Today.
+            {t('Nothing yet. Add a few above, or type “{example}” in the box on Today.', {
+              example: 'Jaipur: visit Hawa Mahal, buy lakh chudi',
+            })}
           </p>
         )}
         {groups.map(([p, list]) => {
@@ -334,15 +358,15 @@ function Wishlist({
             <div key={p || 'any time'} className="wish-place">
               <div className="wish-place-head">
                 <span className="label-text">
-                  {p || 'Any time'} · {list.length}
+                  {p || t('Any time')} · {list.length}
                 </span>
                 {!p ? (
-                  <span className="muted small">Add to any plan from its details</span>
+                  <span className="muted small">{t('Add to any plan from its details')}</span>
                 ) : trip ? (
-                  <span className="tag is-live">Trip {spanLabel(trip.startsOn, trip.endsOn)}</span>
+                  <span className="tag is-live">{t('Trip {span}', { span: spanLabel(trip.startsOn, trip.endsOn) })}</span>
                 ) : (
                   <button className="link small" onClick={() => onPlan(p)}>
-                    Plan a trip &rarr;
+                    {t('Plan a trip')} &rarr;
                   </button>
                 )}
               </div>
@@ -351,10 +375,10 @@ function Wishlist({
                   <li key={item.id} className="commitment-head">
                     <span className="muted small">
                       {item.title}
-                      {item.preferredWindow ? ` · ${WINDOW_LABELS[item.preferredWindow]}` : ''}
+                      {item.preferredWindow ? ` · ${t(WINDOW_LABELS[item.preferredWindow])}` : ''}
                     </span>
                     <button className="link danger-link" onClick={() => void drop(item.id)}>
-                      Remove
+                      {t('Remove')}
                     </button>
                   </li>
                 ))}
@@ -395,15 +419,16 @@ export default function Trips() {
   }
 
   const now = new Date()
-  const upcoming = trips.filter((t) => new Date(`${t.endsOn}T23:59:59`) >= now)
-  const past = trips.filter((t) => new Date(`${t.endsOn}T23:59:59`) < now)
+  const upcoming = trips.filter((trip) => new Date(`${trip.endsOn}T23:59:59`) >= now)
+  const past = trips.filter((trip) => new Date(`${trip.endsOn}T23:59:59`) < now)
 
   return (
     <div className="stack">
       <div className="page-head">
-        <h1 className="page-title">Trips</h1>
+        <h1 className="page-title">{t('Trips')}</h1>
         <span className="page-count">
-          {upcoming.length} coming up{past.length > 0 ? ` · ${past.length} been and gone` : ''}
+          {t('{n} coming up', { n: upcoming.length })}
+          {past.length > 0 ? ` · ${t('{n} been and gone', { n: past.length })}` : ''}
         </span>
       </div>
 
@@ -417,45 +442,46 @@ export default function Trips() {
           <span className="blank-mark" aria-hidden>
             &#9992;
           </span>
-          <h3>No journeys planned</h3>
+          <h3>{t('No journeys planned')}</h3>
           <p>
-            Plan one and everything you want to do there surfaces on its own: the place you
-            meant to see, the friend or client you meant to meet. Say &ldquo;going to Pune 12 to 14
-            Oct&rdquo; in the box on Today, or use Plan a trip.
+            {t(
+              'Plan one and everything you want to do there surfaces on its own: the place you meant to see, the friend or client you meant to meet. Say “{example}” in the box on Today, or use Plan a trip.',
+              { example: 'going to Pune 12 to 14 Oct' },
+            )}
           </p>
         </div>
       )}
 
       {upcoming.length > 0 && (
         <section>
-          <h2 className="section-title">Coming up</h2>
+          <h2 className="section-title">{t('Coming up')}</h2>
           <div className="tiles two-up">
-            {upcoming.map((t) => {
-              const start = new Date(`${t.startsOn}T00:00:00`)
+            {upcoming.map((trip) => {
+              const start = new Date(`${trip.startsOn}T00:00:00`)
               return (
-                <article key={t.id} className="tile is-tappable" onClick={() => setOpenId(t.id)}>
+                <article key={trip.id} className="tile is-tappable" onClick={() => setOpenId(trip.id)}>
                   <span className="tile-mark is-trip" aria-hidden>
                     <span className="mark-top">
-                      {start.toLocaleDateString([], { month: 'short' })}
+                      {start.toLocaleDateString(locale(), { month: 'short' })}
                     </span>
                     <span className="mark-main">{start.getDate()}</span>
                   </span>
 
                   <div className="tile-body">
-                    <p className="tile-title">{t.placeLabel}</p>
+                    <p className="tile-title">{trip.placeLabel}</p>
                     {/* Written the way a person writes it, not the way the
                         column is stored. */}
                     <p className="tile-sub">
-                      {spanLabel(t.startsOn, t.endsOn)} · {whenLabel(t)}
+                      {spanLabel(trip.startsOn, trip.endsOn)} · {whenLabel(trip)}
                     </p>
 
                     <div className="tile-tags">
-                      {Boolean(t.plannedCount) && (
-                        <span className="tag">{t.plannedCount} planned</span>
+                      {Boolean(trip.plannedCount) && (
+                        <span className="tag">{t('{n} planned', { n: trip.plannedCount! })}</span>
                       )}
-                      {Boolean(t.waitingCount) && (
+                      {Boolean(trip.waitingCount) && (
                         <span className="tag is-live">
-                          {t.waitingCount} waiting for you there
+                          {t('{n} waiting for you there', { n: trip.waitingCount! })}
                         </span>
                       )}
                     </div>
@@ -473,21 +499,21 @@ export default function Trips() {
 
       {past.length > 0 && (
         <section>
-          <h2 className="section-title muted-title">Been and gone</h2>
+          <h2 className="section-title muted-title">{t('Been and gone')}</h2>
           <div className="tiles two-up">
-            {past.map((t) => (
-              <article key={t.id} className="tile dimmed is-tappable" onClick={() => setOpenId(t.id)}>
+            {past.map((trip) => (
+              <article key={trip.id} className="tile dimmed is-tappable" onClick={() => setOpenId(trip.id)}>
                 <span className="tile-mark" aria-hidden>
                   <span className="mark-top">
-                    {new Date(`${t.startsOn}T00:00:00`).toLocaleDateString([], { month: 'short' })}
+                    {new Date(`${trip.startsOn}T00:00:00`).toLocaleDateString(locale(), { month: 'short' })}
                   </span>
                   <span className="mark-main">
-                    {new Date(`${t.startsOn}T00:00:00`).getDate()}
+                    {new Date(`${trip.startsOn}T00:00:00`).getDate()}
                   </span>
                 </span>
                 <div className="tile-body">
-                  <p className="tile-title">{t.placeLabel}</p>
-                  <p className="tile-sub">{spanLabel(t.startsOn, t.endsOn)}</p>
+                  <p className="tile-title">{trip.placeLabel}</p>
+                  <p className="tile-sub">{spanLabel(trip.startsOn, trip.endsOn)}</p>
                 </div>
                 <span className="tile-chevron" aria-hidden>
                   ›
@@ -513,7 +539,7 @@ export default function Trips() {
       </div>
 
       {openId && (
-        <Modal title="Trip" onClose={() => setOpenId(null)}>
+        <Modal title={t('Trip')} onClose={() => setOpenId(null)}>
           <TripDetail
             tripId={openId}
             onClose={() => setOpenId(null)}

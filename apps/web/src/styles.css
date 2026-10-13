@@ -6121,6 +6121,25 @@ a.link-btn:hover {
   gap: 14px;
 }
 
+/* English / हिन्दी, on every width: the one control a visitor may need first. */
+.site .site-lang {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.site .site-lang:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .site .site-link {
   color: var(--accent);
   font-weight: 600;

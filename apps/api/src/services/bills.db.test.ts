@@ -103,3 +103,14 @@ test('reminders: the reminder day, the due day, the day after — once, in dayti
   assert.equal(await svc.runBillReminders(morning), 1, 'one notification for all of them')
   assert.deepEqual(await names(morning), [], 'not twice in a day')
 })
+
+test('when a bill is due, in English as before and in Hindi', async () => {
+  const { dueLabel } = await import('@cue/shared')
+  const now = new Date(2026, 9, 11, 10)
+  for (const [due, kind] of [['2026-10-11', 'bill'], ['2026-10-10', 'bill'], ['2026-10-30', 'renewal'], ['2026-10-09', 'renewal']] as const) {
+    assert.equal(svc.dueSaid(due, kind, now, 'en'), dueLabel(due, kind, now))
+  }
+  assert.equal(svc.dueSaid('2026-10-12', 'bill', now, 'hi'), 'कल देय')
+  assert.equal(svc.dueSaid('2026-10-10', 'bill', now, 'hi'), 'समय निकले 1 दिन हो गया')
+  assert.equal(svc.dueSaid('2026-10-30', 'renewal', now, 'hi'), '19 दिन में समाप्त होगा')
+})

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { TargetMetric, TargetProgress } from '@cue/shared'
 import { api } from '../lib/api.ts'
+import { t } from '../lib/i18n.tsx'
 
 export interface WeekTargets {
   week: { from: string; to: string }
@@ -9,9 +10,9 @@ export interface WeekTargets {
 }
 
 export function statusText(m: TargetProgress): string {
-  if (m.status === 'done') return 'Hit'
-  if (m.status === 'on') return 'On pace'
-  if (m.status === 'behind') return `Behind by ${m.expected - m.done}`
+  if (m.status === 'done') return t('Hit')
+  if (m.status === 'on') return t('On pace')
+  if (m.status === 'behind') return t('Behind by {n}', { n: m.expected - m.done })
   return ''
 }
 
@@ -24,7 +25,12 @@ export function TargetBar({ m, small = false }: { m: TargetProgress; small?: boo
     <span
       className={`target-bar${small ? ' is-small' : ''}`}
       role="img"
-      aria-label={`${m.label}: ${m.done} of ${m.target}, ${statusText(m).toLowerCase()}`}
+      aria-label={t('{label}: {done} of {target}, {status}', {
+        label: m.label,
+        done: m.done,
+        target: m.target ?? '',
+        status: statusText(m).toLowerCase(),
+      })}
     >
       <span className={`target-fill is-${m.status}`} style={{ width: `${fill}%` }} />
       {m.status !== 'done' && pace > 0 && pace < 100 && <i className="target-pace" style={{ left: `${pace}%` }} />}
@@ -76,36 +82,37 @@ export function Targets({ onSaved }: { onSaved?: () => void }) {
     }
   }
 
-  if (!data) return <p className="muted small">Counting your week…</p>
+  if (!data) return <p className="muted small">{t('Counting your week…')}</p>
 
   return (
     <div className="stack tight targets">
       <p className="muted small">
-        Counted from what you log: calls, visits, meetings and what you close. Set a number for
-        the ones you want to hit each week; leave the rest empty.
+        {t(
+          'Counted from what you log: calls, visits, meetings and what you close. Set a number for the ones you want to hit each week; leave the rest empty.',
+        )}
       </p>
 
       {data.metrics.map((m) => (
         <div className="target-row" key={m.key}>
           <div className="target-head">
             <span>
-              <strong>{m.label}</strong>
-              <span className="muted small"> · {m.hint}</span>
+              <strong>{t(m.label)}</strong>
+              <span className="muted small"> · {t(m.hint)}</span>
             </span>
             <label className="target-input">
-              <span className="muted small">Weekly</span>
+              <span className="muted small">{t('Weekly')}</span>
               <input
                 type="number"
                 inputMode="numeric"
                 min={0}
                 max={1000}
                 value={draft[m.key] ?? ''}
-                placeholder="Off"
+                placeholder={t('Off')}
                 onChange={(e) => {
                   setSaved(false)
                   setDraft((d) => ({ ...d, [m.key]: e.target.value }))
                 }}
-                aria-label={`${m.label} weekly target`}
+                aria-label={t('{label} weekly target', { label: m.label })}
               />
             </label>
           </div>
@@ -113,16 +120,14 @@ export function Targets({ onSaved }: { onSaved?: () => void }) {
             <>
               <TargetBar m={m} />
               <div className="target-meta small">
-                <span>
-                  {m.done} of {m.target}
-                </span>
+                <span>{t('{n} of {total}', { n: m.done, total: m.target })}</span>
                 <span className={`target-status is-${m.status}`}>{statusText(m)}</span>
-                <span className="muted">Last week {m.lastWeek}</span>
+                <span className="muted">{t('Last week {n}', { n: m.lastWeek })}</span>
               </div>
             </>
           ) : (
             <p className="muted small target-meta">
-              {m.done} this week · {m.lastWeek} last week
+              {t('{done} this week · {last} last week', { done: m.done, last: m.lastWeek })}
             </p>
           )}
         </div>
@@ -131,9 +136,9 @@ export function Targets({ onSaved }: { onSaved?: () => void }) {
       {error && <p className="error small">{error}</p>}
       <div className="row">
         <button className="primary" onClick={() => void save()} disabled={busy || !changed}>
-          {busy ? 'Saving…' : 'Save targets'}
+          {busy ? t('Saving…') : t('Save targets')}
         </button>
-        {saved && !changed && <span className="muted small">Saved.</span>}
+        {saved && !changed && <span className="muted small">{t('Saved.')}</span>}
       </div>
     </div>
   )

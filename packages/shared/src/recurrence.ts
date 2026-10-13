@@ -5,6 +5,7 @@
  * the reminder worker, conflict detection — deals in ordinary commitments that
  * this expansion produced, so none of them need to know recurrence exists.
  */
+import type { Lang } from './examHindi.ts'
 
 export const FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'] as const
 export type Frequency = (typeof FREQUENCIES)[number]
@@ -278,11 +279,59 @@ function listWeekdays(days: number[]): string {
   return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
 }
 
+const WEEKDAY_HI = ['रविवार', 'सोमवार', 'मंगलवार', 'बुधवार', 'गुरुवार', 'शुक्रवार', 'शनिवार']
+const ORDINAL_HI = ['', 'पहला', 'दूसरा', 'तीसरा', 'चौथा', 'पाँचवाँ']
+
+function listWeekdaysHi(days: number[]): string {
+  const sorted = [...new Set(days)].sort()
+  if (sorted.length === 7) return 'दिन'
+  if (sorted.length === 5 && [1, 2, 3, 4, 5].every((d) => days.includes(d))) return 'कामकाजी दिन'
+  const names = sorted.map((d) => WEEKDAY_HI[d]!)
+  if (names.length === 1) return names[0]!
+  return `${names.slice(0, -1).join(', ')} और ${names.at(-1)}`
+}
+
+/** The same, in Hindi: "हर दूसरे मंगलवार", "हर महीने की 1 तारीख को". */
+function describeRecurrenceHi(rule: RecurrenceRule, anchor?: RecurrenceAnchor): string {
+  const n = Math.max(1, Math.floor(rule.interval || 1))
+  // "हर महीने", "हर दूसरे महीने", "हर 3 महीने".
+  const every = (unit: string) => (n === 1 ? `हर ${unit}` : n === 2 ? `हर दूसरे ${unit}` : `हर ${n} ${unit}`)
+
+  let base: string
+  if (rule.freq === 'weekly') {
+    const days = rule.byWeekday?.length ? rule.byWeekday : anchor ? [anchor.startsOn.getDay()] : []
+    base = !days.length ? every('हफ़्ते') : n <= 2 ? every(listWeekdaysHi(days)) : `हर ${n} हफ़्ते, ${listWeekdaysHi(days)} को`
+  } else if (rule.freq === 'daily') {
+    base = every('दिन')
+  } else if (rule.freq === 'monthly' && rule.setPos != null && rule.byWeekday?.length === 1) {
+    const which = rule.setPos < 0 ? 'आख़िरी' : (ORDINAL_HI[rule.setPos] ?? `${rule.setPos}वाँ`)
+    base = `${every('महीने')} का ${which} ${WEEKDAY_HI[rule.byWeekday[0]!]}`
+  } else if (rule.freq === 'yearly' && (rule.byMonth != null || anchor)) {
+    const month = rule.byMonth ?? anchor!.startsOn.getMonth()
+    const day = rule.byMonthDay ?? anchor?.startsOn.getDate() ?? 1
+    const on = new Date(2000, month, day).toLocaleDateString('hi-IN', { day: 'numeric', month: 'short' })
+    base = `${every('साल')}${n > 2 ? ',' : ''} ${on} को`
+  } else {
+    const day = rule.byMonthDay ?? anchor?.startsOn.getDate()
+    const unit = rule.freq === 'yearly' ? 'साल' : 'महीने'
+    const lastDay = day === 31 && rule.freq === 'monthly'
+    base = `${every(unit)}${day ? (lastDay ? ' के आख़िरी दिन' : ` की ${day} तारीख को`) : ''}`
+  }
+
+  if (rule.count != null) return `${base}, ${rule.count} बार`
+  if (rule.until) {
+    const d = new Date(`${rule.until}T00:00:00`)
+    return `${base}, ${d.toLocaleDateString('hi-IN', { day: 'numeric', month: 'short' })} तक`
+  }
+  return base
+}
+
 /**
  * "Every other Tuesday", "Monthly on the 1st" — the rule read back in the words
- * someone would have used to type it.
+ * someone would have used to type it. In Hindi for someone who reads Hindi.
  */
-export function describeRecurrence(rule: RecurrenceRule, anchor?: RecurrenceAnchor): string {
+export function describeRecurrence(rule: RecurrenceRule, anchor?: RecurrenceAnchor, lang: Lang = 'en'): string {
+  if (lang === 'hi') return describeRecurrenceHi(rule, anchor)
   const n = Math.max(1, Math.floor(rule.interval || 1))
   const every = n === 1 ? 'Every' : n === 2 ? 'Every other' : `Every ${n}`
 

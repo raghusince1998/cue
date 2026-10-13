@@ -4,6 +4,7 @@ import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { loadContacts } from '../lib/cache.ts'
 import { dueChoices } from './WrapUp.tsx'
+import { t } from '../lib/i18n.tsx'
 
 /** "Waiting on Ravi: signed contract" → "signed contract". */
 export function waitingWhat(c: CommitmentDTO): string {
@@ -38,12 +39,12 @@ function waNumber(phone: string): string {
  * knows it. Then the only question left is when to check again.
  */
 export function Nudge({ item, onDone }: { item: CommitmentDTO; onDone: () => void }) {
-  const person = item.waitingOn ?? 'them'
+  const person = item.waitingOn ?? t('them')
   const what = waitingWhat(item)
-  const first = person.split(/\s+/)[0]
+  const first = person.split(/\s+/)[0] ?? ''
   const [contacts, setContacts] = useState<ContactDTO[]>([])
-  const [message, setMessage] = useState(
-    `Hi ${first}, just checking in on "${what}" — any update?`,
+  const [message, setMessage] = useState(() =>
+    t('Hi {name}, just checking in on "{what}" — any update?', { name: first, what }),
   )
   const [sent, setSent] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -73,7 +74,7 @@ export function Nudge({ item, onDone }: { item: CommitmentDTO; onDone: () => voi
       setCopied(true)
       setSent(true)
     } catch {
-      setError('Could not copy — select the message and copy it yourself.')
+      setError(t('Could not copy — select the message and copy it yourself.'))
     }
   }
 
@@ -126,13 +127,13 @@ export function Nudge({ item, onDone }: { item: CommitmentDTO; onDone: () => voi
         <span className="muted small">
           {contact
             ? `${contact.name}${contact.phone ? ` · ${contact.phone}` : ''}${contact.email ? ` · ${contact.email}` : ''}`
-            : 'Not in People — WhatsApp will ask who to send it to.'}
-          {item.fromTitle ? ` · from "${item.fromTitle}"` : ''}
+            : t('Not in People — WhatsApp will ask who to send it to.')}
+          {item.fromTitle ? ` · ${t('from "{title}"', { title: item.fromTitle })}` : ''}
         </span>
       </div>
 
       <label>
-        Message
+        {t('Message')}
         <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} />
       </label>
 
@@ -141,23 +142,23 @@ export function Nudge({ item, onDone }: { item: CommitmentDTO; onDone: () => voi
           WhatsApp
         </button>
         <button className="ghost small-btn" onClick={() => open(email)}>
-          Email
+          {t('Email')}
         </button>
         <button className="ghost small-btn" onClick={() => void copy()}>
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? t('Copied') : t('Copy')}
         </button>
         {typeof navigator.share === 'function' && (
           <button className="ghost small-btn" onClick={() => void share()}>
-            Share…
+            {t('Share…')}
           </button>
         )}
       </div>
 
-      <span className="label-text">{sent ? 'Sent. Check again…' : 'Or just check again…'}</span>
+      <span className="label-text">{sent ? t('Sent. Check again…') : t('Or just check again…')}</span>
       <div className="chips">
         {later.map((c) => (
           <button key={c.key} className="chip" disabled={busy} onClick={() => void checkAgain(c.at)}>
-            {c.label}
+            {t(c.label)}
           </button>
         ))}
       </div>
@@ -166,7 +167,7 @@ export function Nudge({ item, onDone }: { item: CommitmentDTO; onDone: () => voi
 
       <div className="form-actions">
         <button className="ghost" onClick={() => void gotIt()} disabled={busy}>
-          Got it — they sent it
+          {t('Got it — they sent it')}
         </button>
       </div>
     </div>

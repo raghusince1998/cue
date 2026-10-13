@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
 import { formatSpan } from '../lib/time.ts'
+import { t } from '../lib/i18n.tsx'
 
 interface ExtractedEvent {
   title: string
@@ -52,9 +53,9 @@ export function ExtractReview({
         const code = err instanceof ApiError ? err.code : ''
         setError(
           code === 'ai_not_configured'
-            ? 'No AI provider is set up yet — add one in Settings.'
+            ? t('No AI provider is set up yet — add one in Settings.')
             : code === 'extraction_failed'
-              ? 'The provider could not be reached, or rejected the request. Check the key in Settings.'
+              ? t('The provider could not be reached, or rejected the request. Check the key in Settings.')
               : (err as Error).message,
         )
       })
@@ -104,7 +105,7 @@ export function ExtractReview({
       }
       onDone(added)
     } catch (err) {
-      setError(`Added ${added} before failing: ${(err as Error).message}`)
+      setError(t('Added {n} before failing: {error}', { n: added, error: (err as Error).message }))
     } finally {
       setSaving(false)
     }
@@ -115,7 +116,7 @@ export function ExtractReview({
       <div className="stack tight">
         <p className="error">{error}</p>
         <button className="ghost" onClick={onCancel}>
-          Back
+          {t('Back')}
         </button>
       </div>
     )
@@ -127,7 +128,7 @@ export function ExtractReview({
         <div className="boot">
           <span className="spinner" />
         </div>
-        <p className="muted small center">Reading what you said…</p>
+        <p className="muted small center">{t('Reading what you said…')}</p>
       </div>
     )
   }
@@ -135,13 +136,12 @@ export function ExtractReview({
   if (result.events.length === 0) {
     return (
       <div className="stack tight">
-        <p>Could not find anything schedulable in that.</p>
+        <p>{t('Could not find anything schedulable in that.')}</p>
         <p className="muted small">
-          Try naming the days explicitly — &ldquo;1 and 2 September&rdquo; rather than
-          &ldquo;first and second&rdquo;.
+          {t('Try naming the days explicitly — “1 and 2 September” rather than “first and second”.')}
         </p>
         <button className="ghost" onClick={onCancel}>
-          Back
+          {t('Back')}
         </button>
       </div>
     )
@@ -150,8 +150,9 @@ export function ExtractReview({
   return (
     <div className="stack tight">
       <p className="muted small">
-        Found {result.events.length} {result.events.length === 1 ? 'thing' : 'things'}. Untick
-        anything you do not want.
+        {result.events.length === 1
+          ? t('Found 1 thing. Untick anything you do not want.')
+          : t('Found {n} things. Untick anything you do not want.', { n: result.events.length })}
       </p>
 
       <ul className="plain">
@@ -172,7 +173,7 @@ export function ExtractReview({
                     event.endsAt ? new Date(event.endsAt).toISOString() : null,
                     Boolean(event.allDay),
                   )}
-                  {event.durationMinutes ? ` · ${event.durationMinutes} min` : ''}
+                  {event.durationMinutes ? ` · ${t('{n} min', { n: event.durationMinutes })}` : ''}
                   {event.place ? ` · ${event.place}` : ''}
                 </span>
               </span>
@@ -183,7 +184,7 @@ export function ExtractReview({
 
       {result.warnings.length > 0 && (
         <div className="conflict">
-          <strong>Worth checking</strong>
+          <strong>{t('Worth checking')}</strong>
           <ul className="plain">
             {result.warnings.map((w) => (
               <li key={w} className="muted small">
@@ -200,10 +201,10 @@ export function ExtractReview({
           onClick={addSelected}
           disabled={saving || chosen.size === 0}
         >
-          {saving ? 'Adding…' : `Add ${chosen.size} to my list`}
+          {saving ? t('Adding…') : t('Add {n} to my list', { n: chosen.size })}
         </button>
         <button className="ghost" onClick={onCancel} disabled={saving}>
-          Cancel
+          {t('Cancel')}
         </button>
       </div>
     </div>

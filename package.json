@@ -23,9 +23,10 @@
     "dev:web": "npm run dev -w @cue/web",
     "build": "npm run build -w @cue/web",
     "typecheck": "npm run typecheck -w @cue/api && npm run typecheck -w @cue/web",
-    "test": "npm run test:unit && npm run test:api",
+    "test": "npm run test:unit && npm run test:web && npm run test:api",
     "start": "npm run build && npm start -w @cue/api",
     "test:unit": "tsx --test packages/shared/src/*.test.ts",
+    "test:web": "tsx --test apps/web/scripts/*.test.ts",
     "test:api": "tsx --test --test-concurrency=1 \"apps/api/src/**/*.test.ts\""
   },
   "devDependencies": {

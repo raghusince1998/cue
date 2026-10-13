@@ -1,40 +1,44 @@
 import { useEffect, useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
+import { locale, msg, t } from '../lib/i18n.tsx'
 
 type Range = 'soon' | 'week' | 'next'
 type Part = 'any' | 'morning' | 'afternoon'
 
 const LENGTHS = [15, 30, 45, 60, 90, 120]
+/** Labels are shown with t(). */
 const RANGES: { value: Range; label: string }[] = [
-  { value: 'soon', label: 'Next 3 days' },
-  { value: 'week', label: 'This week' },
-  { value: 'next', label: 'Next week' },
+  { value: 'soon', label: msg('Next 3 days') },
+  { value: 'week', label: msg('This week') },
+  { value: 'next', label: msg('Next week') },
 ]
 const PARTS: { value: Part; label: string }[] = [
-  { value: 'any', label: 'Any time' },
-  { value: 'morning', label: 'Mornings' },
-  { value: 'afternoon', label: 'Afternoons' },
+  { value: 'any', label: msg('Any time') },
+  { value: 'morning', label: msg('Mornings') },
+  { value: 'afternoon', label: msg('Afternoons') },
 ]
 
 function lengthLabel(m: number): string {
-  return m < 60 ? `${m} min` : `${m / 60 === 1 ? '1 hour' : `${m / 60} hours`}`.replace('1.5 hours', '1½ hours')
+  if (m < 60) return t('{n} min', { n: m })
+  if (m === 60) return t('1 hour')
+  return m === 90 ? t('1½ hours') : t('{n} hours', { n: m / 60 })
 }
 
 /** "Tue 13 Oct, 10:00 – 10:30 am" */
 function slotText(startIso: string, minutes: number): string {
   const start = new Date(startIso)
   const end = new Date(start.getTime() + minutes * 60_000)
-  const day = start.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })
-  const t = (d: Date) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  return `${day}, ${t(start)} – ${t(end)}`
+  const day = start.toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })
+  const clock = (d: Date) => d.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })
+  return `${day}, ${clock(start)} – ${clock(end)}`
 }
 
 /** "IST", or whatever this device calls its zone — times sent abroad need it. */
 function zoneName(): string {
   try {
     return (
-      new Intl.DateTimeFormat([], { timeZoneName: 'short' })
+      new Intl.DateTimeFormat(locale(), { timeZoneName: 'short' })
         .formatToParts(new Date())
         .find((p) => p.type === 'timeZoneName')?.value ?? ''
     )
@@ -46,9 +50,11 @@ function zoneName(): string {
 function compose(slots: string[], minutes: number): string {
   const zone = zoneName()
   return [
-    `Here are a few times that work for me (${lengthLabel(minutes)}${zone ? `, ${zone}` : ''}):`,
+    zone
+      ? t('Here are a few times that work for me ({length}, {zone}):', { length: lengthLabel(minutes), zone })
+      : t('Here are a few times that work for me ({length}):', { length: lengthLabel(minutes) }),
     ...slots.map((s) => `• ${slotText(s, minutes)}`),
-    'Let me know which suits you.',
+    t('Let me know which suits you.'),
   ].join('\n')
 }
 
@@ -114,7 +120,7 @@ export function ShareAvailability({ onDone, initialWith = '' }: { onDone: () => 
       await navigator.clipboard.writeText(message)
       setCopied(true)
     } catch {
-      setError('Could not copy — select the message and copy it yourself.')
+      setError(t('Could not copy — select the message and copy it yourself.'))
     }
   }
 
@@ -134,7 +140,7 @@ export function ShareAvailability({ onDone, initialWith = '' }: { onDone: () => 
       // Something was booked into that time since it was offered.
       setError(
         err instanceof ApiError && err.status === 409
-          ? 'That time has been taken since you shared it. Pick another, or offer new times.'
+          ? t('That time has been taken since you shared it. Pick another, or offer new times.')
           : (err as Error).message,
       )
     } finally {
@@ -145,11 +151,11 @@ export function ShareAvailability({ onDone, initialWith = '' }: { onDone: () => 
   if (booked) {
     return (
       <div className="stack tight">
-        <strong>Booked.</strong>
-        <p className="muted small">{booked}. It is on your calendar with a reminder.</p>
+        <strong>{t('Booked.')}</strong>
+        <p className="muted small">{t('{what}. It is on your calendar with a reminder.', { what: booked })}</p>
         <div className="form-actions">
           <button className="primary" onClick={onDone}>
-            Done
+            {t('Done')}
           </button>
         </div>
       </div>
@@ -158,7 +164,7 @@ export function ShareAvailability({ onDone, initialWith = '' }: { onDone: () => 
 
   return (
     <div className="stack tight share-free">
-      <span className="label-text">How long?</span>
+      <span className="label-text">{t('How long?')}</span>
       <div className="chips">
         {LENGTHS.map((m) => (
           <button key={m} className={`chip${minutes === m ? ' selected' : ''}`} onClick={() => setMinutes(m)}>
@@ -167,27 +173,27 @@ export function ShareAvailability({ onDone, initialWith = '' }: { onDone: () => 
         ))}
       </div>
 
-      <span className="label-text">When?</span>
+      <span className="label-text">{t('When?')}</span>
       <div className="chips">
         {RANGES.map((r) => (
           <button key={r.value} className={`chip${range === r.value ? ' selected' : ''}`} onClick={() => setRange(r.value)}>
-            {r.label}
+            {t(r.label)}
           </button>
         ))}
         <span className="chip-gap" />
         {PARTS.map((p) => (
           <button key={p.value} className={`chip${part === p.value ? ' selected' : ''}`} onClick={() => setPart(p.value)}>
-            {p.label}
+            {t(p.label)}
           </button>
         ))}
       </div>
 
-      <span className="label-text">Times to offer</span>
+      <span className="label-text">{t('Times to offer')}</span>
       {slots === null ? (
-        <p className="muted small">Looking for gaps in your calendar…</p>
+        <p className="muted small">{t('Looking for gaps in your calendar…')}</p>
       ) : slots.length === 0 ? (
         <p className="muted small">
-          Nothing free for {lengthLabel(minutes)} in that time. Try a shorter length or a later week.
+          {t('Nothing free for {length} in that time. Try a shorter length or a later week.', { length: lengthLabel(minutes) })}
         </p>
       ) : (
         <ul className="free-slots">
@@ -205,7 +211,7 @@ export function ShareAvailability({ onDone, initialWith = '' }: { onDone: () => 
       {slots && slots.length > 0 && (
         <>
           <label>
-            Message
+            {t('Message')}
             <textarea
               value={message}
               rows={Math.min(9, chosen.length + 3)}
@@ -217,7 +223,7 @@ export function ShareAvailability({ onDone, initialWith = '' }: { onDone: () => 
           </label>
           {edited && (
             <button className="link small fit-btn" onClick={() => setEdited(false)}>
-              Rewrite it from the chosen times
+              {t('Rewrite it from the chosen times')}
             </button>
           )}
           <div className="row nudge-send">
@@ -232,13 +238,13 @@ export function ShareAvailability({ onDone, initialWith = '' }: { onDone: () => 
               className="ghost small-btn"
               disabled={chosen.length === 0}
               onClick={() =>
-                window.open(`mailto:?subject=${encodeURIComponent('A time to meet')}&body=${text}`, '_blank', 'noopener')
+                window.open(`mailto:?subject=${encodeURIComponent(t('A time to meet'))}&body=${text}`, '_blank', 'noopener')
               }
             >
-              Email
+              {t('Email')}
             </button>
             <button className="ghost small-btn" disabled={chosen.length === 0} onClick={() => void copy()}>
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? t('Copied') : t('Copy')}
             </button>
             {typeof navigator.share === 'function' && (
               <button
@@ -246,13 +252,13 @@ export function ShareAvailability({ onDone, initialWith = '' }: { onDone: () => 
                 disabled={chosen.length === 0}
                 onClick={() => void navigator.share({ text: message }).catch(() => undefined)}
               >
-                Share…
+                {t('Share…')}
               </button>
             )}
           </div>
 
           {/* The other half: they reply with one, and it goes in the calendar. */}
-          <span className="label-text">They picked one?</span>
+          <span className="label-text">{t('They picked one?')}</span>
           <div className="chips">
             {chosen.map((s) => (
               <button key={s} className={`chip${picked === s ? ' selected' : ''}`} onClick={() => setPicked(s)}>
@@ -265,12 +271,12 @@ export function ShareAvailability({ onDone, initialWith = '' }: { onDone: () => 
               <input
                 value={withWhom}
                 onChange={(e) => setWithWhom(e.target.value)}
-                placeholder="With whom? e.g. Ravi"
-                aria-label="With whom"
+                placeholder={t('With whom? e.g. Ravi')}
+                aria-label={t('With whom')}
                 autoFocus
               />
               <button className="primary small-btn" onClick={() => void book()} disabled={busy}>
-                {busy ? 'Booking…' : 'Book it'}
+                {busy ? t('Booking…') : t('Book it')}
               </button>
             </div>
           )}

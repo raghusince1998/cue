@@ -1,3 +1,4 @@
+import type { Lang } from '@cue/shared'
 import { env } from '../env.ts'
 
 /**
@@ -10,8 +11,10 @@ import { env } from '../env.ts'
  * the honest answer. Those lines — and only those — come here, to Claude.
  *
  * What is sent is the line and today's date. Not the person's name, email,
- * contacts or anything else in their account. Nothing is saved from here: the
- * reading becomes a preview, and the person still presses save.
+ * contacts or anything else in their account — only, for someone who reads
+ * Cue in Hindi, the request to write its question and notes in Hindi. Nothing
+ * is saved from here: the reading becomes a preview, and the person still
+ * presses save.
  *
  * Off unless the server has its own key (ANTHROPIC_API_KEY). With no key, or
  * on any error or timeout, the rules' reading stands, exactly as before.
@@ -82,7 +85,7 @@ const SCHEMA = {
   required: ['kind', 'title', 'date', 'time', 'partOfDay', 'endDate', 'repeat', 'place', 'person', 'planKind', 'question', 'choices', 'assumptions'],
 } as const
 
-function system(now: Date): string {
+function system(now: Date, lang: Lang): string {
   const today = now.toLocaleString('en-IN', {
     weekday: 'long',
     day: 'numeric',
@@ -104,10 +107,16 @@ function system(now: Date): string {
     '- date: YYYY-MM-DD, never in the past. time: only if said or plainly meant; a part of the day goes in partOfDay, not time.',
     '- Only facts from the line. Never invent a person, a place or a time.',
     '- assumptions: what you decided that the line did not say, in a few plain words each.',
+    // What they read, said in their language. Every field name and enum stays
+    // as it is, the title stays English, and the choices stay in words the
+    // planner reads, since they are added to the line.
+    ...(lang === 'hi'
+      ? ['- The person reads Hindi: write question and assumptions in everyday Hindi, in Devanagari. Keep title and choices in English.']
+      : []),
   ].join('\n')
 }
 
-type Reader = (text: string, now: Date) => Promise<unknown>
+type Reader = (text: string, now: Date, lang: Lang) => Promise<unknown>
 
 /** Replaced in tests: no test calls the network. */
 let testReader: Reader | null = null
@@ -117,7 +126,7 @@ export function setCaptureAiForTest(reader: Reader | null): void {
   used.clear()
 }
 
-async function callClaude(text: string, now: Date): Promise<unknown> {
+async function callClaude(text: string, now: Date, lang: Lang): Promise<unknown> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -128,7 +137,7 @@ async function callClaude(text: string, now: Date): Promise<unknown> {
     body: JSON.stringify({
       model: env.captureAiModel,
       max_tokens: 600,
-      system: system(now),
+      system: system(now, lang),
       // Forcing the tool is what guarantees a reading in the shape below.
       tools: [{ name: 'record_plan', description: 'Record what the line asks to plan.', input_schema: SCHEMA }],
       tool_choice: { type: 'tool', name: 'record_plan' },
@@ -215,11 +224,12 @@ const CACHE_MS = 15 * 60_000
 /** Readings per person per day, so one account cannot run up the bill. */
 const used = new Map<string, { day: string; n: number }>()
 
-const keyOf = (userId: string, text: string) => `${userId}\n${text.trim().toLowerCase()}`
+/** By person, language and line: a reading in English is not one in Hindi. */
+const keyOf = (userId: string, text: string, lang: Lang) => `${userId}\n${lang}\n${text.trim().toLowerCase()}`
 
 /** The reading the preview already showed for this line, if any. */
-export function cachedReading(userId: string, text: string): AiReading | null {
-  const hit = cache.get(keyOf(userId, text))
+export function cachedReading(userId: string, text: string, lang: Lang = 'en'): AiReading | null {
+  const hit = cache.get(keyOf(userId, text, lang))
   if (!hit || Date.now() - hit.at > CACHE_MS) return null
   return hit.reading
 }
@@ -232,10 +242,11 @@ export async function readWithAi(
   userId: string,
   text: string,
   now: Date,
-  opts: { isDemo?: boolean } = {},
+  opts: { isDemo?: boolean; lang?: Lang } = {},
 ): Promise<AiReading | null> {
   if (!captureAiEnabled()) return null
-  const hit = cachedReading(userId, text)
+  const lang = opts.lang ?? 'en'
+  const hit = cachedReading(userId, text, lang)
   if (hit) return hit
 
   const day = now.toDateString()
@@ -245,11 +256,11 @@ export async function readWithAi(
   used.set(userId, { day, n: n + 1 })
 
   try {
-    const raw = testReader ? await testReader(text, now) : await callClaude(text, now)
+    const raw = testReader ? await testReader(text, now, lang) : await callClaude(text, now, lang)
     const reading = sanitiseReading(raw)
     if (!reading) return null
     if (cache.size > 2000) cache.clear()
-    cache.set(keyOf(userId, text), { reading, at: Date.now() })
+    cache.set(keyOf(userId, text, lang), { reading, at: Date.now() })
     return reading
   } catch (err) {
     console.warn('[capture-ai] reading failed:', (err as Error).message)

@@ -1,5 +1,7 @@
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, ne, notInArray, sql } from 'drizzle-orm'
+import type { Lang } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { langOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
 
 /**
@@ -120,9 +122,14 @@ export async function dayReport(
   userId: string,
   day: Date,
   now = new Date(),
-  /** The day "next" covers. A standup passes today; otherwise the next working day. */
-  opts: { next?: Date } = {},
+  /**
+   * The day "next" covers. A standup passes today; otherwise the next working
+   * day. The words Cue adds ("Received from Vikram: …") are in the person's
+   * language, looked up when not given.
+   */
+  opts: { next?: Date; lang?: Lang } = {},
 ): Promise<DayReport> {
+  const lang = opts.lang ?? (await langOf(userId))
   const start = dayStart(day)
   const end = new Date(start.getTime() + DAY_MS)
   // Only what has happened: a meeting at five is not part of a report sent at four.
@@ -217,7 +224,7 @@ export async function dayReport(
       note: firstLine(m.notes),
     })),
     visits: visitRows.filter((v) => v.channel !== 'call').map((v) => ({
-      title: v.place ?? v.org ?? 'Visit',
+      title: v.place ?? v.org ?? t(lang, 'Visit'),
       at: v.startedAt.toISOString(),
       who: v.contact,
       note: firstLine([v.outcome, v.notes].filter(Boolean).join(' — ') || null),
@@ -225,20 +232,20 @@ export async function dayReport(
     calls: visitRows
       .filter((v) => v.channel === 'call')
       .map((v) => ({
-        title: withWhom(v.contact, v.org) ?? 'Unknown number',
+        title: withWhom(v.contact, v.org) ?? t(lang, 'Unknown number'),
         at: v.startedAt.toISOString(),
         who: v.outcome,
         note: firstLine(v.notes),
       })),
     done: doneRows.map((d) => ({
       // A check-in that was answered reads as what arrived, not as a chore.
-      title: d.waitingOn ? `Received from ${d.waitingOn}: ${waitingWhat(d.title)}` : d.title,
+      title: d.waitingOn ? t(lang, 'Received from {who}: {what}', { who: d.waitingOn, what: waitingWhat(d.title) }) : d.title,
       at: null,
       who: d.waitingOn ? null : withWhom(d.who, d.org),
       note: null,
     })),
     agreed: agreedRows.map((a) => ({
-      title: a.waitingOn ? `${a.waitingOn} to send: ${waitingWhat(a.title)}` : a.title,
+      title: a.waitingOn ? t(lang, '{who} to send: {what}', { who: a.waitingOn, what: waitingWhat(a.title) }) : a.title,
       at: a.dueAt.toISOString(),
       who: null,
       note: null,
@@ -262,30 +269,39 @@ export async function dayReport(
 }
 
 /** The evening reminder, or null for a day with nothing to report. */
-export function composeReminder(r: DayReport, toName: string | null): { title: string; body: string; url: string } | null {
+export function composeReminder(
+  r: DayReport,
+  toName: string | null,
+  lang: Lang = 'en',
+): { title: string; body: string; url: string } | null {
+  const count = (n: number, one: string, many: string) => (n === 0 ? null : n === 1 ? one : many)
   const parts = [
-    r.meetings.length ? `${r.meetings.length} meeting${r.meetings.length === 1 ? '' : 's'}` : null,
-    r.visits.length ? `${r.visits.length} visit${r.visits.length === 1 ? '' : 's'}` : null,
-    r.calls.length ? `${r.calls.length} call${r.calls.length === 1 ? '' : 's'}` : null,
-    r.done.length ? `${r.done.length} done` : null,
+    count(r.meetings.length, t(lang, '1 meeting'), t(lang, '{n} meetings', { n: r.meetings.length })),
+    count(r.visits.length, t(lang, '1 visit'), t(lang, '{n} visits', { n: r.visits.length })),
+    count(r.calls.length, t(lang, '1 call'), t(lang, '{n} calls', { n: r.calls.length })),
+    count(r.done.length, t(lang, '1 done'), t(lang, '{n} done', { n: r.done.length })),
   ].filter(Boolean)
   if (parts.length === 0) return null
-  const agreed = r.agreed.length ? `, ${r.agreed.length} next step${r.agreed.length === 1 ? '' : 's'} agreed` : ''
+  const agreed = count(r.agreed.length, t(lang, '1 next step agreed'), t(lang, '{n} next steps agreed', { n: r.agreed.length }))
+  const list = [...parts, agreed].filter(Boolean).join(', ')
   return {
-    title: 'Your daily report is ready',
-    body: `${parts.join(', ')}${agreed}. Have a look and send it${toName ? ` to ${toName}` : ''}.`,
+    title: t(lang, 'Your daily report is ready'),
+    body: toName
+      ? t(lang, '{list}. Have a look and send it to {name}.', { list, name: toName })
+      : t(lang, '{list}. Have a look and send it.', { list }),
     url: '/?report=1',
   }
 }
 
 export async function sendReportReminderTo(userId: string, now = new Date()) {
   const [user] = await db
-    .select({ toName: schema.users.reportToName })
+    .select({ toName: schema.users.reportToName, language: schema.users.language })
     .from(schema.users)
     .where(eq(schema.users.id, userId))
-  const reminder = composeReminder(await dayReport(userId, now, now), user?.toName ?? null)
+  const lang: Lang = user?.language === 'hi' ? 'hi' : 'en'
+  const reminder = composeReminder(await dayReport(userId, now, now, { lang }), user?.toName ?? null, lang)
   if (!reminder) return null
-  const delivered = await sendToUser(userId, { ...reminder, tag: 'daily-report' })
+  const delivered = await sendToUser(userId, { ...reminder, tag: 'daily-report', lang })
   return { delivered, title: reminder.title, body: reminder.body }
 }
 

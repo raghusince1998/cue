@@ -10,13 +10,14 @@ import {
   type PlaceDTO,
 } from '@cue/shared'
 import { ApiError, api } from '../lib/api.ts'
+import { msg, rich, t } from '../lib/i18n.tsx'
 import { formatDateTime, toLocalInputValue } from '../lib/time.ts'
 import { ConflictWarning } from './ConflictWarning.tsx'
 
 const STATUSES: { value: CommitmentStatus; label: string }[] = [
-  { value: 'pending', label: 'Still open' },
-  { value: 'done', label: 'Done' },
-  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'pending', label: msg('Still open') },
+  { value: 'done', label: msg('Done') },
+  { value: 'cancelled', label: msg('Cancelled') },
 ]
 
 export function CommitmentEditor({
@@ -107,7 +108,7 @@ export function CommitmentEditor({
       await runConflictCheck()
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setError('That time does not fit the other commitment either — pick another slot.')
+        setError(t('That time does not fit the other commitment either — pick another slot.'))
         return
       }
       setError((err as Error).message)
@@ -135,7 +136,7 @@ export function CommitmentEditor({
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setConflict(err.data as ConflictReport)
-        setError('That slot was taken while you were editing.')
+        setError(t('That slot was taken while you were editing.'))
         return
       }
       setError((err as Error).message)
@@ -172,11 +173,11 @@ export function CommitmentEditor({
     <div className="stack tight">
       {notice && <p className="editor-notice small">{notice}</p>}
       <label>
-        What exactly?
+        {t('What exactly?')}
         <input value={title} onChange={(e) => setTitle(e.target.value)} />
       </label>
 
-      <span className="label-text">Type</span>
+      <span className="label-text">{t('Type')}</span>
       <div className="chips">
         {SELECTABLE_KINDS.map((k) => (
           <button
@@ -184,13 +185,13 @@ export function CommitmentEditor({
             className={`chip${kind === k ? ' selected' : ''}`}
             onClick={() => setKind(k)}
           >
-            {KIND_LABELS[k]}
+            {t(KIND_LABELS[k])}
           </button>
         ))}
       </div>
 
       <label>
-        When?
+        {t('When?')}
         <input
           type="datetime-local"
           value={toLocalInputValue(dueAt)}
@@ -201,7 +202,7 @@ export function CommitmentEditor({
         />
       </label>
 
-      <span className="label-text">How long will it block?</span>
+      <span className="label-text">{t('How long will it block?')}</span>
       <div className="chips">
         {DURATION_CHOICES.map((minutes) => (
           <button
@@ -209,31 +210,32 @@ export function CommitmentEditor({
             className={`chip${durationMinutes === minutes ? ' selected' : ''}`}
             onClick={() => setDurationMinutes(minutes)}
           >
-            {minutes < 60 ? `${minutes} min` : `${minutes / 60}h`}
+            {minutes < 60 ? t('{n} min', { n: minutes }) : t('{n}h', { n: minutes / 60 })}
           </button>
         ))}
       </div>
 
       <label>
-        Where? (optional)
+        {t('Where? (optional)')}
         <input
           value={placeLabel}
           onChange={(e) => setPlaceLabel(e.target.value)}
-          placeholder="e.g. BKC, Mumbai"
+          placeholder={t('e.g. {example}', { example: 'BKC, Mumbai' })}
         />
       </label>
       <p className="muted small">
-        A town, area or address. Cue uses it to warn you when two plans are too far apart to get
-        between in time, or clash with a trip.
+        {t(
+          'A town, area or address. Cue uses it to warn you when two plans are too far apart to get between in time, or clash with a trip.',
+        )}
       </p>
 
       {/* Saved places come from logging a visit somewhere with your location on.
           Most people have none, and a list that only says "none" explains nothing. */}
       {(places.length > 0 || placeId) && (
         <label>
-          Saved place
+          {t('Saved place')}
           <select value={placeId ?? ''} onChange={(e) => setPlaceId(e.target.value || null)}>
-            <option value="">— none —</option>
+            <option value="">{t('— none —')}</option>
             {places.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -243,7 +245,7 @@ export function CommitmentEditor({
         </label>
       )}
 
-      <span className="label-text">Status</span>
+      <span className="label-text">{t('Status')}</span>
       <div className="chips">
         {STATUSES.map((s) => (
           <button
@@ -252,25 +254,29 @@ export function CommitmentEditor({
             onClick={() => setStatus(s.value)}
           >
             {/* Calendar history is not "still open": Cue was not there. */}
-            {s.value === 'pending' && history ? 'No status' : s.label}
+            {s.value === 'pending' && history ? t('No status') : t(s.label)}
           </button>
         ))}
       </div>
       {status === 'pending' && history && (
         <p className="muted small">
-          This was already in your calendar before Cue started reading it, so Cue does not treat it
-          as done or as overdue. Mark it done or cancelled if you want it on record.
+          {t(
+            'This was already in your calendar before Cue started reading it, so Cue does not treat it as done or as overdue. Mark it done or cancelled if you want it on record.',
+          )}
         </p>
       )}
       {status === 'pending' && !history && (
         <p className="muted small">
-          Reminders restart from {formatDateTime(dueAt.toISOString())} — the overdue count resets.
+          {t('Reminders restart from {time} — the overdue count resets.', {
+            time: formatDateTime(dueAt.toISOString()),
+          })}
         </p>
       )}
       {status === 'cancelled' && (
         <p className="muted small">
-          Stays on its day with a line through it, and stops reminding you. To take it off your
-          lists entirely, delete it below.
+          {t(
+            'Stays on its day with a line through it, and stops reminding you. To take it off your lists entirely, delete it below.',
+          )}
         </p>
       )}
 
@@ -288,10 +294,10 @@ export function CommitmentEditor({
 
       <div className="row">
         <button className="primary" onClick={save} disabled={busy || blocked || !title.trim()}>
-          {busy ? 'Saving…' : blocked ? 'Resolve the clash' : 'Save changes'}
+          {busy ? t('Saving…') : blocked ? t('Resolve the clash') : t('Save changes')}
         </button>
         <button className="ghost" onClick={onClose} disabled={busy}>
-          Cancel
+          {t('Cancel')}
         </button>
       </div>
 
@@ -299,23 +305,24 @@ export function CommitmentEditor({
         {confirmDelete ? (
           <div className="row">
             <button className="danger-btn" onClick={remove} disabled={busy}>
-              Yes, take it off my list
+              {t('Yes, take it off my list')}
             </button>
             <button className="ghost small-btn" onClick={() => setConfirmDelete(false)}>
-              Keep it
+              {t('Keep it')}
             </button>
           </div>
         ) : (
           <button className="link danger-link" onClick={() => setConfirmDelete(true)}>
-            Delete this commitment
+            {t('Delete this commitment')}
           </button>
         )}
         {/* These do different things and the difference is not guessable, so
             it is spelled out at the moment of choosing. */}
         <p className="muted small">
-          <em>Cancelled</em> above keeps it on its day, struck through, so you can still see the
-          slot is free and why. Deleting takes it off every list — History still shows it, as
-          something you let go.
+          {rich(
+            '<em>Cancelled</em> above keeps it on its day, struck through, so you can still see the slot is free and why. Deleting takes it off every list — History still shows it, as something you let go.',
+            { em: (s) => <em>{s}</em> },
+          )}
         </p>
       </div>
     </div>

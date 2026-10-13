@@ -3,6 +3,7 @@ import { KEEP_IN_TOUCH_CHOICES, type ContactDTO, type PlaceDTO } from '@cue/shar
 import { MonthDayInput } from './MonthDayInput.tsx'
 import { api } from '../lib/api.ts'
 import { formatDateTime } from '../lib/time.ts'
+import { t } from '../lib/i18n.tsx'
 
 interface ContactProfile extends ContactDTO {
   visits: { id: string; purpose: string; outcome: string | null; notes: string | null; startedAt: string }[]
@@ -128,30 +129,30 @@ export function ContactEditor({
           data-contact-id={contactId ?? undefined}
           data-name={name.trim() || undefined}
         >
-          Call {name || phone}
+          {t('Call {name}', { name: name || phone })}
         </a>
       )}
 
       <label>
-        Name
+        {t('Name')}
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Dr. Sharma" />
       </label>
 
       <label>
-        Role
+        {t('Role')}
         <input
           value={role}
           onChange={(e) => setRole(e.target.value)}
-          placeholder="Manager, Recruiter, Landlord, Dentist…"
+          placeholder={t('Manager, Recruiter, Landlord, Dentist…')}
         />
       </label>
 
       <label>
-        Works at
+        {t('Works at')}
         <input
           value={organization}
           onChange={(e) => setOrganization(e.target.value)}
-          placeholder="Company or organisation, e.g. Infosys"
+          placeholder={t('Company or organisation, e.g. Infosys')}
           list="workplace-options"
         />
         <datalist id="workplace-options">
@@ -162,7 +163,7 @@ export function ContactEditor({
       </label>
 
       <label>
-        Phone
+        {t('Phone')}
         <input
           type="tel"
           value={phone}
@@ -172,7 +173,7 @@ export function ContactEditor({
       </label>
 
       <label>
-        Email
+        {t('Email')}
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
       </label>
 
@@ -180,9 +181,9 @@ export function ContactEditor({
           any, a list offering only "none" explained nothing. */}
       {(places.length > 0 || placeId) && (
         <label>
-          Saved place
+          {t('Saved place')}
           <select value={placeId ?? ''} onChange={(e) => setPlaceId(e.target.value || null)}>
-            <option value="">— none —</option>
+            <option value="">{t('— none —')}</option>
             {places.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -192,10 +193,10 @@ export function ContactEditor({
         </label>
       )}
 
-      <span className="label-text">Keep in touch</span>
+      <span className="label-text">{t('Keep in touch')}</span>
       <div className="chips">
         <button className={`chip${keepDays === null ? ' selected' : ''}`} onClick={() => setKeepDays(null)}>
-          Off
+          {t('Off')}
         </button>
         {KEEP_IN_TOUCH_CHOICES.map((k) => (
           <button
@@ -203,31 +204,32 @@ export function ContactEditor({
             className={`chip${keepDays === k.days ? ' selected' : ''}`}
             onClick={() => setKeepDays(k.days)}
           >
-            {k.label}
+            {t(k.label)}
           </button>
         ))}
       </div>
       {keepDays !== null && (
         <p className="muted small">
-          Cue tells you when it has been longer than this since you last met, talked or finished
-          something with them.
+          {t(
+            'Cue tells you when it has been longer than this since you last met, talked or finished something with them.',
+          )}
         </p>
       )}
 
       {/* Remembered for them, so the day itself is not missed. Keyed so a
           loaded value reaches the pickers, which keep their own halves. */}
       <div className="row month-day-row">
-        <MonthDayInput key={`b-${loaded}`} label="Birthday" value={birthday} onChange={setBirthday} />
-        <MonthDayInput key={`a-${loaded}`} label="Anniversary" value={anniversary} onChange={setAnniversary} />
+        <MonthDayInput key={`b-${loaded}`} label={t('Birthday')} value={birthday} onChange={setBirthday} />
+        <MonthDayInput key={`a-${loaded}`} label={t('Anniversary')} value={anniversary} onChange={setAnniversary} />
       </div>
 
       <label>
-        Notes
+        {t('Notes')}
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
-          placeholder="Prefers evening calls, decision maker, etc."
+          placeholder={t('Prefers evening calls, decision maker, etc.')}
         />
       </label>
 
@@ -235,7 +237,7 @@ export function ContactEditor({
         <>
           {profile.commitments.filter((c) => c.status === 'pending').length > 0 && (
             <>
-              <span className="label-text">Open with this person</span>
+              <span className="label-text">{t('Open with this person')}</span>
               <ul className="plain">
                 {profile.commitments
                   .filter((c) => c.status === 'pending')
@@ -250,11 +252,11 @@ export function ContactEditor({
 
           {profile.visits.length > 0 && (
             <>
-              <span className="label-text">Calls and visits · {profile.visits.length}</span>
+              <span className="label-text">{t('Calls and visits · {n}', { n: profile.visits.length })}</span>
               <ul className="plain">
                 {profile.visits.slice(0, 8).map((v) => (
                   <li key={v.id} className="muted small">
-                    {formatDateTime(v.startedAt)} — {v.outcome ?? v.purpose}
+                    {formatDateTime(v.startedAt)} — {t(v.outcome ?? v.purpose)}
                   </li>
                 ))}
               </ul>
@@ -267,10 +269,10 @@ export function ContactEditor({
 
       <div className="row">
         <button className="primary" onClick={save} disabled={busy || !name.trim()}>
-          {busy ? 'Saving…' : contactId ? 'Save changes' : 'Add person'}
+          {busy ? t('Saving…') : contactId ? t('Save changes') : t('Add person')}
         </button>
         <button className="ghost" onClick={onClose} disabled={busy}>
-          Cancel
+          {t('Cancel')}
         </button>
       </div>
 
@@ -279,20 +281,21 @@ export function ContactEditor({
           {confirmDelete ? (
             <div className="row">
               <button className="danger-btn" onClick={remove} disabled={busy}>
-                Yes, delete
+                {t('Yes, delete')}
               </button>
               <button className="ghost small-btn" onClick={() => setConfirmDelete(false)}>
-                Keep
+                {t('Keep')}
               </button>
             </div>
           ) : (
             <button className="link danger-link" onClick={() => setConfirmDelete(true)}>
-              Delete this person
+              {t('Delete this person')}
             </button>
           )}
           <p className="muted small">
-            Visits and follow-ups involving them are kept — deleting someone from your address book
-            should not erase the record that you met them.
+            {t(
+              'Visits and follow-ups involving them are kept — deleting someone from your address book should not erase the record that you met them.',
+            )}
           </p>
         </div>
       )}

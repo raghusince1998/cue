@@ -10,6 +10,7 @@ import {
 } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { announceChange, useOnChange } from '../lib/changes.ts'
+import { msg, rich, t } from '../lib/i18n.tsx'
 import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { rupeesToPaise } from '../components/Owed.tsx'
@@ -21,16 +22,35 @@ interface Detail extends TrackerItemDTO {
 
 /** What each board is for, said once at the top. */
 const INTRO: Record<BoardKey, string> = {
-  jobs: 'Every job you have applied to, or mean to: where each one stands and what to do next.',
-  hiring: 'Everyone in the running: where each candidate is and who needs a next step.',
-  deals: 'Every deal in play, from first lead to signed, with the next step on each.',
+  jobs: msg('Every job you have applied to, or mean to: where each one stands and what to do next.'),
+  hiring: msg('Everyone in the running: where each candidate is and who needs a next step.'),
+  deals: msg('Every deal in play, from first lead to signed, with the next step on each.'),
+}
+
+/** One item of each board, said whole so Hindi can say it its own way. Shown with t(). */
+const WORDS: Record<BoardKey, { sheet: string; remove: string; ask: string }> = {
+  jobs: {
+    sheet: msg('Application'),
+    remove: msg('Delete this application'),
+    ask: msg('Delete this application? Its history goes with it; plans made for it stay.'),
+  },
+  hiring: {
+    sheet: msg('Candidate'),
+    remove: msg('Delete this candidate'),
+    ask: msg('Delete this candidate? Its history goes with it; plans made for it stay.'),
+  },
+  deals: {
+    sheet: msg('Deal'),
+    remove: msg('Delete this deal'),
+    ask: msg('Delete this deal? Its history goes with it; plans made for it stay.'),
+  },
 }
 
 /** "Applied 9 days ago", "Interviewing since yesterday". */
 function sinceLine(board: BoardKey, item: TrackerItemDTO): string {
   const stage = stageOf(board, item.stage)?.label ?? item.stage
   const when = relativeDay(item.stageChangedAt)
-  return when === 'today' ? `${stage} today` : `${stage} ${when}`
+  return t('{stage} {when}', { stage: t(stage), when })
 }
 
 /** The next open stage, for one-tap moving along. */
@@ -111,39 +131,44 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
   return (
     <div className="stack tracker-page">
       <div className="page-head">
-        <h1 className="page-title">{board.label}</h1>
+        <h1 className="page-title">{t(board.label)}</h1>
         {items && (
           <span className="page-count">
-            {open.length} open{closed.length ? ` · ${closed.length} closed` : ''}
+            {closed.length
+              ? t('{open} open · {closed} closed', { open: open.length, closed: closed.length })
+              : t('{n} open', { n: open.length })}
           </span>
         )}
       </div>
-      <p className="muted small">{INTRO[key]}</p>
+      <p className="muted small">{t(INTRO[key])}</p>
 
       <form className="card tracker-add" onSubmit={(e) => void add(e)}>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder={`${board.titleLabel}, ${board.titlePlaceholder}`}
-          aria-label={board.titleLabel}
+          placeholder={`${t(board.titleLabel)}, ${t(board.titlePlaceholder)}`}
+          aria-label={t(board.titleLabel)}
           maxLength={160}
         />
         <input
           value={detail}
           onChange={(e) => setDetail(e.target.value)}
-          placeholder={`${board.detailLabel} (optional), ${board.detailPlaceholder}`}
-          aria-label={board.detailLabel}
+          placeholder={t('{label} (optional), {example}', {
+            label: t(board.detailLabel),
+            example: t(board.detailPlaceholder),
+          })}
+          aria-label={t(board.detailLabel)}
           maxLength={200}
         />
-        <select value={stage} onChange={(e) => setStage(e.target.value)} aria-label="Stage">
+        <select value={stage} onChange={(e) => setStage(e.target.value)} aria-label={t('Stage')}>
           {openStages.map((s) => (
             <option key={s.key} value={s.key}>
-              {s.label}
+              {t(s.label)}
             </option>
           ))}
         </select>
         <button className="primary" type="submit" disabled={busy || !title.trim()}>
-          Add
+          {t('Add')}
         </button>
       </form>
       {error && <p className="error small">{error}</p>}
@@ -151,9 +176,9 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
       {quiet.length > 0 && (
         <div className="tracker-quiet">
           <strong>
-            {quiet.length === 1 ? 'One has gone quiet' : `${quiet.length} have gone quiet`}
+            {quiet.length === 1 ? t('One has gone quiet') : t('{n} have gone quiet', { n: quiet.length })}
           </strong>
-          <span className="muted small"> — nothing booked, and longer than usual at their stage.</span>
+          <span className="muted small"> {t('— nothing booked, and longer than usual at their stage.')}</span>
         </div>
       )}
 
@@ -166,17 +191,19 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
           <span className="blank-mark" aria-hidden>
             &#128203;
           </span>
-          <h3>Nothing tracked yet</h3>
+          <h3>{t('Nothing tracked yet')}</h3>
           <p>
-            Add one above, or type it in the box on Today:{' '}
-            <strong>
-              {key === 'jobs'
-                ? 'applied to Infosys for data analyst'
-                : key === 'hiring'
-                  ? 'candidate Priya Nair for product designer'
-                  : 'new lead: Tata Motors for 50 laptops'}
-            </strong>
-            .
+            {rich('Add one above, or type it in the box on Today: {example}.', {
+              example: (
+                <strong>
+                  {key === 'jobs'
+                    ? 'applied to Infosys for data analyst'
+                    : key === 'hiring'
+                      ? 'candidate Priya Nair for product designer'
+                      : 'new lead: Tata Motors for 50 laptops'}
+                </strong>
+              ),
+            })}
           </p>
         </div>
       ) : (
@@ -187,7 +214,7 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
               return (
                 <section key={s.key} className={`tracker-column${here.length === 0 ? ' is-empty' : ''}`}>
                   <h2 className="tracker-column-head">
-                    {s.label} <span className="muted">{here.length}</span>
+                    {t(s.label)} <span className="muted">{here.length}</span>
                   </h2>
                   {here.map((i) => (
                     <TrackerCard key={i.id} board={key} item={i} onOpen={() => show(i.id)} onMove={(to) => void move(i, to)} />
@@ -199,7 +226,7 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
 
           {closed.length > 0 && (
             <details className="tracker-closed">
-              <summary>Closed · {closed.length}</summary>
+              <summary>{t('Closed · {n}', { n: closed.length })}</summary>
               <div className="stack tight">
                 {closed.map((i) => (
                   <TrackerCard key={i.id} board={key} item={i} onOpen={() => show(i.id)} />
@@ -211,7 +238,7 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
       )}
 
       {openId && (
-        <Modal title={board.noun[0]!.toUpperCase() + board.noun.slice(1)} onClose={() => show(null)} closeOnBackdrop={false}>
+        <Modal title={t(WORDS[key].sheet)} onClose={() => show(null)} closeOnBackdrop={false}>
           <ItemSheet
             id={openId}
             board={key}
@@ -247,18 +274,22 @@ function TrackerCard({
         <span className="tracker-card-title">{item.title}</span>
         {item.detail && <span className="tracker-card-detail">{item.detail}</span>}
         <span className="tracker-card-meta">
-          {stage?.closed ? `${stage.label} · ${dayLabel(item.closedAt ?? item.stageChangedAt)}` : sinceLine(board, item)}
+          {stage?.closed ? `${t(stage.label)} · ${dayLabel(item.closedAt ?? item.stageChangedAt)}` : sinceLine(board, item)}
           {item.valuePaise ? ` · ${formatRupees(item.valuePaise)}` : ''}
         </span>
         {item.next ? (
-          <span className="tracker-card-next">Next: {item.next.title} · {formatDateTime(item.next.dueAt)}</span>
+          <span className="tracker-card-next">
+            {t('Next: {title} · {when}', { title: item.next.title, when: formatDateTime(item.next.dueAt) })}
+          </span>
         ) : (
-          item.quietDays !== null && <span className="tracker-card-quiet">Quiet for {item.quietDays} days — what is next?</span>
+          item.quietDays !== null && (
+            <span className="tracker-card-quiet">{t('Quiet for {n} days — what is next?', { n: item.quietDays })}</span>
+          )
         )}
       </button>
       {forward && (
         <button className="link small tracker-forward" onClick={() => onMove!(forward.key)}>
-          Move to {forward.label} →
+          {t('Move to {stage} →', { stage: t(forward.label) })}
         </button>
       )}
     </article>
@@ -266,9 +297,9 @@ function TrackerCard({
 }
 
 const NEXT_WHEN = [
-  { label: 'Tomorrow', days: 1 },
-  { label: 'In 3 days', days: 3 },
-  { label: 'Next week', days: 7 },
+  { label: msg('Tomorrow'), days: 1 },
+  { label: msg('In 3 days'), days: 3 },
+  { label: msg('Next week'), days: 7 },
 ]
 
 /** One item: where it stands, what is next, and how it got here. */
@@ -341,7 +372,7 @@ function ItemSheet({
   async function saveDetails() {
     const person = people.find((p) => p.name.toLowerCase() === draft.person.trim().toLowerCase())
     if (draft.person.trim() && !person) {
-      setError(`${draft.person.trim()} is not in your People yet. Add them there first, then link them here.`)
+      setError(t('{name} is not in your People yet. Add them there first, then link them here.', { name: draft.person.trim() }))
       return
     }
     await patch({
@@ -356,13 +387,13 @@ function ItemSheet({
 
   async function addNext(days: number | null) {
     if (!nextText.trim()) {
-      setError('What is the next step? e.g. Send a thank-you note')
+      setError(t('What is the next step? e.g. Send a thank-you note'))
       return
     }
     let due: Date
     if (days === null) {
       if (!nextAt) {
-        setError('Pick a day and time.')
+        setError(t('Pick a day and time.'))
         return
       }
       due = new Date(nextAt)
@@ -398,7 +429,7 @@ function ItemSheet({
   }
 
   async function remove() {
-    if (!window.confirm(`Delete this ${board.noun}? Its history goes with it; plans made for it stay.`)) return
+    if (!window.confirm(t(WORDS[key].ask))) return
     await api(`/tracker-items/${id}`, { method: 'DELETE' })
     onChanged()
     announceChange()
@@ -416,8 +447,8 @@ function ItemSheet({
         {item.detail && <p className="muted small">{item.detail}</p>}
       </div>
 
-      <span className="label-text">Stage</span>
-      <div className="chips tracker-stages" role="group" aria-label="Stage">
+      <span className="label-text">{t('Stage')}</span>
+      <div className="chips tracker-stages" role="group" aria-label={t('Stage')}>
         {board.stages.map((s) => (
           <button
             key={s.key}
@@ -426,13 +457,13 @@ function ItemSheet({
             disabled={busy}
             aria-pressed={item.stage === s.key}
           >
-            {s.label}
+            {t(s.label)}
           </button>
         ))}
       </div>
       <p className="muted small">{sinceLine(key, item)}.</p>
 
-      <span className="label-text">Next step</span>
+      <span className="label-text">{t('Next step')}</span>
       {upcoming.length > 0 ? (
         <ul className="plain tracker-plans">
           {upcoming.map((p) => (
@@ -442,7 +473,7 @@ function ItemSheet({
           ))}
         </ul>
       ) : (
-        isOpenStage(key, item.stage) && <p className="muted small">Nothing booked. What happens next, and when?</p>
+        isOpenStage(key, item.stage) && <p className="muted small">{t('Nothing booked. What happens next, and when?')}</p>
       )}
       {isOpenStage(key, item.stage) && (
         <div className="stack tight tracker-next">
@@ -451,59 +482,59 @@ function ItemSheet({
             onChange={(e) => setNextText(e.target.value)}
             placeholder={
               key === 'jobs'
-                ? 'e.g. Follow up with the recruiter'
+                ? t('e.g. Follow up with the recruiter')
                 : key === 'hiring'
-                  ? 'e.g. Second interview with the team'
-                  : 'e.g. Send the revised quote'
+                  ? t('e.g. Second interview with the team')
+                  : t('e.g. Send the revised quote')
             }
-            aria-label="Next step"
+            aria-label={t('Next step')}
           />
           <div className="row">
             {NEXT_WHEN.map((w) => (
               <button key={w.label} className="ghost small-btn" onClick={() => void addNext(w.days)} disabled={busy}>
-                {w.label}
+                {t(w.label)}
               </button>
             ))}
             <input
               type="datetime-local"
               value={nextAt}
               onChange={(e) => setNextAt(e.target.value)}
-              aria-label="Or pick a time"
+              aria-label={t('Or pick a time')}
               className="tracker-next-at"
             />
             {nextAt && (
               <button className="primary small-btn" onClick={() => void addNext(null)} disabled={busy}>
-                Book it
+                {t('Book it')}
               </button>
             )}
           </div>
         </div>
       )}
 
-      <span className="label-text">Details</span>
+      <span className="label-text">{t('Details')}</span>
       <div className="tracker-fields">
         <label>
-          {board.titleLabel}
+          {t(board.titleLabel)}
           <input {...field('title')} maxLength={160} />
         </label>
         <label>
-          {board.detailLabel}
-          <input {...field('detail')} placeholder={board.detailPlaceholder} maxLength={200} />
+          {t(board.detailLabel)}
+          <input {...field('detail')} placeholder={t(board.detailPlaceholder)} maxLength={200} />
         </label>
         <label>
-          {key === 'hiring' ? 'Saved as a person' : 'Who you deal with'}
-          <input {...field('person')} list="tracker-people" placeholder="A name from People" />
+          {key === 'hiring' ? t('Saved as a person') : t('Who you deal with')}
+          <input {...field('person')} list="tracker-people" placeholder={t('A name from People')} />
         </label>
         <label>
-          {board.valueLabel} (₹, optional)
+          {t('{label} (₹, optional)', { label: t(board.valueLabel) })}
           <input {...field('value')} inputMode="decimal" placeholder="0" />
         </label>
         <label className="tracker-wide">
-          Link (optional)
-          <input {...field('link')} type="url" placeholder="https://… the posting, the CV, the proposal" />
+          {t('Link (optional)')}
+          <input {...field('link')} type="url" placeholder={t('https://… the posting, the CV, the proposal')} />
         </label>
         <label className="tracker-wide">
-          Notes
+          {t('Notes')}
           <textarea {...field('notes')} rows={3} />
         </label>
       </div>
@@ -514,20 +545,23 @@ function ItemSheet({
       </datalist>
       <div className="row">
         <button className="primary small-btn" onClick={() => void saveDetails()} disabled={busy || !dirty || !draft.title.trim()}>
-          Save details
+          {t('Save details')}
         </button>
         {item.link && (
           <a className="ghost small-btn link-btn" href={item.link} target="_blank" rel="noopener noreferrer">
-            Open link
+            {t('Open link')}
           </a>
         )}
       </div>
 
-      <span className="label-text">History</span>
+      <span className="label-text">{t('History')}</span>
       <ul className="plain tracker-history">
         {[
-          ...item.events.map((e) => ({ at: e.at, text: stageOf(key, e.to)?.label ?? e.to })),
-          ...past.map((p) => ({ at: p.dueAt, text: `${p.title}${p.status === 'cancelled' ? ' (cancelled)' : ''}` })),
+          ...item.events.map((e) => ({ at: e.at, text: t(stageOf(key, e.to)?.label ?? e.to) })),
+          ...past.map((p) => ({
+            at: p.dueAt,
+            text: p.status === 'cancelled' ? t('{title} (cancelled)', { title: p.title }) : p.title,
+          })),
         ]
           .sort((a, b) => a.at.localeCompare(b.at))
           .map((h, i) => (
@@ -539,7 +573,7 @@ function ItemSheet({
 
       <div className="row">
         <button className="link small danger-text" onClick={() => void remove()}>
-          Delete this {board.noun}
+          {t(WORDS[key].remove)}
         </button>
       </div>
       {error && <p className="error small">{error}</p>}

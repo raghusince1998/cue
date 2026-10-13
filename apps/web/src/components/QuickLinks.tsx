@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
+import { locale, msg, rich, t } from '../lib/i18n.tsx'
 
 export interface PersonLink {
   id: string
@@ -42,14 +43,14 @@ export interface LinkChoices {
 export const NO_CHOICES: LinkChoices = { placeId: null, accountName: null, trip: 'add', onTrip: true }
 
 const day = (ymd: string, style: 'short' | 'long' = 'short') =>
-  new Date(`${ymd}T00:00:00`).toLocaleDateString([], {
+  new Date(`${ymd}T00:00:00`).toLocaleDateString(locale(), {
     weekday: style,
     day: 'numeric',
     month: 'short',
   })
 
 export function range(a: string, b: string): string {
-  return a === b ? day(a) : `${day(a)} to ${day(b)}`
+  return a === b ? day(a) : t('{from} to {to}', { from: day(a), to: day(b) })
 }
 
 /**
@@ -93,25 +94,25 @@ export function QuickLinks({
             <span className="quick-link-mark" aria-hidden>
               &#128100;
             </span>
-            With <strong>{person.name}</strong>
+            {rich('With {name}', { name: <strong>{person.name}</strong> })}
             {person.detail ? <span className="muted"> · {person.detail}</span> : null}
           </span>
           <button className="link small" onClick={() => set({ contactId: null })}>
-            Not them
+            {t('Not them')}
           </button>
         </div>
       ) : (
         links.people.length > 0 && (
           <div className="quick-link">
             <span className="muted small">
-              {chosen === null && contactId ? 'Not linked to anyone. Someone else?' : 'Is this about…'}
+              {chosen === null && contactId ? t('Not linked to anyone. Someone else?') : t('Is this about…')}
             </span>
           </div>
         )
       )}
       {others.length > 0 && (
         <div className="chips quick-link-choices">
-          {person && <span className="muted small">or</span>}
+          {person && <span className="muted small">{t('or')}</span>}
           {others.map((p) => (
             <button key={p.id} className="chip" onClick={() => set({ contactId: p.id })}>
               {p.name}
@@ -132,7 +133,7 @@ export function QuickLinks({
             <span className="quick-link-mark" aria-hidden>
               &#128205;
             </span>
-            At <strong>{p.name}</strong>
+            {rich('At {place}', { place: <strong>{p.name}</strong> })}
             {p.detail ? <span className="muted"> · {p.detail}</span> : null}
           </span>
         </label>
@@ -149,11 +150,11 @@ export function QuickLinks({
             <span className="quick-link-mark" aria-hidden>
               &#127970;
             </span>
-            For <strong>{a.name}</strong>
+            {rich('For {name}', { name: <strong>{a.name}</strong> })}
             {a.people ? (
               <span className="muted">
                 {' '}
-                · {a.people} {a.people === 1 ? 'person' : 'people'} there
+                · {a.people === 1 ? t('1 person there') : t('{n} people there', { n: a.people })}
               </span>
             ) : null}
           </span>
@@ -167,7 +168,7 @@ export function QuickLinks({
               <span className="quick-link-mark" aria-hidden>
                 &#9992;
               </span>
-              Part of your <strong>{trip.placeLabel}</strong> trip
+              {rich('Part of your {place} trip', { place: <strong>{trip.placeLabel}</strong> })}
               <span className="muted"> · {range(trip.existing.startsOn, trip.existing.endsOn)}</span>
             </span>
           </div>
@@ -183,19 +184,22 @@ export function QuickLinks({
                 <span className="quick-link-mark" aria-hidden>
                   &#9992;
                 </span>
-                Also a trip to <strong>{trip.placeLabel}</strong>
+                {rich('Also a trip to {place}', { place: <strong>{trip.placeLabel}</strong> })}
                 <span className="muted"> · {day(trip.day, 'long')}</span>
               </span>
             </label>
             <button className="link small" onClick={() => onHome(trip.placeLabel)}>
-              {trip.placeLabel} is where I live
+              {t('{place} is where I live', { place: trip.placeLabel })}
             </button>
           </div>
         ))}
       {trip && trip.waiting.length > 0 && (choices.trip === 'add' || trip.existing) && (
         <p className="muted small quick-link-note">
-          {trip.waiting.length} saved for {trip.placeLabel}: {trip.waiting.map((w) => w.title).slice(0, 3).join(', ')}
-          {trip.waiting.length > 3 ? '…' : ''}. Add them to this day after saving.
+          {t('{n} saved for {place}: {list}. Add them to this day after saving.', {
+            n: trip.waiting.length,
+            place: trip.placeLabel,
+            list: `${trip.waiting.map((w) => w.title).slice(0, 3).join(', ')}${trip.waiting.length > 3 ? '…' : ''}`,
+          })}
         </p>
       )}
 
@@ -206,7 +210,7 @@ export function QuickLinks({
             <span className="quick-link-mark" aria-hidden>
               &#9992;
             </span>
-            Put it on your <strong>{upcomingTrip.placeLabel}</strong> trip
+            {rich('Put it on your {place} trip', { place: <strong>{upcomingTrip.placeLabel}</strong> })}
             <span className="muted"> · {range(upcomingTrip.startsOn, upcomingTrip.endsOn)}</span>
           </span>
         </label>
@@ -216,9 +220,9 @@ export function QuickLinks({
 }
 
 const WINDOWS = [
-  { key: 'morning', label: 'Morning', hour: 10 },
-  { key: 'afternoon', label: 'Afternoon', hour: 15 },
-  { key: 'evening', label: 'Evening', hour: 18 },
+  { key: 'morning', label: msg('Morning'), hour: 10 },
+  { key: 'afternoon', label: msg('Afternoon'), hour: 15 },
+  { key: 'evening', label: msg('Evening'), hour: 18 },
 ] as const
 
 /**
@@ -253,7 +257,7 @@ export function SavedForTrip({
         method: 'POST',
         body: { intentionIds: left.map((w) => w.id), dueAt: new Date(y!, m! - 1, d!, hour, 0).toISOString() },
       })
-      const when = `${day(onDay)}, ${label.toLowerCase()}, together`
+      const when = t('{day}, {part}, together', { day: day(onDay), part: t(label).toLowerCase() })
       setDone((x) => ({ ...x, ...Object.fromEntries(left.map((w) => [w.id, when])) }))
       announceChange()
     } catch (err) {
@@ -269,7 +273,7 @@ export function SavedForTrip({
         method: 'POST',
         body: { dueAt: new Date(y!, m! - 1, d!, hour, 0).toISOString(), tripId: trip.id, flexibility: 'flexible' },
       })
-      setDone((x) => ({ ...x, [id]: `${day(onDay)}, ${label.toLowerCase()}` }))
+      setDone((x) => ({ ...x, [id]: `${day(onDay)}, ${t(label).toLowerCase()}` }))
       announceChange()
     } catch (err) {
       setError((err as Error).message)
@@ -278,7 +282,7 @@ export function SavedForTrip({
 
   return (
     <div className="trip-wishes-now">
-      <span className="label-text">Saved for {trip.placeLabel}: add to this trip?</span>
+      <span className="label-text">{t('Saved for {place}: add to this trip?', { place: trip.placeLabel })}</span>
       {days.length > 1 && (
         <div className="chips">
           {days.map((d) => (
@@ -292,12 +296,12 @@ export function SavedForTrip({
         <div className="your-day-line" key={w.id}>
           <span>{w.title}</span>
           {done[w.id] ? (
-            <span className="small target-status is-done">Added · {done[w.id]}</span>
+            <span className="small target-status is-done">{t('Added · {when}', { when: done[w.id]! })}</span>
           ) : (
             <span className="row">
-              {WINDOWS.map((t) => (
-                <button key={t.key} className="ghost tiny-btn" onClick={() => void add(w.id, t.hour, t.label)}>
-                  {t.label}
+              {WINDOWS.map((win) => (
+                <button key={win.key} className="ghost tiny-btn" onClick={() => void add(w.id, win.hour, win.label)}>
+                  {t(win.label)}
                 </button>
               ))}
             </span>
@@ -307,13 +311,13 @@ export function SavedForTrip({
       {left.length > 1 && (
         <div className="your-day-line">
           <span>
-            <strong>All {left.length} together</strong>
-            <span className="muted small"> · one plan with a list</span>
+            <strong>{t('All {n} together', { n: left.length })}</strong>
+            <span className="muted small"> · {t('one plan with a list')}</span>
           </span>
           <span className="row">
-            {WINDOWS.map((t) => (
-              <button key={t.key} className="ghost tiny-btn" onClick={() => void addAll(t.hour, t.label)}>
-                {t.label}
+            {WINDOWS.map((win) => (
+              <button key={win.key} className="ghost tiny-btn" onClick={() => void addAll(win.hour, win.label)}>
+                {t(win.label)}
               </button>
             ))}
           </span>

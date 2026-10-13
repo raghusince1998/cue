@@ -1,6 +1,8 @@
 import { and, asc, eq, gte, lt, lte, ne, or, sql } from 'drizzle-orm'
+import type { Lang } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { env } from '../env.ts'
+import { langOf, t } from '../i18n.ts'
 import { cancelPendingReminders, scheduleFirstReminder } from './reminders.ts'
 import { nextFreeSlot } from './freeSlots.ts'
 import { canBeOverdue } from './overdue.ts'
@@ -64,8 +66,9 @@ export interface TriageReport {
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'}`
+/** A weekday's name in a sentence, 0 for Sunday: 4 October 2026 was one. */
+function weekdayName(day: number, lang: Lang): string {
+  return lang === 'en' ? WEEKDAYS[day]! : new Date(2026, 9, 4 + day).toLocaleDateString('hi-IN', { weekday: 'long' })
 }
 
 /** Which weekday this person's commitments reliably die on, if any. */
@@ -101,8 +104,10 @@ async function worstWeekdayFor(userId: string, now: Date): Promise<number | null
 export async function buildTriage(
   userId: string,
   now = new Date(),
-  opts: { all?: boolean } = {},
+  /** The reasons are said in the person's language, looked up when not given. */
+  opts: { all?: boolean; lang?: Lang } = {},
 ): Promise<TriageReport> {
+  const lang = opts.lang ?? (await langOf(userId))
   const overdue = await db
     .select({
       id: schema.commitments.id,
@@ -137,24 +142,37 @@ export async function buildTriage(
     const daysOverdue = Math.floor((now.getTime() - c.dueAt.getTime()) / DAY_MS)
 
     let reason: TriageReason = 'just-old'
-    let because = `${plural(daysOverdue, 'day')} past its time, and nothing has moved.`
+    let because =
+      daysOverdue === 1
+        ? t(lang, '1 day past its time, and nothing has moved.')
+        : t(lang, '{n} days past its time, and nothing has moved.', { n: daysOverdue })
 
     if (!stuckIds.has(c.id)) {
       reason = 'late'
       const hoursLate = Math.max(1, Math.round((now.getTime() - c.dueAt.getTime()) / 3_600_000))
       because =
         daysOverdue >= 1
-          ? `${plural(daysOverdue, 'day')} past its time.`
-          : `${plural(hoursLate, 'hour')} past its time.`
+          ? daysOverdue === 1
+            ? t(lang, '1 day past its time.')
+            : t(lang, '{n} days past its time.', { n: daysOverdue })
+          : hoursLate === 1
+            ? t(lang, '1 hour past its time.')
+            : t(lang, '{n} hours past its time.', { n: hoursLate })
     } else if (c.escalationCount >= env.maxEscalations) {
       reason = 'chased-out'
-      because = `Chased ${plural(c.escalationCount, 'time')} and still open. The reminders are not working for this one.`
+      because =
+        c.escalationCount === 1
+          ? t(lang, 'Chased 1 time and still open. The reminders are not working for this one.')
+          : t(lang, 'Chased {n} times and still open. The reminders are not working for this one.', { n: c.escalationCount })
     } else if (c.flexibility === 'flexible') {
       reason = 'never-scheduled'
-      because = `It has never had a real time, so nothing ever forced the issue — ${plural(daysOverdue, 'day')} now.`
+      because =
+        daysOverdue === 1
+          ? t(lang, 'It has never had a real time, so nothing ever forced the issue — 1 day now.')
+          : t(lang, 'It has never had a real time, so nothing ever forced the issue — {n} days now.', { n: daysOverdue })
     } else if (worst !== null && c.dueAt.getDay() === worst) {
       reason = 'bad-day'
-      because = `Due on a ${WEEKDAYS[worst]}, which is where your plans reliably slip.`
+      because = t(lang, 'Due on a {day}, which is where your plans reliably slip.', { day: weekdayName(worst, lang) })
     }
 
     // Suggesting "drop" for something merely late would be the app giving up

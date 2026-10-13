@@ -214,3 +214,17 @@ test('a calendar event that is over is not something you dropped', async () => {
   assert.notEqual(overdue!.action?.href, '/', 'a button that links to the page it is on does nothing')
   await h.sql`delete from calendar_feeds`
 })
+
+test('someone who reads Hindi is told in Hindi, with their own words left as they wrote them', async () => {
+  await plan('Send the quote', at(-9, 17))
+  await plan('Call the accountant', at(-2, 17))
+  await h.sql`update users set language = 'hi' where id = ${me.userId}`
+  try {
+    const overdue = (await svc.buildInsights(me.userId, NOW)).find((i) => i.id === 'overdue')!
+    assert.equal(overdue.headline, '2 काम जो आपने करने को कहे थे, अभी बाकी हैं')
+    assert.equal(overdue.detail, 'सबसे पुराना "Send the quote" है, समय निकले 8 दिन हो गए।')
+    assert.equal(overdue.action?.label, 'इन्हें निपटाएँ')
+  } finally {
+    await h.sql`update users set language = 'en' where id = ${me.userId}`
+  }
+})

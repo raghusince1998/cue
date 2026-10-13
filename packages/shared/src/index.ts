@@ -1482,6 +1482,18 @@ export {
   stepTitleHi,
   type Lang,
 } from './examHindi.ts'
+export {
+  BOARD_HI,
+  DELIVERY_STATUS_HI,
+  EXPENSE_CATEGORY_HI,
+  REPEAT_HI,
+  TRACKER_STAGE_HI,
+  boardLabel,
+  deliveryStatusLabel,
+  expenseCategoryLabel,
+  repeatLabel,
+  trackerStageLabel,
+} from './hindi.ts'
 
 /** A study plan for an exam: subjects dealt across the days chosen, and a weekly mock test. */
 export const studyPlanInput = z.object({

@@ -8,6 +8,7 @@ import { DeleteAccount } from './DeleteAccount.tsx'
 import { Modal } from './Modal.tsx'
 import { TemplateManager } from './QuickMessage.tsx'
 import { api } from '../lib/api.ts'
+import { locale, msg, rich, t } from '../lib/i18n.tsx'
 import { useAuth } from '../lib/auth.tsx'
 import { describeWorkHours, hasWork } from '@cue/shared'
 
@@ -41,16 +42,19 @@ interface Preferences {
 
 /** Monday first, the way a working week is read. */
 const WEEK = [
-  { day: 1, label: 'Mon' },
-  { day: 2, label: 'Tue' },
-  { day: 3, label: 'Wed' },
-  { day: 4, label: 'Thu' },
-  { day: 5, label: 'Fri' },
-  { day: 6, label: 'Sat' },
-  { day: 0, label: 'Sun' },
+  { day: 1, label: msg('Mon') },
+  { day: 2, label: msg('Tue') },
+  { day: 3, label: msg('Wed') },
+  { day: 4, label: msg('Thu') },
+  { day: 5, label: msg('Fri') },
+  { day: 6, label: msg('Sat') },
+  { day: 0, label: msg('Sun') },
 ]
 
 function label(hour: number): string {
+  // Hindi says the part of the day rather than am and pm: सुबह 7, शाम 6.
+  const lang = locale()
+  if (lang) return new Date(2000, 0, 1, hour).toLocaleTimeString(lang, { hour: 'numeric', dayPeriod: 'short' })
   const suffix = hour < 12 ? 'am' : 'pm'
   const twelve = hour % 12 === 0 ? 12 : hour % 12
   return `${twelve}${suffix}`
@@ -106,10 +110,10 @@ export function Settings({ onClose }: { onClose: () => void }) {
       )
       setMessage(
         res.empty
-          ? 'Nothing booked today and nothing outstanding, so there is nothing to brief — it stays quiet on days like this.'
+          ? t('Nothing booked today and nothing outstanding, so there is nothing to brief — it stays quiet on days like this.')
           : res.delivered > 0
-            ? `Sent: “${res.title}”`
-            : 'No device registered — enable notifications on the Today screen first.',
+            ? t('Sent: “{title}”', { title: res.title ?? '' })
+            : t('No device registered — enable notifications on the Today screen first.'),
       )
     } catch (err) {
       setMessage((err as Error).message)
@@ -127,10 +131,10 @@ export function Settings({ onClose }: { onClose: () => void }) {
       )
       setMessage(
         res.empty
-          ? 'Nothing happened this week and nothing is booked next, so there is nothing to review yet.'
+          ? t('Nothing happened this week and nothing is booked next, so there is nothing to review yet.')
           : res.delivered > 0
-            ? `Sent: “${res.title}”`
-            : 'No device registered — enable notifications on the Today screen first.',
+            ? t('Sent: “{title}”', { title: res.title ?? '' })
+            : t('No device registered — enable notifications on the Today screen first.'),
       )
     } catch (err) {
       setMessage((err as Error).message)
@@ -148,10 +152,10 @@ export function Settings({ onClose }: { onClose: () => void }) {
       )
       setMessage(
         res.empty
-          ? 'Nothing has happened today yet, so there is no report to send.'
+          ? t('Nothing has happened today yet, so there is no report to send.')
           : res.delivered > 0
-            ? `Sent: “${res.title}”`
-            : 'No device registered — enable notifications on the Today screen first.',
+            ? t('Sent: “{title}”', { title: res.title ?? '' })
+            : t('No device registered — enable notifications on the Today screen first.'),
       )
     } catch (err) {
       setMessage((err as Error).message)
@@ -169,8 +173,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
       )
       setMessage(
         res.delivered > 0
-          ? `Sent: “${res.title}”`
-          : 'No device registered — enable notifications on the Today screen first.',
+          ? t('Sent: “{title}”', { title: res.title })
+          : t('No device registered — enable notifications on the Today screen first.'),
       )
     } catch (err) {
       setMessage((err as Error).message)
@@ -218,14 +222,14 @@ export function Settings({ onClose }: { onClose: () => void }) {
       })
       setCurrentPassword('')
       setNewPassword('')
-      setPasswordNote('Password changed.')
+      setPasswordNote(t('Password changed.'))
     } catch (err) {
       const code = (err as { code?: string }).code
       setPasswordNote(
         code === 'wrong_password'
-          ? 'That is not your current password.'
+          ? t('That is not your current password.')
           : code === 'invalid_input'
-            ? 'The new password must be at least 8 characters.'
+            ? t('The new password must be at least 8 characters.')
             : (err as Error).message,
       )
     } finally {
@@ -238,10 +242,10 @@ export function Settings({ onClose }: { onClose: () => void }) {
     <div className="stack tight">
       <div className="viewswitch">
         <button className={tab === 'profile' ? 'selected' : ''} onClick={() => setTab('profile')}>
-          Profile
+          {t('Profile')}
         </button>
         <button className={tab === 'settings' ? 'selected' : ''} onClick={() => setTab('settings')}>
-          Settings
+          {t('Settings')}
         </button>
       </div>
 
@@ -261,27 +265,27 @@ export function Settings({ onClose }: { onClose: () => void }) {
       <p className="account-email">{me?.email}</p>
 
       <hr className="rule" />
-      <span className="label-text">Your name</span>
+      <span className="label-text">{t('Your name')}</span>
       <div className="row inline-field-row">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('Your name')} />
         <button className="ghost small-btn" onClick={() => void saveName()} disabled={busy || !name.trim()}>
-          Save
+          {t('Save')}
         </button>
       </div>
-      {nameSaved && <p className="muted small">Saved.</p>}
+      {nameSaved && <p className="muted small">{t('Saved.')}</p>}
 
       <hr className="rule" />
-      <span className="label-text">Connected accounts</span>
+      <span className="label-text">{t('Connected accounts')}</span>
       <Integrations />
 
       <hr className="rule" />
-      <span className="label-text">What you use Cue for</span>
+      <span className="label-text">{t('What you use Cue for')}</span>
       <UsesPicker compact />
 
       <hr className="rule" />
-      {/* Hindi first where aspirants are: the exam screens and their reminders. */}
+      {/* Every screen, and what Cue sends: reminders, the morning brief, what quick add understood. */}
       <span className="label-text">Language · भाषा</span>
-      <div className="chips" role="group" aria-label="Language">
+      <div className="chips" role="group" aria-label={t('Language')}>
         {(
           [
             ['en', 'English'],
@@ -299,26 +303,24 @@ export function Settings({ onClose }: { onClose: () => void }) {
         ))}
       </div>
       <p className="muted small">
-        {account?.language === 'hi'
-          ? 'परीक्षाओं की स्क्रीन, उनके रिमाइंडर और सूचनाएँ अब हिन्दी में। Cue का बाकी हिस्सा भी धीरे-धीरे।'
-          : 'Hindi covers the exam screens, their reminders and notices for now; the rest of Cue will follow.'}
+        {t('Every screen, and the reminders and notices Cue sends you. What you type stays as you typed it.')}
       </p>
 
       <hr className="rule" />
 
-      <span className="label-text">Change password</span>
+      <span className="label-text">{t('Change password')}</span>
       <input
         type="password"
         value={currentPassword}
         onChange={(e) => setCurrentPassword(e.target.value)}
-        placeholder="Current password"
+        placeholder={t('Current password')}
         autoComplete="current-password"
       />
       <input
         type="password"
         value={newPassword}
         onChange={(e) => setNewPassword(e.target.value)}
-        placeholder="New password, at least 8 characters"
+        placeholder={t('New password, at least 8 characters')}
         autoComplete="new-password"
       />
       <button
@@ -326,7 +328,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         onClick={() => void changePassword()}
         disabled={busy || !currentPassword || newPassword.length < 8}
       >
-        Change it
+        {t('Change it')}
       </button>
       {passwordNote && <p className="muted small">{passwordNote}</p>}
       </>
@@ -344,13 +346,12 @@ export function Settings({ onClose }: { onClose: () => void }) {
             disabled={busy}
             onChange={(e) => void update({ morningBriefEnabled: e.target.checked })}
           />
-          <span>Send me a brief of the day each morning</span>
+          <span>{t('Send me a brief of the day each morning')}</span>
         </label>
-        <InfoTip label="What is in it?">
-          Your day in one place: work and personal, each with its first thing; a train or
-          flight and when to leave for it; parcels arriving; bills due; who is due a
-          check-in; your longest free stretch; and anything left over. Tapping it opens your
-          day hour by hour. On a day with nothing in it, it stays quiet.
+        <InfoTip label={t('What is in it?')}>
+          {t(
+            'Your day in one place: work and personal, each with its first thing; a train or flight and when to leave for it; parcels arriving; bills due; who is due a check-in; your longest free stretch; and anything left over. Tapping it opens your day hour by hour. On a day with nothing in it, it stays quiet.',
+          )}
         </InfoTip>
       </div>
       {prefs.morningBriefEnabled && (
@@ -368,7 +369,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
             ))}
           </div>
           <button className="ghost small-btn" onClick={testBrief} disabled={busy}>
-            Send today&rsquo;s brief now
+            {t('Send today’s brief now')}
           </button>
         </>
       )}
@@ -385,17 +386,16 @@ export function Settings({ onClose }: { onClose: () => void }) {
                 disabled={busy}
                 onChange={(e) => void update({ keepApart: e.target.checked })}
               />
-              <span>Keep work and personal apart</span>
+              <span>{t('Keep work and personal apart')}</span>
             </label>
-            <InfoTip label="What does it do?">
-              During your working hours, personal reminders that only nag (a second &ldquo;still
-              open&rdquo;, or something with no set time) wait until the evening. After hours, work
-              ones wait for the morning. Anything at a time you chose still rings on time, and
-              critical things always do.
+            <InfoTip label={t('What does it do?')}>
+              {t(
+                'During your working hours, personal reminders that only nag (a second “still open”, or something with no set time) wait until the evening. After hours, work ones wait for the morning. Anything at a time you chose still rings on time, and critical things always do.',
+              )}
             </InfoTip>
           </div>
-          <p className="muted small">Your working week: {describeWorkHours({ days: prefs.workDays, start: prefs.workStartHour, end: prefs.workEndHour })}</p>
-          <div className="chips" role="group" aria-label="Working days">
+          <p className="muted small">{t('Your working week: {hours}', { hours: describeWorkHours({ days: prefs.workDays, start: prefs.workStartHour, end: prefs.workEndHour }) })}</p>
+          <div className="chips" role="group" aria-label={t('Working days')}>
             {WEEK.map(({ day, label: name }) => {
               const on = prefs.workDays.includes(day)
               return (
@@ -408,14 +408,14 @@ export function Settings({ onClose }: { onClose: () => void }) {
                     void update({ workDays: on ? prefs.workDays.filter((d) => d !== day) : [...prefs.workDays, day] })
                   }
                 >
-                  {name}
+                  {t(name)}
                 </button>
               )
             })}
           </div>
           <div className="row work-hours">
             <label>
-              Starts{' '}
+              {t('Starts')}{' '}
               <select
                 value={prefs.workStartHour}
                 disabled={busy}
@@ -431,7 +431,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
               </select>
             </label>
             <label>
-              Ends{' '}
+              {t('Ends')}{' '}
               <select
                 value={prefs.workEndHour}
                 disabled={busy}
@@ -441,7 +441,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
                   .filter((h) => h > prefs.workStartHour)
                   .map((h) => (
                     <option key={h} value={h}>
-                      {h === 24 ? 'midnight' : label(h)}
+                      {h === 24 ? t('midnight') : label(h)}
                     </option>
                   ))}
               </select>
@@ -454,18 +454,18 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
       {/* Quick messages: written once, filled in for whoever they go to. */}
       <div className="setting-row has-infotip">
-        <span>Quick messages</span>
-        <InfoTip label="What are quick messages?">
-          The things you send over and over (thanks for meeting, missed your call, a gentle
-          reminder) written once. On anyone&rsquo;s page, tap Message and pick one: their name,
-          where they work and yours are filled in, ready for WhatsApp, a text or email.
+        <span>{t('Quick messages')}</span>
+        <InfoTip label={t('What are quick messages?')}>
+          {t(
+            'The things you send over and over (thanks for meeting, missed your call, a gentle reminder) written once. On anyone’s page, tap Message and pick one: their name, where they work and yours are filled in, ready for WhatsApp, a text or email.',
+          )}
         </InfoTip>
       </div>
       <button className="ghost small-btn" onClick={() => setEditingMessages(true)}>
-        Edit quick messages
+        {t('Edit quick messages')}
       </button>
       {editingMessages && (
-        <Modal title="Quick messages" onClose={() => setEditingMessages(false)}>
+        <Modal title={t('Quick messages')} onClose={() => setEditingMessages(false)}>
           <TemplateManager onClose={() => setEditingMessages(false)} />
         </Modal>
       )}
@@ -484,15 +484,15 @@ export function Settings({ onClose }: { onClose: () => void }) {
             onChange={(e) => void update({ reportEnabled: e.target.checked })}
           />
           <span>
-            Remind me to send my daily report
-            {prefs.reportToName ? ` to ${prefs.reportToName}` : ''}
+            {prefs.reportToName
+              ? t('Remind me to send my daily report to {name}', { name: prefs.reportToName })
+              : t('Remind me to send my daily report')}
           </span>
         </label>
-        <InfoTip label="What is the daily report?">
-          Your meetings with who and what came of them, visits, what got done, next steps agreed,
-          what you are waiting on, and tomorrow — written up from what is already in Cue, ready
-          to send by WhatsApp or email. Open it any time from &ldquo;Send today&rsquo;s report&rdquo;
-          on Today. A day with nothing in it sends no reminder.
+        <InfoTip label={t('What is the daily report?')}>
+          {t(
+            'Your meetings with who and what came of them, visits, what got done, next steps agreed, what you are waiting on, and tomorrow — written up from what is already in Cue, ready to send by WhatsApp or email. Open it any time from “Send today’s report” on Today. A day with nothing in it sends no reminder.',
+          )}
         </InfoTip>
       </div>
       {prefs.reportEnabled && (
@@ -510,7 +510,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
             ))}
           </div>
           <button className="ghost small-btn" onClick={testReport} disabled={busy}>
-            Send today&rsquo;s reminder now
+            {t('Send today’s reminder now')}
           </button>
         </>
       )}
@@ -528,12 +528,12 @@ export function Settings({ onClose }: { onClose: () => void }) {
             disabled={busy}
             onChange={(e) => void update({ weeklyReviewEnabled: e.target.checked })}
           />
-          <span>Every Friday, ask me to review the week</span>
+          <span>{t('Every Friday, ask me to review the week')}</span>
         </label>
-        <InfoTip label="What is the review?">
-          What got done, what slipped, who still owes you something, and how next week is
-          already filling up — two minutes, each part with the one thing to do about it. It
-          stays quiet on a week with nothing in it.
+        <InfoTip label={t('What is the review?')}>
+          {t(
+            'What got done, what slipped, who still owes you something, and how next week is already filling up — two minutes, each part with the one thing to do about it. It stays quiet on a week with nothing in it.',
+          )}
         </InfoTip>
       </div>
       {prefs.weeklyReviewEnabled && (
@@ -546,12 +546,12 @@ export function Settings({ onClose }: { onClose: () => void }) {
                 disabled={busy}
                 onClick={() => void update({ weeklyReviewHour: hour })}
               >
-                Fri {label(hour)}
+                {t('Fri {time}', { time: label(hour) })}
               </button>
             ))}
           </div>
           <button className="ghost small-btn" onClick={testReview} disabled={busy}>
-            Send this week&rsquo;s now
+            {t('Send this week’s now')}
           </button>
         </>
       )}
@@ -568,17 +568,18 @@ export function Settings({ onClose }: { onClose: () => void }) {
             disabled={busy}
             onChange={(e) => void update({ dailyNudgeEnabled: e.target.checked })}
           />
-          <span>Ask me each evening if I logged everything</span>
+          <span>{t('Ask me each evening if I logged everything')}</span>
         </label>
-        <InfoTip label="Why ask each evening?">
-          Nothing can tell that you went somewhere and never logged it — a browser cannot watch
-          your location in the background. This is the app asking instead.
+        <InfoTip label={t('Why ask each evening?')}>
+          {t(
+            'Nothing can tell that you went somewhere and never logged it — a browser cannot watch your location in the background. This is the app asking instead.',
+          )}
         </InfoTip>
       </div>
 
       {prefs.dailyNudgeEnabled && (
         <>
-          <span className="label-text">What time?</span>
+          <span className="label-text">{t('What time?')}</span>
           <div className="chips">
             {[17, 18, 19, 20, 21].map((hour) => (
               <button
@@ -593,21 +594,21 @@ export function Settings({ onClose }: { onClose: () => void }) {
           </div>
 
           <p className="muted small">
-            Your time, in {prefs.timezone}
-            {deviceZone && deviceZone !== prefs.timezone && (
-              <>
-                {' '}
-                — this device says {deviceZone}.{' '}
-                <button className="link" onClick={() => void update({ timezone: deviceZone })}>
-                  Use that instead
-                </button>
-              </>
-            )}
-            .
+            {deviceZone && deviceZone !== prefs.timezone
+              ? rich('Your time, in {zone} — this device says {device}. <use>Use that instead</use>.', {
+                  zone: prefs.timezone,
+                  device: deviceZone,
+                  use: (s) => (
+                    <button className="link" onClick={() => void update({ timezone: deviceZone })}>
+                      {s}
+                    </button>
+                  ),
+                })
+              : t('Your time, in {zone}.', { zone: prefs.timezone })}
           </p>
 
           <button className="ghost small-btn" onClick={testNudge} disabled={busy}>
-            Send one now to check
+            {t('Send one now to check')}
           </button>
         </>
       )}
@@ -621,12 +622,12 @@ export function Settings({ onClose }: { onClose: () => void }) {
             disabled={busy}
             onChange={(e) => void update({ followupPrompts: e.target.checked })}
           />
-          <span>When a meeting ends, ask me what to follow up on</span>
+          <span>{t('When a meeting ends, ask me what to follow up on')}</span>
         </label>
-        <InfoTip label="What does this do?">
-          A notification as each one-off meeting ends — from Cue or a connected calendar — so
-          you can note what was agreed while it is fresh. Each follow-up becomes a reminder of
-          its own. Meetings also wait under &ldquo;Just finished&rdquo; on Today either way.
+        <InfoTip label={t('What does this do?')}>
+          {t(
+            'A notification as each one-off meeting ends — from Cue or a connected calendar — so you can note what was agreed while it is fresh. Each follow-up becomes a reminder of its own. Meetings also wait under “Just finished” on Today either way.',
+          )}
         </InfoTip>
       </div>
 
@@ -638,12 +639,12 @@ export function Settings({ onClose }: { onClose: () => void }) {
             disabled={busy}
             onChange={(e) => void update({ prepPrompts: e.target.checked })}
           />
-          <span>Before a meeting, remind me what is still open from last time</span>
+          <span>{t('Before a meeting, remind me what is still open from last time')}</span>
         </label>
-        <InfoTip label="How does it know?">
-          Follow-ups remember the meeting they came from. About 15 minutes before a meeting
-          with the same title, in the same series, or with the same person, you get a note of
-          what is still open from the earlier ones — only when there is something.
+        <InfoTip label={t('How does it know?')}>
+          {t(
+            'Follow-ups remember the meeting they came from. About 15 minutes before a meeting with the same title, in the same series, or with the same person, you get a note of what is still open from the earlier ones — only when there is something.',
+          )}
         </InfoTip>
       </div>
 

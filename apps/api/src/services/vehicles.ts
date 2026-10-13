@@ -1,20 +1,23 @@
 import { and, eq, ilike, sql } from 'drizzle-orm'
-import { formatRupees, type ChallanNotice, type FastagNotice } from '@cue/shared'
+import { formatRupees, type ChallanNotice, type FastagNotice, type Lang } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { localeOf, t } from '../i18n.ts'
 import { createBill, payBill } from './bills.ts'
 import { scheduleFirstReminder } from './reminders.ts'
 
 /**
  * A vehicle's running reminders from its messages: a FASTag to recharge — a
  * to-do that closes itself when the recharge goes through — and a traffic
- * challan to pay, which leaves Bills when it is paid.
+ * challan to pay, which leaves Bills when it is paid. What is found, and the
+ * notes kept with it, are in the person's language; the titles stay English,
+ * because the next message is matched against them.
  */
 
 const c = schema.commitments
 const b = schema.bills
 
-const dayWords = (ymd: string) =>
-  new Date(`${ymd}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+const dayWords = (ymd: string, lang: Lang) =>
+  new Date(`${ymd}T00:00:00`).toLocaleDateString(localeOf(lang), { weekday: 'short', day: 'numeric', month: 'short' })
 
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
@@ -50,17 +53,34 @@ async function openRecharge(userId: string, vehicle: string | null) {
  * than adding another. Recharged: that to-do is done. Returns what happened,
  * in words, or null when nothing new did.
  */
-export async function fastagFromNotice(orgId: string, userId: string, n: FastagNotice, now = new Date()): Promise<string | null> {
+export async function fastagFromNotice(
+  orgId: string,
+  userId: string,
+  n: FastagNotice,
+  now = new Date(),
+  lang: Lang = 'en',
+): Promise<string | null> {
   const open = await openRecharge(userId, n.vehicle)
   const title = `Recharge FASTag${n.vehicle ? ` · ${n.vehicle}` : ''}`
 
   if (n.status === 'recharged') {
     if (!open) return null
     await db.update(c).set({ status: 'done', completedAt: now }).where(eq(c.id, open.id))
-    return `${title.replace('Recharge ', '')}: recharged${n.balancePaise !== null ? `, balance ${formatRupees(n.balancePaise)}` : ''}`
+    const name = title.replace('Recharge ', '')
+    return n.balancePaise !== null
+      ? t(lang, '{name}: recharged, balance {balance}', { name, balance: formatRupees(n.balancePaise) })
+      : t(lang, '{name}: recharged', { name })
   }
 
-  const notes = `${n.balancePaise !== null ? `Balance ${formatRupees(n.balancePaise)}` : 'Low balance'}${n.issuer ? ` on your ${n.issuer} FASTag` : ''}. Running out can mean paying double at the toll.`
+  const balance = n.balancePaise !== null ? formatRupees(n.balancePaise) : null
+  const notes =
+    balance && n.issuer
+      ? t(lang, 'Balance {balance} on your {issuer} FASTag. Running out can mean paying double at the toll.', { balance, issuer: n.issuer })
+      : balance
+        ? t(lang, 'Balance {balance}. Running out can mean paying double at the toll.', { balance })
+        : n.issuer
+          ? t(lang, 'Low balance on your {issuer} FASTag. Running out can mean paying double at the toll.', { issuer: n.issuer })
+          : t(lang, 'Low balance. Running out can mean paying double at the toll.')
   if (open) {
     await db.update(c).set({ notes }).where(eq(c.id, open.id))
     return null
@@ -71,7 +91,7 @@ export async function fastagFromNotice(orgId: string, userId: string, n: FastagN
     .values({ orgId, userId, title, kind: 'task', dueAt, durationMinutes: 10, notes, flexibility: 'flexible' })
     .returning({ id: c.id })
   await scheduleFirstReminder({ orgId, commitmentId: row!.id, fireAt: dueAt })
-  return `${title}${n.balancePaise !== null ? ` (${formatRupees(n.balancePaise)} left)` : ''}`
+  return balance ? t(lang, '{title} ({balance} left)', { title, balance }) : title
 }
 
 /** What the challan is called on Bills: the vehicle and what it was for. */
@@ -101,13 +121,19 @@ async function existingChallan(userId: string, n: ChallanNotice) {
  * issued, when none is — with the challan number to pay it by. Paid: off
  * Bills, the payment kept.
  */
-export async function challanFromNotice(orgId: string, userId: string, n: ChallanNotice, now = new Date()): Promise<string | null> {
+export async function challanFromNotice(
+  orgId: string,
+  userId: string,
+  n: ChallanNotice,
+  now = new Date(),
+  lang: Lang = 'en',
+): Promise<string | null> {
   const existing = await existingChallan(userId, n)
   const name = challanName(n)
   if (n.status === 'paid') {
     if (!existing) return null
     await payBill(userId, existing.id, {}, now)
-    return `${name}: paid`
+    return t(lang, '{name}: paid', { name })
   }
   if (existing) return null
 
@@ -122,12 +148,14 @@ export async function challanFromNotice(orgId: string, userId: string, n: Challa
     repeat: 'none',
     remindDays: 5,
     notes: [
-      n.number ? `Challan No. ${n.number}` : null,
-      n.issuedOn ? `issued ${dayWords(n.issuedOn)}` : null,
-      'Pay at echallan.parivahan.gov.in or your state traffic police site',
+      n.number ? t(lang, 'Challan No. {number}', { number: n.number }) : null,
+      n.issuedOn ? t(lang, 'issued {day}', { day: dayWords(n.issuedOn, lang) }) : null,
+      t(lang, 'Pay at echallan.parivahan.gov.in or your state traffic police site'),
     ]
       .filter(Boolean)
       .join(' · '),
   })
-  return `${name}${n.amountPaise ? `: ${formatRupees(n.amountPaise)}` : ''}, pay by ${dayWords(dueOn)}`
+  return n.amountPaise
+    ? t(lang, '{name}: {amount}, pay by {day}', { name, amount: formatRupees(n.amountPaise), day: dayWords(dueOn, lang) })
+    : t(lang, '{name}, pay by {day}', { name, day: dayWords(dueOn, lang) })
 }

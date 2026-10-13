@@ -1,5 +1,6 @@
 import type { ConflictReport, LocationConflictDTO } from '@cue/shared'
 import { formatDateTime, formatTime } from '../lib/time.ts'
+import { t } from '../lib/i18n.tsx'
 
 /**
  * Shown wherever a time is chosen — the capture screen and the commitment
@@ -39,24 +40,27 @@ export function ConflictWarning({
     <div className={`conflict${locations.some((l) => l.severity === 'impossible') ? '' : ' warn'}`}>
       <strong>
         {locations.some((l) => l.severity === 'impossible')
-          ? 'This looks impractical'
-          : 'Worth a look'}
+          ? t('This looks impractical')
+          : t('Worth a look')}
       </strong>
       {locations.map((l: LocationConflictDTO, i) => (
         <div key={i} className="stack tight">
           <p className="notes">{l.reason}</p>
           {l.travel && (
             <p className="muted small">
-              About {l.travel.distanceKm} km · roughly{' '}
-              {Math.round(l.travel.minutes / 6) / 10} hours · estimated, not a routed journey
+              {t('About {km} km · roughly {hours} hours · estimated, not a routed journey', {
+                km: l.travel.distanceKm,
+                hours: Math.round(l.travel.minutes / 6) / 10,
+              })}
             </p>
           )}
           <p className="muted small">{l.suggestedActions.join(' · ')}</p>
         </div>
       ))}
       <p className="muted small">
-        Nothing is blocked — you can save this anyway. It is only flagged so the decision is
-        yours rather than a surprise later.
+        {t(
+          'Nothing is blocked — you can save this anyway. It is only flagged so the decision is yours rather than a surprise later.',
+        )}
       </p>
     </div>
   )
@@ -69,17 +73,16 @@ export function ConflictWarning({
     <div className={`conflict${suggestedTimeOnly ? ' warn' : ''}`}>
       <strong>
         {suggestedTimeOnly
-          ? `That default time is taken — you already have ${
-              conflicts.length === 1 ? 'something' : `${conflicts.length} things`
-            } then`
-          : `You already have ${
-              conflicts.length === 1 ? 'something' : `${conflicts.length} things`
-            } booked then`}
+          ? conflicts.length === 1
+            ? t('That default time is taken — you already have something then')
+            : t('That default time is taken — you already have {n} things then', { n: conflicts.length })
+          : conflicts.length === 1
+            ? t('You already have something booked then')
+            : t('You already have {n} things booked then', { n: conflicts.length })}
       </strong>
       {suggestedTimeOnly && (
         <p className="muted small">
-          Nothing is blocked — this is just the time the form opened on. Pick another below, or
-          save anyway.
+          {t('Nothing is blocked — this is just the time the form opened on. Pick another below, or save anyway.')}
         </p>
       )}
 
@@ -89,7 +92,7 @@ export function ConflictWarning({
             <span className="commitment-title">{c.title}</span>
             <br />
             <span className="muted small">
-              {formatDateTime(c.dueAt)} · blocks {c.durationMinutes} min
+              {formatDateTime(c.dueAt)} · {t('blocks {n} min', { n: c.durationMinutes })}
               {c.placeName ? ` · ${c.placeName}` : ''}
             </span>
           </li>
@@ -98,7 +101,7 @@ export function ConflictWarning({
 
       {suggestions.length > 0 && (
         <>
-          <span className="label-text">Move this one to a free slot</span>
+          <span className="label-text">{t('Move this one to a free slot')}</span>
           <div className="chips">
             {suggestions.map((s) => (
               <button key={s} className="chip" onClick={() => onUseSuggestion(s)}>
@@ -112,7 +115,10 @@ export function ConflictWarning({
               className="ghost small-btn"
               onClick={() => onShiftExisting(conflicts[0]!.id, firstSuggestion)}
             >
-              Or shift &ldquo;{conflicts[0]!.title}&rdquo; to {formatTime(firstSuggestion)} instead
+              {t('Or shift “{title}” to {time} instead', {
+                title: conflicts[0]!.title,
+                time: formatTime(firstSuggestion),
+              })}
             </button>
           )}
         </>
@@ -124,7 +130,7 @@ export function ConflictWarning({
           checked={allowConflict}
           onChange={(e) => onAllowConflictChange(e.target.checked)}
         />
-        <span>Book both anyway — I know they overlap</span>
+        <span>{t('Book both anyway — I know they overlap')}</span>
       </label>
     </div>
     </>

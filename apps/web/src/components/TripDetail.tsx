@@ -10,6 +10,7 @@ import {
   type TripItemDTO,
 } from '@cue/shared'
 import { ApiError, api } from '../lib/api.ts'
+import { locale, msg, t } from '../lib/i18n.tsx'
 import { Checklist } from './Checklist.tsx'
 
 interface TripDetailResponse {
@@ -19,13 +20,14 @@ interface TripDetailResponse {
 }
 
 const KIND_OF_BOOKING: Record<string, string> = {
-  flight: 'Flight',
-  train: 'Train',
-  bus: 'Bus',
-  hotel: 'Stay',
-  show: 'Show',
-  appointment: 'Booking',
-  other: 'Booking',
+  flight: msg('Flight'),
+  train: msg('Train'),
+  bus: msg('Bus'),
+  hotel: msg('Stay'),
+  // Not 'Show': that line is already the button ("दिखाएँ") in Hindi.
+  show: msg('Event'),
+  appointment: msg('Booking'),
+  other: msg('Booking'),
 }
 
 const dayKey = (iso: string) => {
@@ -33,8 +35,8 @@ const dayKey = (iso: string) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 const dayName = (ymd: string) =>
-  new Date(`${ymd}T00:00:00`).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })
-const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  new Date(`${ymd}T00:00:00`).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })
+const clock = (iso: string) => new Date(iso).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })
 
 type DayRow = { key: string; at: string; item?: TripItemDTO; checkOut?: string }
 
@@ -139,7 +141,7 @@ export function TripDetail({
     } catch (err) {
       setError(
         err instanceof ApiError && err.code === 'already_scheduled'
-          ? 'That one is already on the plan.'
+          ? t('That one is already on the plan.')
           : (err as Error).message,
       )
     } finally {
@@ -157,7 +159,7 @@ export function TripDetail({
       if (r.detached > 0) {
         // Worth saying out loud — people expect a delete to take everything.
         // eslint-disable-next-line no-alert
-        alert(`Trip removed. ${r.detached} plan(s) were kept and detached from it.`)
+        alert(t('Trip removed. {n} plan(s) were kept and detached from it.', { n: r.detached }))
       }
     } catch (err) {
       setError((err as Error).message)
@@ -178,6 +180,8 @@ export function TripDetail({
   const dayCount = trip.nights + 1
   const plan = daysOf(trip, planned.filter((p) => p.id !== trip.packingId))
   const packing = planned.find((p) => p.id === trip.packingId) ?? null
+  const nightsLabel = trip.nights === 1 ? t('1 night') : t('{n} nights', { n: trip.nights })
+  const packFor = trip.nights > 0 ? nightsLabel : t('the day')
 
   async function makePacking(purpose: 'work' | 'leisure') {
     setBusy(true)
@@ -200,26 +204,31 @@ export function TripDetail({
     <section className="repeat-card trip-packing">
       {packing ? (
         <>
-          <strong>Packing list</strong>
+          <strong>{t('Packing list')}</strong>
           <p className="muted small">
-            A reminder {new Date(packing.dueAt).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
-            {packing.checklistCount > 0 ? ` · ${packing.checklistDone} of ${packing.checklistCount} packed` : ''}
+            {t('A reminder {when}', {
+              when: new Date(packing.dueAt).toLocaleString(locale(), { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }),
+            })}
+            {packing.checklistCount > 0
+              ? ` · ${t('{done} of {total} packed', { done: packing.checklistDone, total: packing.checklistCount })}`
+              : ''}
           </p>
           <Checklist commitmentId={packing.id} />
         </>
       ) : (
         <>
-          <strong>What to pack</strong>
+          <strong>{t('What to pack')}</strong>
           <p className="muted small">
-            A list for {trip.nights > 0 ? `${trip.nights} ${trip.nights === 1 ? 'night' : 'nights'}` : 'the day'}
-            {planned.some((p) => p.booking?.type === 'flight') ? ' and a flight' : ''}, with a reminder the evening before you go.
+            {planned.some((p) => p.booking?.type === 'flight')
+              ? t('A list for {span} and a flight, with a reminder the evening before you go.', { span: packFor })
+              : t('A list for {span}, with a reminder the evening before you go.', { span: packFor })}
           </p>
           <div className="row">
             <button className="ghost small-btn" disabled={busy} onClick={() => void makePacking('work')}>
-              For work
+              {t('For work')}
             </button>
             <button className="ghost small-btn" disabled={busy} onClick={() => void makePacking('leisure')}>
-              For a holiday
+              {t('For a holiday')}
             </button>
           </div>
         </>
@@ -234,19 +243,20 @@ export function TripDetail({
         <p className="muted small">
           {trip.startsOn === trip.endsOn
             ? dayName(trip.startsOn)
-            : `${dayName(trip.startsOn)} – ${dayName(trip.endsOn)} · ${trip.nights} ${trip.nights === 1 ? 'night' : 'nights'}`}
+            : `${dayName(trip.startsOn)} – ${dayName(trip.endsOn)} · ${nightsLabel}`}
         </p>
-        <p className="muted small">{STRICTNESS_LABELS[trip.strictness]}</p>
+        <p className="muted small">{t(STRICTNESS_LABELS[trip.strictness])}</p>
       </div>
 
       {waiting.length > 0 && (
         <section className="repeat-card">
           <strong>
-            {waiting.length} saved for {trip.placeLabel}
+            {t('{n} saved for {place}', { n: waiting.length, place: trip.placeLabel })}
           </strong>
           <p className="muted small">
-            Wishes you noted down before this trip existed. They are not on your calendar until
-            you put them there.
+            {t(
+              'Wishes you noted down before this trip existed. They are not on your calendar until you put them there.',
+            )}
           </p>
 
           <ul className="plain">
@@ -257,8 +267,8 @@ export function TripDetail({
                     <span className="commitment-title">{w.title}</span>
                     <br />
                     <span className="muted small">
-                      {w.preferredWindow ? WINDOW_LABELS[w.preferredWindow] : 'Any time'} ·{' '}
-                      {w.durationMinutes} min
+                      {w.preferredWindow ? t(WINDOW_LABELS[w.preferredWindow]) : t('Any time')} ·{' '}
+                      {t('{n} min', { n: w.durationMinutes })}
                     </span>
                   </div>
                   <button
@@ -268,13 +278,13 @@ export function TripDetail({
                       if (w.preferredWindow) setWindow(w.preferredWindow)
                     }}
                   >
-                    {scheduling === w.id ? 'Cancel' : 'Schedule'}
+                    {scheduling === w.id ? t('Cancel') : t('Schedule')}
                   </button>
                 </div>
 
                 {scheduling === w.id && (
                   <div className="stack tight">
-                    <span className="label-text">Which day?</span>
+                    <span className="label-text">{t('Which day?')}</span>
                     <div className="chips">
                       {Array.from({ length: dayCount }, (_, i) => (
                         <button
@@ -282,7 +292,7 @@ export function TripDetail({
                           className={`chip${dayOffset === i ? ' selected' : ''}`}
                           onClick={() => setDayOffset(i)}
                         >
-                          {dayOfTrip(trip, i).toLocaleDateString([], {
+                          {dayOfTrip(trip, i).toLocaleDateString(locale(), {
                             weekday: 'short',
                             day: 'numeric',
                             month: 'short',
@@ -291,15 +301,15 @@ export function TripDetail({
                       ))}
                     </div>
 
-                    <span className="label-text">Roughly when?</span>
+                    <span className="label-text">{t('Roughly when?')}</span>
                     <div className="chips">
-                      {TIME_WINDOWS.map((t) => (
+                      {TIME_WINDOWS.map((slot) => (
                         <button
-                          key={t}
-                          className={`chip${window === t ? ' selected' : ''}`}
-                          onClick={() => setWindow(t)}
+                          key={slot}
+                          className={`chip${window === slot ? ' selected' : ''}`}
+                          onClick={() => setWindow(slot)}
                         >
-                          {WINDOW_LABELS[t]}
+                          {t(WINDOW_LABELS[slot])}
                         </button>
                       ))}
                     </div>
@@ -309,7 +319,7 @@ export function TripDetail({
                       disabled={busy}
                       onClick={() => void schedule(w)}
                     >
-                      {busy ? 'Adding…' : 'Add to the trip'}
+                      {busy ? t('Adding…') : t('Add to the trip')}
                     </button>
                   </div>
                 )}
@@ -321,7 +331,7 @@ export function TripDetail({
               Jaipur, not two reminders. */}
           {waiting.length > 1 && scheduling === null && (
             <div className="stack tight together">
-              <span className="label-text">Or all together, as one plan with a list</span>
+              <span className="label-text">{t('Or all together, as one plan with a list')}</span>
               <div className="chips">
                 {Array.from({ length: dayCount }, (_, i) => (
                   <button
@@ -329,33 +339,35 @@ export function TripDetail({
                     className={`chip${dayOffset === i ? ' selected' : ''}`}
                     onClick={() => setDayOffset(i)}
                   >
-                    {dayOfTrip(trip, i).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {dayOfTrip(trip, i).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })}
                   </button>
                 ))}
               </div>
               <div className="chips">
-                {TIME_WINDOWS.map((t) => (
-                  <button key={t} className={`chip${window === t ? ' selected' : ''}`} onClick={() => setWindow(t)}>
-                    {WINDOW_LABELS[t]}
+                {TIME_WINDOWS.map((slot) => (
+                  <button key={slot} className={`chip${window === slot ? ' selected' : ''}`} onClick={() => setWindow(slot)}>
+                    {t(WINDOW_LABELS[slot])}
                   </button>
                 ))}
               </div>
               <button className="primary small-btn fit-btn" disabled={busy} onClick={() => void planAll()}>
-                {busy ? 'Adding…' : `Add all ${waiting.length} as one plan`}
+                {busy ? t('Adding…') : t('Add all {n} as one plan', { n: waiting.length })}
               </button>
             </div>
           )}
         </section>
       )}
 
-      <span className="label-text">Day by day</span>
+      <span className="label-text">{t('Day by day')}</span>
       {plan.before.length === 0 && plan.days.length === 0 ? (
-        <p className="muted small">Nothing planned yet. Bookings found in your email, and plans you add here, show up day by day.</p>
+        <p className="muted small">
+          {t('Nothing planned yet. Bookings found in your email, and plans you add here, show up day by day.')}
+        </p>
       ) : (
         <div className="trip-days">
           {plan.before.length > 0 && (
             <div className="trip-day">
-              <p className="trip-day-name">Before you go</p>
+              <p className="trip-day-name">{t('Before you go')}</p>
               <ul className="plain">
                 {plan.before.map((p) => (
                   <TripRow key={p.id} item={p} withDay />
@@ -374,7 +386,8 @@ export function TripDetail({
                     <li key={r.key} className="trip-row">
                       <span className="trip-time">{clock(r.at)}</span>
                       <span>
-                        <span className="trip-kind">Stay</span> Check out: {r.checkOut}
+                        <span className="trip-kind">{t('Stay')}</span>{' '}
+                        {t('Check out: {place}', { place: r.checkOut ?? '' })}
                       </span>
                     </li>
                   ),
@@ -391,7 +404,7 @@ export function TripDetail({
 
       <div className="row">
         <button className="ghost" onClick={onClose}>
-          Close
+          {t('Close')}
         </button>
       </div>
 
@@ -399,20 +412,21 @@ export function TripDetail({
         {confirmDelete ? (
           <div className="row">
             <button className="danger-btn" onClick={removeTrip} disabled={busy}>
-              Yes, remove the trip
+              {t('Yes, remove the trip')}
             </button>
             <button className="ghost small-btn" onClick={() => setConfirmDelete(false)}>
-              Keep it
+              {t('Keep it')}
             </button>
           </div>
         ) : (
           <button className="link danger-link" onClick={() => setConfirmDelete(true)}>
-            Remove this trip
+            {t('Remove this trip')}
           </button>
         )}
         <p className="muted small">
-          Anything planned on it is kept and simply detached — cancelling a journey does not
-          cancel the appointment you filed under it.
+          {t(
+            'Anything planned on it is kept and simply detached — cancelling a journey does not cancel the appointment you filed under it.',
+          )}
         </p>
       </div>
     </div>
@@ -424,9 +438,11 @@ function TripRow({ item, withDay }: { item: TripItemDTO; withDay?: boolean }) {
   const done = item.status === 'done' || item.status === 'cancelled'
   const flexible = item.flexibility === 'flexible' && item.preferredWindow
   const facts = [
-    item.booking?.leaveAt ? `leave by ${clock(item.booking.leaveAt)}` : null,
-    item.booking?.type === 'hotel' && item.booking.endsOn ? `check out ${dayName(item.booking.endsOn)}` : null,
-    item.booking?.ref ? `Ref ${item.booking.ref}` : null,
+    item.booking?.leaveAt ? t('leave by {time}', { time: clock(item.booking.leaveAt) }) : null,
+    item.booking?.type === 'hotel' && item.booking.endsOn
+      ? t('check out {day}', { day: dayName(item.booking.endsOn) })
+      : null,
+    item.booking?.ref ? t('Ref {ref}', { ref: item.booking.ref }) : null,
     item.booking?.provider ?? null,
   ].filter(Boolean)
   // "Flight 6E 512 …" says what it is already; the tag is for "Check in: Taj".
@@ -436,10 +452,10 @@ function TripRow({ item, withDay }: { item: TripItemDTO; withDay?: boolean }) {
     <li className={`trip-row${done ? ' is-done' : ''}`}>
       <span className="trip-time">
         {withDay ? `${dayName(dayKey(item.dueAt))}, ` : ''}
-        {flexible ? WINDOW_LABELS[item.preferredWindow!] : clock(item.dueAt)}
+        {flexible ? t(WINDOW_LABELS[item.preferredWindow!]) : clock(item.dueAt)}
       </span>
       <span>
-        {tag && <span className="trip-kind">{tag}</span>} {item.title}
+        {tag && <span className="trip-kind">{t(tag)}</span>} {item.title}
         {facts.length > 0 && <span className="muted small trip-facts">{facts.join(' · ')}</span>}
       </span>
     </li>

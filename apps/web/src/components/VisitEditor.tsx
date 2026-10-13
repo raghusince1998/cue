@@ -8,8 +8,16 @@ import {
 } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { formatDateTime, toLocalInputValue } from '../lib/time.ts'
+import { msg, t } from '../lib/i18n.tsx'
 import { VoiceNotes } from './VoiceNotes.tsx'
 import { DictateButton } from './DictateButton.tsx'
+
+/** How each purpose reads on its chip. Show with t(). */
+const PURPOSE_LABELS: Record<Purpose, string> = {
+  business: msg('Business'),
+  personal: msg('Personal'),
+  unknown: msg('Not sure'),
+}
 
 export function VisitEditor({
   visitId,
@@ -101,9 +109,9 @@ export function VisitEditor({
   return (
     <div className="stack tight">
       <label>
-        Place
+        {t('Place')}
         <select value={placeId ?? ''} onChange={(e) => setPlaceId(e.target.value || null)}>
-          <option value="">— none —</option>
+          <option value="">{t('— none —')}</option>
           {places.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -112,7 +120,7 @@ export function VisitEditor({
         </select>
       </label>
 
-      <span className="label-text">Purpose</span>
+      <span className="label-text">{t('Purpose')}</span>
       <div className="chips">
         {PURPOSE.map((p) => (
           <button
@@ -120,17 +128,17 @@ export function VisitEditor({
             className={`chip${purpose === p ? ' selected' : ''}`}
             onClick={() => setPurpose(p)}
           >
-            {p === 'unknown' ? 'Not sure' : p[0]!.toUpperCase() + p.slice(1)}
+            {t(PURPOSE_LABELS[p])}
           </button>
         ))}
       </div>
 
       <label>
-        Who was it with?
+        {t('Who was it with?')}
         <input value={contactName} onChange={(e) => setContactName(e.target.value)} />
       </label>
 
-      <span className="label-text">Outcome</span>
+      <span className="label-text">{t('Outcome')}</span>
       <div className="chips">
         {OUTCOME_OPTIONS.map((o) => (
           <button
@@ -138,24 +146,24 @@ export function VisitEditor({
             className={`chip${outcome === o ? ' selected' : ''}`}
             onClick={() => setOutcome(outcome === o ? '' : o)}
           >
-            {o}
+            {t(o)}
           </button>
         ))}
       </div>
 
       <label>
-        Notes
+        {t('Notes')}
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} />
       </label>
       <div className="row">
         <DictateButton value={notes} onChange={setNotes} />
       </div>
 
-      <span className="label-text">Voice notes</span>
+      <span className="label-text">{t('Voice notes')}</span>
       <VoiceNotes interactionId={visitId} />
 
       <label>
-        When did this happen?
+        {t('When did this happen?')}
         <input
           type="datetime-local"
           value={toLocalInputValue(startedAt)}
@@ -168,13 +176,15 @@ export function VisitEditor({
 
       {linked.length > 0 && (
         <>
-          <span className="label-text">Follow-ups from this visit</span>
+          <span className="label-text">{t('Follow-ups from this visit')}</span>
           <ul className="plain">
             {linked.map((c) => (
               <li key={c.id}>
                 <button className="link" onClick={() => onEditCommitment(c.id)}>
                   {c.title} · {formatDateTime(c.dueAt)}
-                  {c.status !== 'pending' ? ` (${c.status})` : ''}
+                  {c.status !== 'pending'
+                    ? ` (${c.status === 'done' ? t('done') : c.status === 'cancelled' ? t('cancelled') : c.status})`
+                    : ''}
                 </button>
               </li>
             ))}
@@ -186,10 +196,10 @@ export function VisitEditor({
 
       <div className="row">
         <button className="primary" onClick={save} disabled={busy}>
-          {busy ? 'Saving…' : 'Save changes'}
+          {busy ? t('Saving…') : t('Save changes')}
         </button>
         <button className="ghost" onClick={onClose} disabled={busy}>
-          Cancel
+          {t('Cancel')}
         </button>
       </div>
 
@@ -197,21 +207,28 @@ export function VisitEditor({
         {confirmDelete ? (
           <div className="row">
             <button className="danger-btn" onClick={remove} disabled={busy}>
-              Yes, delete it
+              {t('Yes, delete it')}
             </button>
             <button className="ghost small-btn" onClick={() => setConfirmDelete(false)}>
-              Keep it
+              {t('Keep it')}
             </button>
           </div>
         ) : (
           <button className="link danger-link" onClick={() => setConfirmDelete(true)}>
-            Delete this entry
+            {t('Delete this entry')}
           </button>
         )}
         <p className="muted small">
-          {linked.length > 0
-            ? `The ${linked.length} follow-up${linked.length === 1 ? '' : 's'} above will survive — a promise you made does not disappear because you deleted the note about the meeting.`
-            : 'This removes the record only.'}
+          {linked.length === 0
+            ? t('This removes the record only.')
+            : linked.length === 1
+              ? t(
+                  'The 1 follow-up above will survive — a promise you made does not disappear because you deleted the note about the meeting.',
+                )
+              : t(
+                  'The {n} follow-ups above will survive — a promise you made does not disappear because you deleted the note about the meeting.',
+                  { n: linked.length },
+                )}
         </p>
       </div>
     </div>

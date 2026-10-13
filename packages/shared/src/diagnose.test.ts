@@ -138,3 +138,15 @@ test('an identical title and sentence is never duplicated', () => {
   assert.equal(originalIfInformative('Team standup', 'Team standup'), null)
   assert.equal(originalIfInformative('  Team standup ', 'team standup'), null)
 })
+
+test('in Hindi, it says what is missing in Hindi', () => {
+  const both = diagnose(
+    'hi please block my calendar for of November for the pause awareness session at Volkswagen Pune on site the session time will be 22330 p.m',
+    'hi',
+  )
+  assert.equal(both?.message, 'बस थोड़ा और — अभी November की तारीख, और एक सही समय चाहिए। "22330 p.m" को मैं समय की तरह नहीं पढ़ पाया।')
+  assert.equal(both?.likelyPlace, 'Volkswagen Pune', 'what it recovers is the same')
+  assert.equal(diagnose('team offsite in November at Pune', 'hi')?.message, 'बस थोड़ा और — अभी November की तारीख चाहिए।')
+  // English unchanged.
+  assert.match(diagnose('team offsite in November at Pune', 'en')!.message, /^Almost — I still need which day of November\.$/)
+})

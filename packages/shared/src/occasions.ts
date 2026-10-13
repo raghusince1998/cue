@@ -40,11 +40,11 @@ export function daysUntil(date: Date, now = new Date()): number {
   return Math.round((date.getTime() - today.getTime()) / DAY_MS)
 }
 
-/** "14 Mar" from "03-14". */
-export function monthDayLabel(monthDay: string): string {
+/** "14 Mar" from "03-14" — or, given 'hi-IN', "14 मार्च". */
+export function monthDayLabel(monthDay: string, locale = 'en-IN'): string {
   const m = MONTH_DAY.exec(monthDay)
   if (!m) return monthDay
-  return new Date(2000, Number(m[1]) - 1, Number(m[2])).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+  return new Date(2000, Number(m[1]) - 1, Number(m[2])).toLocaleDateString(locale, { day: 'numeric', month: 'short' })
 }
 
 export const OCCASION_MESSAGES: Record<OccasionKind, string> = {

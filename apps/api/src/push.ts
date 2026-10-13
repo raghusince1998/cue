@@ -1,5 +1,6 @@
 import webpush from 'web-push'
 import { eq } from 'drizzle-orm'
+import type { Lang } from '@cue/shared'
 import { db, schema } from './db/index.ts'
 import { env, pushConfigured } from './env.ts'
 
@@ -28,6 +29,12 @@ export interface PushPayload {
   commitmentId?: string
   /** When present the notification shows a Call action. */
   phone?: string
+  /**
+   * The language the person reads Cue in, so the service worker can label
+   * its buttons ("Mark done", "Snooze 15m") to match. Filled in from their
+   * account when the caller leaves it out.
+   */
+  lang?: Lang
 }
 
 /**
@@ -42,9 +49,20 @@ export async function sendToUser(userId: string, payload: PushPayload): Promise<
   }
 
   const subs = await db
-    .select()
+    .select({
+      id: schema.pushSubscriptions.id,
+      endpoint: schema.pushSubscriptions.endpoint,
+      p256dh: schema.pushSubscriptions.p256dh,
+      auth: schema.pushSubscriptions.auth,
+      language: schema.users.language,
+    })
     .from(schema.pushSubscriptions)
+    .leftJoin(schema.users, eq(schema.users.id, schema.pushSubscriptions.userId))
     .where(eq(schema.pushSubscriptions.userId, userId))
+
+  // Read along with the subscriptions, so it costs no extra round trip.
+  const lang: Lang = payload.lang ?? (subs[0]?.language === 'hi' ? 'hi' : 'en')
+  const message = JSON.stringify({ ...payload, lang })
 
   let delivered = 0
 
@@ -56,7 +74,7 @@ export async function sendToUser(userId: string, payload: PushPayload): Promise<
             endpoint: sub.endpoint,
             keys: { p256dh: sub.p256dh, auth: sub.auth },
           },
-          JSON.stringify(payload),
+          message,
           SEND_OPTIONS,
         )
         delivered += 1

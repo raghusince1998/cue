@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, lt, lte, or } from 'drizzle-orm'
-import { DEFAULT_WINDOW_HOURS, type TimeWindow } from '@cue/shared'
+import { DEFAULT_WINDOW_HOURS, type Lang, type TimeWindow } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { langOf, msg, t } from '../i18n.ts'
 
 /**
  * Turning "sometime tomorrow" into a time, without asking.
@@ -48,8 +49,16 @@ interface Busy {
   endsAt: Date
 }
 
-function hhmm(d: Date): string {
-  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+function hhmm(d: Date, lang: Lang): string {
+  return d.toLocaleTimeString(lang === 'hi' ? 'hi-IN' : [], { hour: 'numeric', minute: '2-digit' })
+}
+
+/** A part of the day, inside a sentence: "No morning gap long enough…". */
+const WINDOW_WORDS: Record<TimeWindow, string> = {
+  morning: msg('morning'),
+  afternoon: msg('afternoon'),
+  evening: msg('evening'),
+  night: msg('night'),
 }
 
 /**
@@ -74,8 +83,9 @@ function gapsIn(busy: Busy[], dayStart: Date, dayEnd: Date): Busy[] {
   return gaps.filter((g) => g.endsAt.getTime() - g.startsAt.getTime() >= MIN_GAP_MINUTES * 60_000)
 }
 
-/** Builds a plan for the day after `now`, writing nothing. */
-export async function planTomorrow(userId: string, now = new Date()): Promise<TomorrowPlan> {
+/** Builds a plan for the day after `now`, writing nothing. Its reasons are in the person's language. */
+export async function planTomorrow(userId: string, now = new Date(), language?: Lang): Promise<TomorrowPlan> {
+  const lang = language ?? (await langOf(userId))
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 8, 0)
   const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 21, 0)
   const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
@@ -147,8 +157,8 @@ export async function planTomorrow(userId: string, now = new Date()): Promise<To
         commitmentId: item.id,
         title: item.title,
         because: window
-          ? `No ${window} gap long enough for ${item.durationMinutes} minutes.`
-          : `No gap long enough for ${item.durationMinutes} minutes.`,
+          ? t(lang, 'No {window} gap long enough for {n} minutes.', { window: t(lang, WINDOW_WORDS[window]), n: item.durationMinutes })
+          : t(lang, 'No gap long enough for {n} minutes.', { n: item.durationMinutes }),
       })
       continue
     }
@@ -172,8 +182,12 @@ export async function planTomorrow(userId: string, now = new Date()): Promise<To
       at: start.toISOString(),
       durationMinutes: item.durationMinutes,
       because: window
-        ? `Your first free ${window} stretch, ${hhmm(start)} to ${hhmm(reportedEnd)}.`
-        : `You are clear from ${hhmm(start)} to ${hhmm(reportedEnd)}.`,
+        ? t(lang, 'Your first free {window} stretch, {from} to {to}.', {
+            window: t(lang, WINDOW_WORDS[window]),
+            from: hhmm(start, lang),
+            to: hhmm(reportedEnd, lang),
+          })
+        : t(lang, 'You are clear from {from} to {to}.', { from: hhmm(start, lang), to: hhmm(reportedEnd, lang) }),
     })
 
     // Split the gap around what was just placed, rather than moving its start

@@ -5,6 +5,7 @@ import { DictateButton } from './DictateButton.tsx'
 import { announceChange } from '../lib/changes.ts'
 import { examplesFor, hasWork, type Sphere } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
+import { locale, msg, t } from '../lib/i18n.tsx'
 import {
   NO_CHOICES,
   QuickLinks,
@@ -117,24 +118,29 @@ interface Frequent {
   count: number
 }
 
+/** Shown with t(). */
 const KIND_WORD: Record<Plan['kind'], string> = {
-  commitment: 'Planned',
-  intention: 'Saved for later',
-  trip: 'Trip planned',
-  recurrence: 'Repeating',
-  expense: 'Expense',
-  owed: 'Owed to you',
-  tracker: 'Tracking',
-  exam: 'Tracking',
-  bill: 'Bill',
-  delivery: 'Parcel',
-  needsTime: 'Understood',
-  needsPerson: 'Which one?',
+  commitment: msg('Planned'),
+  intention: msg('Saved for later'),
+  trip: msg('Trip planned'),
+  recurrence: msg('Repeating'),
+  expense: msg('Expense'),
+  owed: msg('Owed to you'),
+  tracker: msg('Tracking'),
+  exam: msg('Tracking'),
+  bill: msg('Bill'),
+  delivery: msg('Parcel'),
+  needsTime: msg('Understood'),
+  needsPerson: msg('Which one?'),
   unclear: '',
 }
 
-/** One tap each, rather than a date picker for a question this small. */
-const WHEN_CHIPS = ['tomorrow 10am', 'tomorrow 3pm', 'friday 11am', 'next monday 10am']
+/**
+ * One tap each, rather than a date picker for a question this small. The
+ * label is shown with t(); the line itself stays English, since that is what
+ * the sentence reader reads.
+ */
+const WHEN_CHIPS = [msg('tomorrow 10am'), msg('tomorrow 3pm'), msg('friday 11am'), msg('next monday 10am')]
 
 export function QuickAdd({
   onSaved,
@@ -283,7 +289,7 @@ export function QuickAdd({
           })
         } else if (err instanceof ApiError && err.status === 422) {
           const data = err.data as { problem?: string }
-          setError(data.problem ?? 'I could not read that.')
+          setError(data.problem ?? t('I could not read that.'))
         } else {
           setError((err as Error).message)
         }
@@ -348,20 +354,20 @@ export function QuickAdd({
           }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder={inline ? `Plan something: ${examples[0]}` : examples[0]}
-          aria-label="What do you want to plan?"
+          placeholder={inline ? t('Plan something: {example}', { example: examples[0] ?? '' }) : examples[0]}
+          aria-label={t('What do you want to plan?')}
           autoFocus={autoFocus}
         />
-        <DictateButton value={text} onChange={setText} autoStart={listen} label="Speak" />
+        <DictateButton value={text} onChange={setText} autoStart={listen} label={t('Speak')} />
         <button className="primary" onClick={() => void save()} disabled={!ready || busy}>
-          {busy ? 'Saving…' : 'Plan it'}
+          {busy ? t('Saving…') : t('Plan it')}
         </button>
       </div>
 
       {/* Nothing typed: the fastest capture is the one with no typing at all. */}
       {!text && !saved && frequent.length > 0 && (!inline || focused) && (
         <div className="quick-frequent">
-          <span className="muted small">You often add</span>
+          <span className="muted small">{t('You often add')}</span>
           {frequent.map((f) => (
             <button key={f.title} className="chip" onClick={() => setText(`${f.title} `)}>
               {f.title}
@@ -372,7 +378,7 @@ export function QuickAdd({
 
       {!text && !saved && frequent.length === 0 && (!inline || focused) && (
         <p className="muted small quick-hint">
-          One line is enough.{' '}
+          {t('One line is enough.')}{' '}
           {[
             ...examples,
             'gym every mon wed fri at 7am',
@@ -383,8 +389,10 @@ export function QuickAdd({
               {i > 0 && ' · '}&ldquo;{x}&rdquo;
             </span>
           ))}
-          . Or paste a shop&rsquo;s delivery message, or a train, flight, hotel or movie booking
-          confirmation, and Cue keeps track of it.
+          .{' '}
+          {t(
+            'Or paste a shop’s delivery message, or a train, flight, hotel or movie booking confirmation, and Cue keeps track of it.',
+          )}
         </p>
       )}
 
@@ -392,14 +400,14 @@ export function QuickAdd({
       {needsPerson && plan && !saved && (
         <div className="quick-plan is-asking">
           <div>
-            <span className="quick-kind">{KIND_WORD.needsPerson}</span>
+            <span className="quick-kind">{t(KIND_WORD.needsPerson)}</span>
             <strong>{plan.title}</strong>
             <p className="muted small">
               {plan.question
                 ? plan.choices?.length
                   ? plan.question
-                  : `${plan.question} Type their name in place of “${plan.personName}”.`
-                : `${plan.people.length} people match “${plan.personName}”.`}
+                  : `${plan.question} ${t('Type their name in place of “{name}”.', { name: plan.personName ?? '' })}`
+                : t('{n} people match “{name}”.', { n: plan.people.length, name: plan.personName ?? '' })}
             </p>
             <div className="quick-frequent">
               {plan.choices?.map((c) => (
@@ -416,8 +424,8 @@ export function QuickAdd({
                     // preview resolves to exactly one.
                     // The article goes with the word: replacing "plumber"
                     // alone leaves "call the Ramesh Yadav".
-                    setText((t) =>
-                      t.replace(
+                    setText((line) =>
+                      line.replace(
                         new RegExp(`(?:\\b(?:the|my|our)\\s+)?\\b${plan.personName}\\b`, 'i'),
                         person.name,
                       ),
@@ -438,20 +446,20 @@ export function QuickAdd({
       {needsTime && plan && !saved && (
         <div className="quick-plan is-asking">
           <div>
-            <span className="quick-kind">{KIND_WORD.needsTime}</span>
+            <span className="quick-kind">{t(KIND_WORD.needsTime)}</span>
             <strong>{plan.title}</strong>
             <ul className="quick-assumptions">
               {plan.assumptions.map((a) => (
                 <li key={a}>{a}</li>
               ))}
             </ul>
-            <p className="muted small">{plan.question ?? 'When is it?'}</p>
+            <p className="muted small">{plan.question ?? t('When is it?')}</p>
             <div className="quick-frequent">
               {(plan.choices?.length
                 ? plan.choices
                 : plan.question
                   ? []
-                  : WHEN_CHIPS.map((c) => ({ label: c, line: `${text.trim()} ${c}` }))
+                  : WHEN_CHIPS.map((c) => ({ label: t(c), line: `${text.trim()} ${c}` }))
               ).map((c) => (
                 <button key={c.line} className="chip" onClick={() => setText(c.line)}>
                   {c.label}
@@ -469,14 +477,14 @@ export function QuickAdd({
             <>
               <strong>{plan.problem}</strong>
               <button className="ghost small-btn" onClick={() => onFillIn(text)}>
-                Fill it in myself
+                {t('Fill it in myself')}
               </button>
             </>
           ) : (
             <>
               <div>
-                <span className="quick-kind">{plan.booking ? 'Booking' : KIND_WORD[plan.kind]}</span>
-                {reading && <span className="quick-reading">Reading it more carefully…</span>}
+                <span className="quick-kind">{plan.booking ? t('Booking') : t(KIND_WORD[plan.kind])}</span>
+                {reading && <span className="quick-reading">{t('Reading it more carefully…')}</span>}
                 <strong>{plan.summary}</strong>
                 {plan.assumptions.length > 0 && (
                   <ul className="quick-assumptions">
@@ -487,12 +495,12 @@ export function QuickAdd({
                 )}
                 {/* Which half of the day it is part of, as read, and one tap to change. */}
                 {working && (plan.kind === 'commitment' || plan.kind === 'recurrence') && (
-                  <div className="sphere-pick" role="group" aria-label="Work or personal">
+                  <div className="sphere-pick" role="group" aria-label={t('Work or personal')}>
                     {(['work', 'personal'] as const).map((s) => {
                       const on = (sphere ?? plan.sphere) === s
                       return (
                         <button key={s} className={`sphere-tag is-${s}${on ? ' is-on' : ''}`} aria-pressed={on} onClick={() => setSphere(s)}>
-                          {s === 'work' ? 'Work' : 'Personal'}
+                          {s === 'work' ? t('Work') : t('Personal')}
                         </button>
                       )
                     })}
@@ -507,7 +515,7 @@ export function QuickAdd({
 
       {/* A better plan, offered: nothing changes unless it is accepted. */}
       {plan && ready && !saved && (plan.suggestions ?? []).length > 0 && (
-        <ul className="quick-suggestions" aria-label="Suggestions">
+        <ul className="quick-suggestions" aria-label={t('Suggestions')}>
           {plan.suggestions!.map((s) => {
             const on = accepted.includes(s.id)
             return (
@@ -543,21 +551,21 @@ export function QuickAdd({
         <div className="quick-plan is-problem">
           <div>
             <strong>
-              That clashes with {clash.titles.join(', ') || 'something already booked'}
+              {t('That clashes with {what}', { what: clash.titles.join(', ') || t('something already booked') })}
             </strong>
             {clash.suggestions.length > 0 && (
               <p className="muted small">
-                Free at{' '}
-                {clash.suggestions
-                  .slice(0, 3)
-                  .map((s) => new Date(s).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))
-                  .join(', ')}
-                .
+                {t('Free at {times}.', {
+                  times: clash.suggestions
+                    .slice(0, 3)
+                    .map((s) => new Date(s).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' }))
+                    .join(', '),
+                })}
               </p>
             )}
           </div>
           <button className="ghost small-btn" onClick={() => void save(true)} disabled={busy}>
-            Book it anyway
+            {t('Book it anyway')}
           </button>
         </div>
       )}
@@ -566,25 +574,31 @@ export function QuickAdd({
         <div className="quick-saved">
           <div>
             <strong>
-              {saved.booking ? 'Booked' : KIND_WORD[saved.kind]} · {saved.summary}
+              {saved.booking ? t('Booked') : t(KIND_WORD[saved.kind])} · {saved.summary}
             </strong>
             {saved.assumptions.length > 0 && (
               <p className="muted small">{saved.assumptions.join(' ')}</p>
             )}
             {(saved.acceptedActions ?? []).length > 0 && (
-              <p className="muted small">Also done: {saved.acceptedActions!.join(' · ')}.</p>
+              <p className="muted small">{t('Also done: {actions}.', { actions: saved.acceptedActions!.join(' · ') })}</p>
             )}
             {saved.savedTrip && saved.kind === 'commitment' && (
               <p className="muted small">
                 &#9992;{' '}
                 {saved.savedTrip.created
-                  ? `Trip to ${saved.savedTrip.placeLabel} added for ${range(saved.savedTrip.startsOn, saved.savedTrip.endsOn)}.`
-                  : `Part of your ${saved.savedTrip.placeLabel} trip, ${range(saved.savedTrip.startsOn, saved.savedTrip.endsOn)}.`}
+                  ? t('Trip to {place} added for {dates}.', {
+                      place: saved.savedTrip.placeLabel,
+                      dates: range(saved.savedTrip.startsOn, saved.savedTrip.endsOn),
+                    })
+                  : t('Part of your {place} trip, {dates}.', {
+                      place: saved.savedTrip.placeLabel,
+                      dates: range(saved.savedTrip.startsOn, saved.savedTrip.endsOn),
+                    })}
               </p>
             )}
             {saved.kind === 'exam' && (
               <p className="muted small">
-                On the Exams page, its dates as reminders.{' '}
+                {t('On the Exams page, its dates as reminders.')}{' '}
                 <button
                   className="link small"
                   onClick={() => {
@@ -593,20 +607,23 @@ export function QuickAdd({
                     navigate('/exams')
                   }}
                 >
-                  Open Exams
+                  {t('Open Exams')}
                 </button>
               </p>
             )}
             {saved.scheduledOnTrip && (
               <p className="muted small">
-                &#9992; On your {saved.scheduledOnTrip.placeLabel} trip, the evening of{' '}
-                {range(saved.scheduledOnTrip.startsOn, saved.scheduledOnTrip.startsOn)}.
+                &#9992;{' '}
+                {t('On your {place} trip, the evening of {date}.', {
+                  place: saved.scheduledOnTrip.placeLabel,
+                  date: range(saved.scheduledOnTrip.startsOn, saved.scheduledOnTrip.startsOn),
+                })}
               </p>
             )}
           </div>
           <div className="row">
             <button className="ghost small-btn" onClick={() => void undo()} disabled={busy}>
-              Undo
+              {t('Undo')}
             </button>
             <button
               className="ghost small-btn"
@@ -615,7 +632,7 @@ export function QuickAdd({
                 onDone()
               }}
             >
-              Done
+              {t('Done')}
             </button>
           </div>
         </div>

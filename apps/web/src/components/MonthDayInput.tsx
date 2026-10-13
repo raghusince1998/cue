@@ -1,6 +1,21 @@
 import { useState } from 'react'
+import { msg, t } from '../lib/i18n.tsx'
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** Shown with t(). */
+const MONTHS = [
+  msg('Jan'),
+  msg('Feb'),
+  msg('Mar'),
+  msg('Apr'),
+  msg('May'),
+  msg('Jun'),
+  msg('Jul'),
+  msg('Aug'),
+  msg('Sep'),
+  msg('Oct'),
+  msg('Nov'),
+  msg('Dec'),
+]
 const LONGEST = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 /**
@@ -34,25 +49,25 @@ export function MonthDayInput({
     <div className="month-day">
       <span className="label-text">{label}</span>
       <div className="row">
-        <select value={day || ''} onChange={(e) => set(month, Number(e.target.value))} aria-label={`${label} day`}>
-          <option value="">Day</option>
+        <select value={day || ''} onChange={(e) => set(month, Number(e.target.value))} aria-label={t('{label} day', { label })}>
+          <option value="">{t('Day')}</option>
           {Array.from({ length: 31 }, (_, i) => (
             <option key={i + 1} value={i + 1}>
               {i + 1}
             </option>
           ))}
         </select>
-        <select value={month || ''} onChange={(e) => set(Number(e.target.value), day)} aria-label={`${label} month`}>
-          <option value="">Month</option>
+        <select value={month || ''} onChange={(e) => set(Number(e.target.value), day)} aria-label={t('{label} month', { label })}>
+          <option value="">{t('Month')}</option>
           {MONTHS.map((m, i) => (
             <option key={m} value={i + 1}>
-              {m}
+              {t(m)}
             </option>
           ))}
         </select>
         {(month > 0 || day > 0) && (
           <button className="link small" onClick={() => set(0, 0)}>
-            Clear
+            {t('Clear')}
           </button>
         )}
       </div>

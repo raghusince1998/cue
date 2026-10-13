@@ -3,6 +3,7 @@ import { CALL_OUTCOMES, CALL_OUTCOME_LABELS, shortName, type CallOutcome } from 
 import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import type { PendingCall } from '../lib/calls.ts'
+import { t } from '../lib/i18n.tsx'
 import { dueChoices } from './WrapUp.tsx'
 import { QuickMessage } from './QuickMessage.tsx'
 
@@ -44,7 +45,8 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
   const typedPhone = /^[+\d][\d\s-]{5,}$/.test(typed) ? typed : null
   const typedName = typedPhone ? null : typed || null
   const who = call.name ?? (typed || call.phone)
-  const short = call.name ? shortName(call.name) : typedName ? shortName(typedName) : 'them'
+  // Nobody named: "them", which Hindi says differently, so its own lines below.
+  const short = call.name ? shortName(call.name) : typedName ? shortName(typedName) : null
   const answered = outcome === 'spoke' || outcome === 'message'
 
   function pick(o: CallOutcome) {
@@ -88,12 +90,13 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
     }
   }
 
-  const dueLabel = choices.find((c) => c.key === due)?.label.toLowerCase() ?? 'tomorrow'
+  const dueChoice = choices.find((c) => c.key === due)
+  const dueLabel = dueChoice ? t(dueChoice.label).toLowerCase() : t('tomorrow')
 
   if (messaging) {
     return (
       <div className="stack tight call-log">
-        <p className="muted small">Saved. Now a message to {who}:</p>
+        <p className="muted small">{t('Saved. Now a message to {name}:', { name: who })}</p>
         <QuickMessage
           to={{
             name: call.name ?? typedName,
@@ -103,7 +106,7 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
           onDone={() => onDone(true)}
         />
         <button className="ghost small-btn fit-btn" onClick={() => onDone(true)}>
-          Done
+          {t('Done')}
         </button>
       </div>
     )
@@ -113,11 +116,11 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
     <div className="stack tight call-log">
       {unknown && !call.phone ? (
         <label>
-          Who was it?
+          {t('Who was it?')}
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="A name from People, or a number"
+            placeholder={t('A name from People, or a number')}
             list="call-people"
             autoFocus
           />
@@ -134,7 +137,12 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
             {call.name && call.phone ? <span className="muted small"> · {call.phone}</span> : null}
           </p>
           {unknown && (
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Who was it? (optional)" aria-label="Who" />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t('Who was it? (optional)')}
+              aria-label={t('Who')}
+            />
           )}
         </>
       )}
@@ -142,7 +150,7 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
       <div className="chips">
         {CALL_OUTCOMES.map((o) => (
           <button key={o} className={`chip${outcome === o ? ' selected' : ''}`} onClick={() => pick(o)}>
-            {CALL_OUTCOME_LABELS[o]}
+            {t(CALL_OUTCOME_LABELS[o])}
           </button>
         ))}
       </div>
@@ -154,26 +162,26 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              placeholder="What was said? (optional)"
-              aria-label="Notes"
+              placeholder={t('What was said? (optional)')}
+              aria-label={t('Notes')}
             />
           )}
 
           {call.commitmentId && call.commitmentTitle && answered && (
             <label className="checkbox">
               <input type="checkbox" checked={markDone} onChange={(e) => setMarkDone(e.target.checked)} />
-              <span>Mark &ldquo;{call.commitmentTitle}&rdquo; done</span>
+              <span>{t('Mark “{title}” done', { title: call.commitmentTitle })}</span>
             </label>
           )}
 
-          <span className="label-text">What next?</span>
+          <span className="label-text">{t('What next?')}</span>
           <div className="chips">
             {(
               [
-                ['none', 'Nothing'],
-                ['again', 'Call again'],
-                ['followup', 'Something to do'],
-                ['waiting', `Waiting on ${short}`],
+                ['none', t('Nothing')],
+                ['again', t('Call again')],
+                ['followup', t('Something to do')],
+                ['waiting', short ? t('Waiting on {name}', { name: short }) : t('Waiting on them')],
               ] as [Next, string][]
             ).map(([k, label]) => (
               <button key={k} className={`chip${next === k ? ' selected' : ''}`} onClick={() => setNext(k)}>
@@ -182,29 +190,35 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
             ))}
           </div>
           {next === 'followup' && (
-            <input value={what} onChange={(e) => setWhat(e.target.value)} placeholder="e.g. Send the brochure" aria-label="What to do" autoFocus />
+            <input
+              value={what}
+              onChange={(e) => setWhat(e.target.value)}
+              placeholder={t('e.g. Send the brochure')}
+              aria-label={t('What to do')}
+              autoFocus
+            />
           )}
           {next === 'waiting' && (
             <input
               value={what}
               onChange={(e) => setWhat(e.target.value)}
-              placeholder={`What will ${short} send or do?`}
-              aria-label="What they will do"
+              placeholder={short ? t('What will {name} send or do?', { name: short }) : t('What will they send or do?')}
+              aria-label={t('What they will do')}
               autoFocus
             />
           )}
           {next !== 'none' && (
             <div className="wrapup-due">
-              <span className="muted small">{next === 'waiting' ? 'Check in' : 'When'}</span>
+              <span className="muted small">{next === 'waiting' ? t('Check in') : t('When')}</span>
               {choices.map((c) => (
                 <button key={c.key} className={`chip${due === c.key ? ' selected' : ''}`} onClick={() => setDue(c.key)}>
-                  {c.label}
+                  {t(c.label)}
                 </button>
               ))}
             </div>
           )}
           {next === 'again' && call.commitmentId && call.commitmentTitle && (
-            <p className="muted small">&ldquo;{call.commitmentTitle}&rdquo; moves to {dueLabel}.</p>
+            <p className="muted small">{t('“{title}” moves to {when}.', { title: call.commitmentTitle, when: dueLabel })}</p>
           )}
         </>
       )}
@@ -213,13 +227,13 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
 
       <div className="row">
         <button className="primary" onClick={() => void save()} disabled={busy || !outcome}>
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? t('Saving…') : t('Save')}
         </button>
         <button className="ghost" onClick={() => void save(true)} disabled={busy || !outcome}>
-          Save and send a message
+          {t('Save and send a message')}
         </button>
         <button className="ghost" onClick={() => onDone(false)} disabled={busy}>
-          Not now
+          {t('Not now')}
         </button>
       </div>
     </div>

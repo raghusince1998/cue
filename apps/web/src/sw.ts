@@ -37,6 +37,19 @@ interface ReminderPayload {
   url?: string
   commitmentId?: string
   phone?: string
+  /** The language the person reads Cue in; the server sends it with every push. */
+  lang?: string
+}
+
+/**
+ * The buttons' words. The worker cannot read the app's language setting (it
+ * lives in the page), and pulling the app's translations in here would make
+ * this file large, so the server says which language and the three labels
+ * live here.
+ */
+const ACTION_LABELS = {
+  en: { call: 'Call', done: 'Mark done', snooze: 'Snooze 15m' },
+  hi: { call: 'कॉल करें', done: 'हो गया', snooze: '15 मिनट बाद' },
 }
 
 /**
@@ -62,6 +75,7 @@ self.addEventListener('push', (event) => {
     payload = { title: 'Cue', body: event.data.text() }
   }
 
+  const words = payload.lang === 'hi' ? ACTION_LABELS.hi : ACTION_LABELS.en
   const options: SwNotificationOptions = {
     body: payload.body,
     tag: payload.tag,
@@ -81,13 +95,13 @@ self.addEventListener('push', (event) => {
       ? []
       : payload.phone
       ? [
-          { action: 'call', title: 'Call' },
-          { action: 'done', title: 'Mark done' },
-          { action: 'snooze', title: 'Snooze 15m' },
+          { action: 'call', title: words.call },
+          { action: 'done', title: words.done },
+          { action: 'snooze', title: words.snooze },
         ]
       : [
-          { action: 'done', title: 'Mark done' },
-          { action: 'snooze', title: 'Snooze 15m' },
+          { action: 'done', title: words.done },
+          { action: 'snooze', title: words.snooze },
         ],
   }
 

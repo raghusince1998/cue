@@ -3,6 +3,7 @@ import { GREETING_OCCASIONS, fillTemplate, shortName, type ContactDTO } from '@c
 import { api } from '../lib/api.ts'
 import { useAuth } from '../lib/auth.tsx'
 import { announceChange } from '../lib/changes.ts'
+import { t } from '../lib/i18n.tsx'
 import { waNumber } from './PersonSheet.tsx'
 
 interface RunPerson {
@@ -44,7 +45,7 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
   const [run, setRun] = useState<Run | null>(null)
   const [occasion, setOccasion] = useState(GREETING_OCCASIONS[0]!.key)
   const [customName, setCustomName] = useState('')
-  const [message, setMessage] = useState(GREETING_OCCASIONS[0]!.message)
+  const [message, setMessage] = useState(() => t(GREETING_OCCASIONS[0]!.message))
   const [audience, setAudience] = useState<Audience>('all')
   const [orgs, setOrgs] = useState<string[]>([])
   const [picked, setPicked] = useState<string[]>([])
@@ -122,7 +123,7 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
       await navigator.clipboard.writeText(textFor(p))
       void markSent(p)
     } catch {
-      setError('Could not copy — select the message and copy it yourself.')
+      setError(t('Could not copy — select the message and copy it yourself.'))
     }
   }
 
@@ -134,7 +135,7 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
       <div className="stack tight greetings">
         <div className="greet-progress">
           <strong>
-            {run.occasion} · {sent} of {run.people.length} sent
+            {t('{occasion} · {sent} of {total} sent', { occasion: run.occasion, sent, total: run.people.length })}
           </strong>
           <span className="target-bar">
             <span
@@ -149,15 +150,19 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
             className="primary"
             onClick={() => (next.phone ? whatsapp(next) : email(next))}
           >
-            Send to {shortName(next.name)}
-            {next.organization ? ` (${next.organization})` : ''} by {next.phone ? 'WhatsApp' : 'email'}
+            {next.organization
+              ? t('Send to {name} ({org}) by {via}', {
+                  name: shortName(next.name),
+                  org: next.organization,
+                  via: next.phone ? 'WhatsApp' : t('email'),
+                })
+              : t('Send to {name} by {via}', { name: shortName(next.name), via: next.phone ? 'WhatsApp' : t('email') })}
           </button>
         ) : (
-          <p className="small target-status is-done">Everyone has had it. Well done.</p>
+          <p className="small target-status is-done">{t('Everyone has had it. Well done.')}</p>
         )}
         <p className="muted small">
-          Each opens with their own message, name and all. Send it there, come back, and tap for the
-          next.
+          {t('Each opens with their own message, name and all. Send it there, come back, and tap for the next.')}
         </p>
 
         <ul className="plain greet-list">
@@ -168,7 +173,7 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
                 {p.organization ? <span className="muted small"> · {p.organization}</span> : null}
               </span>
               {p.sentAt ? (
-                <span className="small target-status is-done">Sent</span>
+                <span className="small target-status is-done">{t('Sent')}</span>
               ) : (
                 <span className="row">
                   {p.phone && (
@@ -178,11 +183,11 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
                   )}
                   {p.email && (
                     <button className="ghost tiny-btn" onClick={() => email(p)}>
-                      Email
+                      {t('Email')}
                     </button>
                   )}
                   <button className="ghost tiny-btn" onClick={() => void copy(p)}>
-                    Copy
+                    {t('Copy')}
                   </button>
                 </span>
               )}
@@ -191,7 +196,7 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
         </ul>
         {error && <p className="error small">{error}</p>}
         <button className="ghost fit-btn" onClick={onClose}>
-          Done for now
+          {t('Done for now')}
         </button>
       </div>
     )
@@ -206,13 +211,13 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
         <div className="greet-resume">
           {unfinished.map((r) => (
             <button key={r.id} className="ghost small-btn" onClick={() => void resume(r.id)}>
-              Continue {r.occasion}: {r.sent} of {r.total} sent
+              {t('Continue {occasion}: {sent} of {total} sent', { occasion: r.occasion, sent: r.sent, total: r.total })}
             </button>
           ))}
         </div>
       )}
 
-      <span className="label-text">What for?</span>
+      <span className="label-text">{t('What for?')}</span>
       <div className="chips">
         {GREETING_OCCASIONS.map((o) => (
           <button
@@ -220,37 +225,37 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
             className={`chip${occasion === o.key ? ' selected' : ''}`}
             onClick={() => {
               setOccasion(o.key)
-              setMessage(o.message)
+              setMessage(t(o.message))
             }}
           >
-            {o.label}
+            {t(o.label)}
           </button>
         ))}
       </div>
       {occasion === 'custom' && (
-        <input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="e.g. Ganesh Chaturthi" />
+        <input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder={t('e.g. Ganesh Chaturthi')} />
       )}
 
       <label>
-        Message
+        {t('Message')}
         <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={5} />
       </label>
       <p className="muted small">
-        {'{first}'} becomes each person&rsquo;s name (Ravi, Dr. Rao), and {'{me}'} yours.
+        {t('{first} becomes each person’s name (Ravi, Dr. Rao), and {me} yours.', { first: '{first}', me: '{me}' })}
       </p>
 
-      <span className="label-text">Who to?</span>
+      <span className="label-text">{t('Who to?')}</span>
       <div className="chips">
         <button className={`chip${audience === 'all' ? ' selected' : ''}`} onClick={() => setAudience('all')}>
-          Everyone · {reachable.length}
+          {t('Everyone · {n}', { n: reachable.length })}
         </button>
         {orgCounts.length > 0 && (
           <button className={`chip${audience === 'orgs' ? ' selected' : ''}`} onClick={() => setAudience('orgs')}>
-            By company
+            {t('By company')}
           </button>
         )}
         <button className={`chip${audience === 'pick' ? ' selected' : ''}`} onClick={() => setAudience('pick')}>
-          Choose people
+          {t('Choose people')}
         </button>
       </div>
 
@@ -270,7 +275,7 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
 
       {audience === 'pick' && (
         <div className="greet-pick">
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search people" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Search people')} />
           <ul className="plain">
             {reachable
               .filter((c) => !q || [c.name, c.organization, c.role].some((f) => f?.toLowerCase().includes(q)))
@@ -297,7 +302,9 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
 
       {reachable.length < contacts.length && (
         <p className="muted small">
-          {contacts.length - reachable.length} people have no number or email, so they are left out.
+          {contacts.length - reachable.length === 1
+            ? t('1 person has no number or email, so they are left out.')
+            : t('{n} people have no number or email, so they are left out.', { n: contacts.length - reachable.length })}
         </p>
       )}
       {error && <p className="error small">{error}</p>}
@@ -306,7 +313,11 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
         disabled={busy || recipients.length === 0 || !label || !message.trim()}
         onClick={() => void start()}
       >
-        {busy ? 'Getting ready…' : `Start: ${recipients.length} ${recipients.length === 1 ? 'person' : 'people'}`}
+        {busy
+          ? t('Getting ready…')
+          : recipients.length === 1
+            ? t('Start: 1 person')
+            : t('Start: {n} people', { n: recipients.length })}
       </button>
     </div>
   )

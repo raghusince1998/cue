@@ -35,6 +35,7 @@ import {
 import { ApiError, api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { loadContacts, loadPlaces } from '../lib/cache.ts'
+import { language, locale, msg, rich, t } from '../lib/i18n.tsx'
 import { duePresets, formatDateTime, formatSpan, toDateInputValue, toLocalInputValue } from '../lib/time.ts'
 import { ConflictWarning } from './ConflictWarning.tsx'
 import { DictateButton } from './DictateButton.tsx'
@@ -93,7 +94,7 @@ function planRepeat(
   return {
     title: when ? titleFrom(rest, when) : rest,
     rule: parsedRepeat.rule,
-    summary: describeRecurrence(parsedRepeat.rule, { startsOn: firstAt ?? now, hour, minute }),
+    summary: describeRecurrence(parsedRepeat.rule, { startsOn: firstAt ?? now, hour, minute }, language()),
     hour,
     minute,
     startsOn: ymd(firstAt ?? now),
@@ -113,24 +114,40 @@ function planRepeat(
  */
 type RepeatChoice = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly' | 'custom'
 
+// Labels here are shown with t().
 const REPEAT_CHOICES: { value: RepeatChoice; label: string }[] = [
-  { value: 'none', label: "Doesn't repeat" },
-  { value: 'daily', label: 'Every day' },
-  { value: 'weekdays', label: 'Weekdays' },
-  { value: 'weekly', label: 'Every week' },
-  { value: 'monthly', label: 'Every month' },
-  { value: 'yearly', label: 'Every year' },
-  { value: 'custom', label: 'Every few…' },
+  { value: 'none', label: msg("Doesn't repeat") },
+  { value: 'daily', label: msg('Every day') },
+  { value: 'weekdays', label: msg('Weekdays') },
+  { value: 'weekly', label: msg('Every week') },
+  { value: 'monthly', label: msg('Every month') },
+  { value: 'yearly', label: msg('Every year') },
+  { value: 'custom', label: msg('Every few…') },
 ]
 
 const WEEKDAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
-const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-const CUSTOM_UNITS: { freq: Frequency; label: string }[] = [
-  { freq: 'daily', label: 'days' },
-  { freq: 'weekly', label: 'weeks' },
-  { freq: 'monthly', label: 'months' },
-  { freq: 'yearly', label: 'years' },
+const WEEKDAY_NAMES = [
+  msg('Sunday'),
+  msg('Monday'),
+  msg('Tuesday'),
+  msg('Wednesday'),
+  msg('Thursday'),
+  msg('Friday'),
+  msg('Saturday'),
 ]
+const CUSTOM_UNITS: { freq: Frequency; label: string }[] = [
+  { freq: 'daily', label: msg('days') },
+  { freq: 'weekly', label: msg('weeks') },
+  { freq: 'monthly', label: msg('months') },
+  { freq: 'yearly', label: msg('years') },
+]
+
+/** A day's one-letter name in English; in Hindi, which has none (शुक्र, शनि), its short name. */
+function weekdayLetter(day: number, letter: string): string {
+  const lang = locale()
+  // 7 January 2024 was a Sunday.
+  return lang ? new Date(2024, 0, 7 + day).toLocaleDateString(lang, { weekday: 'short' }) : letter
+}
 
 export function UpcomingForm({
   onDone,
@@ -288,7 +305,7 @@ export function UpcomingForm({
       await api(`/commitments/${id}/reschedule`, { method: 'POST', body: { dueAt: to } })
       await runConflictCheck()
     } catch {
-      setError('That time does not fit the other one either — pick another slot.')
+      setError(t('That time does not fit the other one either — pick another slot.'))
     }
   }
 
@@ -400,7 +417,7 @@ export function UpcomingForm({
         // They committed to this time by pressing save, so from here it blocks.
         setTimeChosen(true)
         setConflict(err.data as ConflictReport)
-        setError('That slot was taken while you were filling this in.')
+        setError(t('That slot was taken while you were filling this in.'))
         return
       }
       setError((err as Error).message)
@@ -425,7 +442,7 @@ export function UpcomingForm({
   const asRepeat = asIntention || asTrip ? null : parseRecurrence(quick)
   const repeat = asRepeat ? planRepeat(quick, asRepeat) : null
   const parsed = asIntention || asTrip || asRepeat ? null : parseWhen(quick)
-  const problem = asIntention || asTrip || asRepeat ? null : diagnose(quick)
+  const problem = asIntention || asTrip || asRepeat ? null : diagnose(quick, language())
   const parsedTitle = parsed ? titleFrom(quick, parsed) : ''
   const parsedPlace = parsed ? placeFrom(quick) : null
   // A date that parsed does not mean the whole sentence was understood: the
@@ -450,8 +467,11 @@ export function UpcomingForm({
       })
       setSaveNote(
         r.matchingTrips.length > 0
-          ? `Saved — and you already have a trip to ${asIntention.placeLabel} on ${r.matchingTrips[0]!.startsOn}.`
-          : `Saved. It will surface the moment you plan a trip to ${asIntention.placeLabel}.`,
+          ? t('Saved — and you already have a trip to {place} on {date}.', {
+              place: asIntention.placeLabel,
+              date: r.matchingTrips[0]!.startsOn,
+            })
+          : t('Saved. It will surface the moment you plan a trip to {place}.', { place: asIntention.placeLabel }),
       )
       setQuick('')
       // The sheet stays open on its note, so the page behind it is told now.
@@ -491,7 +511,10 @@ export function UpcomingForm({
       setQuick('')
       announceChange()
       setSaveNote(
-        `${r.recurrence.summary} — ${r.recurrence.upcomingCount} booked in, and it keeps going.`,
+        t('{summary} — {n} booked in, and it keeps going.', {
+          summary: r.recurrence.summary,
+          n: r.recurrence.upcomingCount,
+        }),
       )
     } catch (err) {
       setError((err as Error).message)
@@ -518,8 +541,15 @@ export function UpcomingForm({
       setQuick('')
       announceChange()
       if (r.waiting.length > 0) {
+        const vars = {
+          n: r.waiting.length,
+          place: asTrip.placeLabel,
+          list: r.waiting.map((w) => w.title).join(', '),
+        }
         setSaveNote(
-          `Trip saved — you have ${r.waiting.length} things saved for ${asTrip.placeLabel}: ${r.waiting.map((w) => w.title).join(', ')}`,
+          r.waiting.length === 1
+            ? t('Trip saved — you have 1 thing saved for {place}: {list}', vars)
+            : t('Trip saved — you have {n} things saved for {place}: {list}', vars),
         )
       } else {
         navigate('/trips')
@@ -560,7 +590,7 @@ ${original}` : original))
     <div className="stack">
       <section className="card">
         <label>
-          Type it in plain words
+          {t('Type it in plain words')}
           <input
             value={quick}
             onChange={(e) => setQuick(e.target.value)}
@@ -583,11 +613,11 @@ ${original}` : original))
             <div>
               <p className="commitment-title">{asIntention.title}</p>
               <p className="muted small">
-                Saved for {asIntention.placeLabel} · no date, surfaces on a trip there
+                {t('Saved for {place} · no date, surfaces on a trip there', { place: asIntention.placeLabel })}
               </p>
             </div>
             <button className="primary small-btn" onClick={saveIntention} disabled={saving}>
-              Save it
+              {t('Save it')}
             </button>
           </div>
         )}
@@ -595,18 +625,17 @@ ${original}` : original))
         {repeat && (
           <div className="parsed-preview">
             <div>
-              <p className="commitment-title">{repeat.title || '(what should it be called?)'}</p>
+              <p className="commitment-title">{repeat.title || t('(what should it be called?)')}</p>
               <p className="muted small">
                 {repeat.summary}
                 {repeat.firstAt
-                  ? ` · from ${formatDateTime(repeat.firstAt.toISOString())}`
-                  : ' · nothing left in this series'}
-                {repeat.timeAssumed && ' · time assumed'}
+                  ? ` · ${t('from {date}', { date: formatDateTime(repeat.firstAt.toISOString()) })}`
+                  : ` · ${t('nothing left in this series')}`}
+                {repeat.timeAssumed && ` · ${t('time assumed')}`}
               </p>
               {!repeat.title && (
                 <p className="error small">
-                  That is all repeat and no plan — say what it is, like
-                  &ldquo;book club every second tuesday of the month&rdquo;.
+                  {t('That is all repeat and no plan — say what it is, like “book club every second tuesday of the month”.')}
                 </p>
               )}
             </div>
@@ -615,7 +644,7 @@ ${original}` : original))
               onClick={saveRepeat}
               disabled={saving || !repeat.title || !repeat.firstAt}
             >
-              Set it up
+              {t('Set it up')}
             </button>
           </div>
         )}
@@ -623,13 +652,13 @@ ${original}` : original))
         {asTrip && (
           <div className="parsed-preview">
             <div>
-              <p className="commitment-title">Trip to {asTrip.placeLabel}</p>
+              <p className="commitment-title">{t('Trip to {place}', { place: asTrip.placeLabel })}</p>
               <p className="muted small">
                 {asTrip.startsOn} → {asTrip.endsOn}
               </p>
             </div>
             <button className="primary small-btn" onClick={saveTrip} disabled={saving}>
-              Plan it
+              {t('Plan it')}
             </button>
           </div>
         )}
@@ -643,9 +672,11 @@ ${original}` : original))
             <strong>{problem.message}</strong>
             {(problem.likelyTitle || problem.likelyPlace) && (
               <p className="muted small">
-                I did get
-                {problem.likelyTitle ? ` “${problem.likelyTitle}”` : ''}
-                {problem.likelyPlace ? ` at ${problem.likelyPlace}` : ''}.
+                {problem.likelyTitle && problem.likelyPlace
+                  ? t('I did get “{title}” at {place}.', { title: problem.likelyTitle, place: problem.likelyPlace })
+                  : problem.likelyTitle
+                    ? t('I did get “{title}”.', { title: problem.likelyTitle })
+                    : t('I did get at {place}.', { place: problem.likelyPlace ?? '' })}
               </p>
             )}
             <button
@@ -660,10 +691,10 @@ ${original}` : original))
 ${original}` : original))
                 }
                 setQuick('')
-                setSaveNote('Filled in what I understood — set the date and time below.')
+                setSaveNote(t('Filled in what I understood — set the date and time below.'))
               }}
             >
-              Use that and I will pick the date
+              {t('Use that and I will pick the date')}
             </button>
           </div>
         )}
@@ -671,14 +702,13 @@ ${original}` : original))
         {quick.trim() && !parsed && !asIntention && !asTrip && !asRepeat && !problem && (
           <>
             <p className="muted small">
-              No date spotted yet — try &ldquo;friday 6pm&rdquo;, &ldquo;tomorrow 4&rdquo;,
-              &ldquo;in 3 days&rdquo;.
+              {t('No date spotted yet — try “friday 6pm”, “tomorrow 4”, “in 3 days”.')}
             </p>
             {/* Long sentences are exactly what the simple parser cannot do, so
                 that is the only case worth spending an API call on. */}
             {aiProvider !== 'none' && quick.trim().length > 25 && (
               <button className="ghost" onClick={() => setReviewing(quick.trim())}>
-                Too complicated to type? Let AI read it
+                {t('Too complicated to type? Let AI read it')}
               </button>
             )}
           </>
@@ -687,26 +717,31 @@ ${original}` : original))
         {parsed && (
           <div className="parsed-preview">
             <div>
-              <p className="commitment-title">{parsedTitle || '(no title yet)'}</p>
+              <p className="commitment-title">{parsedTitle || t('(no title yet)')}</p>
               <p className="muted small">
                 {/* Showing "2:00 PM" for "this afternoon" would put back the
                     invented precision the parser was changed to avoid. */}
                 {parsed.window
-                  ? `${parsed.date.toLocaleDateString([], { weekday: 'long' })} ${WINDOW_LABELS[parsed.window].toLowerCase()} — no set time`
+                  ? t('{day} {window} — no set time', {
+                      day: parsed.date.toLocaleDateString(locale(), { weekday: 'long' }),
+                      window: WINDOW_LABELS[parsed.window].toLowerCase(),
+                    })
                   : formatDateTime(parsed.date.toISOString())}
-                {parsed.timeAssumed && !parsed.window && ' · time assumed'}
-                {parsed.durationMinutes ? ` · ${parsed.durationMinutes} min` : ''}
+                {parsed.timeAssumed && !parsed.window && ` · ${t('time assumed')}`}
+                {parsed.durationMinutes ? ` · ${t('{n} min', { n: parsed.durationMinutes })}` : ''}
                 {parsedPlace ? ` · ${parsedPlace}` : ''}
               </p>
               {ignoredTime && (
                 <p className="error small">
-                  I could not read &ldquo;{ignoredTime}&rdquo; as a time, so this is set to{' '}
-                  {formatDateTime(parsed.date.toISOString())}. Change it below if that is wrong.
+                  {t('I could not read “{text}” as a time, so this is set to {time}. Change it below if that is wrong.', {
+                    text: ignoredTime,
+                    time: formatDateTime(parsed.date.toISOString()),
+                  })}
                 </p>
               )}
             </div>
             <button className="primary small-btn" onClick={applyQuick}>
-              Use this
+              {t('Use this')}
             </button>
           </div>
         )}
@@ -714,15 +749,15 @@ ${original}` : original))
 
       <section className="card">
         <label>
-          What is it?
+          {t('What is it?')}
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Dentist appointment, client call, submit the report…"
+            placeholder={t('Dentist appointment, client call, submit the report…')}
           />
         </label>
 
-        <span className="label-text">Type</span>
+        <span className="label-text">{t('Type')}</span>
         <div className="chips">
           {SELECTABLE_KINDS.map((k) => (
             <button
@@ -737,25 +772,25 @@ ${original}` : original))
       </section>
 
       <section className="card">
-        <span className="label-text">Is this at a set time?</span>
+        <span className="label-text">{t('Is this at a set time?')}</span>
         <div className="row">
           <button
             className={`choice big${flexibility === 'fixed' ? ' selected' : ''}`}
             onClick={() => setFlexibility('fixed')}
           >
-            Yes, a set time
+            {t('Yes, a set time')}
           </button>
           <button
             className={`choice big${flexibility === 'flexible' ? ' selected' : ''}`}
             onClick={() => setFlexibility('flexible')}
           >
-            Sometime around then
+            {t('Sometime around then')}
           </button>
         </div>
 
         {flexibility === 'flexible' && (
           <>
-            <span className="label-text">Roughly when?</span>
+            <span className="label-text">{t('Roughly when?')}</span>
             <div className="chips">
               {TIME_WINDOWS.map((w) => (
                 <button
@@ -770,7 +805,7 @@ ${original}` : original))
 
             {slots.length > 0 ? (
               <>
-                <span className="label-text">You are actually free at</span>
+                <span className="label-text">{t('You are actually free at')}</span>
                 <ul className="plain">
                   {slots.map((slot) => (
                     <li key={slot.startsAt}>
@@ -788,19 +823,20 @@ ${original}` : original))
                   ))}
                 </ul>
                 <p className="muted small">
-                  Pick one to pin it down, or leave it flexible and decide later.
+                  {t('Pick one to pin it down, or leave it flexible and decide later.')}
                 </p>
               </>
             ) : (
               <p className="muted small">
-                Kept as an intention for that part of the day — it will not clash with
-                anything, and it stays on your list until it is done.
+                {t(
+                  'Kept as an intention for that part of the day — it will not clash with anything, and it stays on your list until it is done.',
+                )}
               </p>
             )}
           </>
         )}
 
-        <span className="label-text">How important?</span>
+        <span className="label-text">{t('How important?')}</span>
         <div className="chips">
           {PRIORITIES.map((p) => (
             <button
@@ -824,14 +860,14 @@ ${original}` : original))
               if (e.target.checked) setEndsOn(new Date(dueAt))
             }}
           />
-          <span>All day, or spread over several days</span>
+          <span>{t('All day, or spread over several days')}</span>
         </label>
 
         {allDay && (
           <>
             <div className="row">
               <label className="grow">
-                From
+                {t('From')}
                 <input
                   type="date"
                   value={toDateInputValue(dueAt)}
@@ -842,7 +878,7 @@ ${original}` : original))
                 />
               </label>
               <label className="grow">
-                To
+                {t('To')}
                 <input
                   type="date"
                   min={toDateInputValue(dueAt)}
@@ -855,20 +891,17 @@ ${original}` : original))
               </label>
             </div>
             <p className="muted small">
-              {formatSpan(
-                spanStart.toISOString(),
-                spanEnd ? spanEnd.toISOString() : null,
-                true,
+              {t(
+                '{span}. Reminder at 9am on the first day. All-day items do not clash with anything — you can still book calls while you are away.',
+                { span: formatSpan(spanStart.toISOString(), spanEnd ? spanEnd.toISOString() : null, true) },
               )}
-              . Reminder at 9am on the first day. All-day items do not clash with
-              anything — you can still book calls while you are away.
             </p>
           </>
         )}
 
         {!allDay && (
           <>
-        <span className="label-text">{flexibility === 'fixed' ? 'When?' : 'Which day?'}</span>
+        <span className="label-text">{flexibility === 'fixed' ? t('When?') : t('Which day?')}</span>
         <div className="chips">
           {duePresets.map((preset) => {
             const at = preset.at()
@@ -879,14 +912,14 @@ ${original}` : original))
                 className={`chip${selected ? ' selected' : ''}`}
                 onClick={() => setDueAt(at)}
               >
-                {preset.label}
+                {t(preset.label)}
               </button>
             )
           })}
         </div>
 
         <label>
-          Exact time
+          {t('Exact time')}
           <input
             type="datetime-local"
             value={toLocalInputValue(dueAt)}
@@ -897,7 +930,7 @@ ${original}` : original))
           />
         </label>
 
-        <span className="label-text">How long will it block?</span>
+        <span className="label-text">{t('How long will it block?')}</span>
         <div className="chips">
           {DURATION_CHOICES.map((minutes) => (
             <button
@@ -905,7 +938,7 @@ ${original}` : original))
               className={`chip${durationMinutes === minutes ? ' selected' : ''}`}
               onClick={() => setDurationMinutes(minutes)}
             >
-              {minutes < 60 ? `${minutes} min` : `${minutes / 60}h`}
+              {minutes < 60 ? t('{n} min', { n: minutes }) : t('{n}h', { n: minutes / 60 })}
             </button>
           ))}
         </div>
@@ -928,15 +961,16 @@ ${original}` : original))
 
         {!allDay && flexibility === 'fixed' && (
           <p className="muted small">
-            You will be reminded at {formatDateTime(dueAt.toISOString())}, then chased every 15
-            minutes until you mark it done.
+            {t('You will be reminded at {time}, then chased every 15 minutes until you mark it done.', {
+              time: formatDateTime(dueAt.toISOString()),
+            })}
           </p>
         )}
       </section>
 
       {canRepeat && (
         <section className="card">
-          <span className="label-text">Repeats?</span>
+          <span className="label-text">{t('Repeats?')}</span>
           <div className="chips">
             {REPEAT_CHOICES.map((c) => (
               <button
@@ -944,25 +978,25 @@ ${original}` : original))
                 className={`chip${repeatChoice === c.value ? ' selected' : ''}`}
                 onClick={() => setRepeatChoice(c.value)}
               >
-                {c.label}
+                {t(c.label)}
               </button>
             ))}
             {onSchedule && (
               <button className="chip" onClick={() => onSchedule(title)}>
-                Irregular dates…
+                {t('Irregular dates…')}
               </button>
             )}
           </div>
 
           {repeatChoice === 'weekly' && (
-            <div className="weekday-pick" role="group" aria-label="On which days">
+            <div className="weekday-pick" role="group" aria-label={t('On which days')}>
               {WEEKDAY_LETTERS.map((letter, day) => {
                 const on = repeatDays.length > 0 ? repeatDays.includes(day) : day === dueAt.getDay()
                 return (
                   <button
                     key={day}
                     className={`weekday${on ? ' selected' : ''}`}
-                    aria-label={WEEKDAY_NAMES[day]}
+                    aria-label={t(WEEKDAY_NAMES[day]!)}
                     aria-pressed={on}
                     onClick={() => {
                       const current = repeatDays.length > 0 ? repeatDays : [dueAt.getDay()]
@@ -972,7 +1006,7 @@ ${original}` : original))
                       setRepeatDays(next.length > 0 ? next : current)
                     }}
                   >
-                    {letter}
+                    {weekdayLetter(day, letter)}
                   </button>
                 )
               })}
@@ -981,23 +1015,23 @@ ${original}` : original))
 
           {repeatChoice === 'custom' && (
             <div className="row repeat-every">
-              <span>Every</span>
+              <span>{t('Every')}</span>
               <input
                 type="number"
                 min={1}
                 max={52}
                 value={customEvery}
                 onChange={(e) => setCustomEvery(Number(e.target.value) || 1)}
-                aria-label="How many"
+                aria-label={t('How many')}
               />
               <select
                 value={customFreq}
                 onChange={(e) => setCustomFreq(e.target.value as Frequency)}
-                aria-label="Days, weeks, months or years"
+                aria-label={t('Days, weeks, months or years')}
               >
                 {CUSTOM_UNITS.map((u) => (
                   <option key={u.freq} value={u.freq}>
-                    {u.label}
+                    {t(u.label)}
                   </option>
                 ))}
               </select>
@@ -1006,25 +1040,25 @@ ${original}` : original))
 
           {seriesRule && (
             <>
-              <span className="label-text">Until?</span>
+              <span className="label-text">{t('Until?')}</span>
               <div className="chips">
                 <button
                   className={`chip${repeatEnd === 'never' ? ' selected' : ''}`}
                   onClick={() => setRepeatEnd('never')}
                 >
-                  No end
+                  {t('No end')}
                 </button>
                 <button
                   className={`chip${repeatEnd === 'count' ? ' selected' : ''}`}
                   onClick={() => setRepeatEnd('count')}
                 >
-                  A number of times
+                  {t('A number of times')}
                 </button>
                 <button
                   className={`chip${repeatEnd === 'until' ? ' selected' : ''}`}
                   onClick={() => setRepeatEnd('until')}
                 >
-                  Until a date
+                  {t('Until a date')}
                 </button>
               </div>
               {repeatEnd === 'count' && (
@@ -1035,9 +1069,9 @@ ${original}` : original))
                     max={500}
                     value={repeatCount}
                     onChange={(e) => setRepeatCount(Number(e.target.value) || 1)}
-                    aria-label="How many times"
+                    aria-label={t('How many times')}
                   />
-                  <span>times</span>
+                  <span>{t('times')}</span>
                 </div>
               )}
               {repeatEnd === 'until' && (
@@ -1046,27 +1080,33 @@ ${original}` : original))
                   min={toDateInputValue(dueAt)}
                   value={repeatUntil}
                   onChange={(e) => setRepeatUntil(e.target.value)}
-                  aria-label="Last date"
+                  aria-label={t('Last date')}
                 />
               )}
               <p className="muted small">
-                {describeRecurrence(seriesRule, {
-                  startsOn: dueAt,
-                  hour: dueAt.getHours(),
-                  minute: dueAt.getMinutes(),
-                })}
-                {firstOccurrence
-                  ? `, first on ${formatDateTime(firstOccurrence.toISOString())}`
-                  : ''}
-                . Each one reminds you on its own, and the series is on the Repeating page.
+                {(() => {
+                  const rule = describeRecurrence(
+                    seriesRule,
+                    { startsOn: dueAt, hour: dueAt.getHours(), minute: dueAt.getMinutes() },
+                    language(),
+                  )
+                  return firstOccurrence
+                    ? t('{rule}, first on {date}. Each one reminds you on its own, and the series is on the Repeating page.', {
+                        rule,
+                        date: formatDateTime(firstOccurrence.toISOString()),
+                      })
+                    : t('{rule}. Each one reminds you on its own, and the series is on the Repeating page.', { rule })
+                })()}
               </p>
             </>
           )}
 
           {repeatChoice === 'none' && (
             <p className="muted small">
-              For dates that follow a plan rather than a rhythm — vaccinations, a course of
-              treatment — use <strong>Irregular dates</strong>.
+              {rich(
+                'For dates that follow a plan rather than a rhythm — vaccinations, a course of treatment — use <b>Irregular dates</b>.',
+                { b: (s) => <strong>{s}</strong> },
+              )}
             </p>
           )}
         </section>
@@ -1074,26 +1114,27 @@ ${original}` : original))
 
       {/* Everything below is optional — an appointment needs a time, not a dossier. */}
       <section className="card">
-        <h2 className="section-title">Anything else? (optional)</h2>
+        <h2 className="section-title">{t('Anything else? (optional)')}</h2>
 
         <label>
-          Where?
+          {t('Where?')}
           <input
             value={placeLabel}
             onChange={(e) => setPlaceLabel(e.target.value)}
-            placeholder="e.g. BKC, Mumbai"
+            placeholder={t('e.g. BKC, Mumbai')}
           />
         </label>
         <p className="muted small">
-          Naming a place lets the app notice when it clashes with a trip, or when there is not
-          enough time to get between two things.
+          {t(
+            'Naming a place lets the app notice when it clashes with a trip, or when there is not enough time to get between two things.',
+          )}
         </p>
 
         {places.length > 0 && (
           <label>
-            Saved place
+            {t('Saved place')}
             <select value={placeId ?? ''} onChange={(e) => setPlaceId(e.target.value || null)}>
-              <option value="">— not tied to a place —</option>
+              <option value="">{t('— not tied to a place —')}</option>
               {places.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -1105,9 +1146,9 @@ ${original}` : original))
 
         {contacts.length > 0 && (
           <label>
-            Who with
+            {t('Who with')}
             <select value={contactId ?? ''} onChange={(e) => setContactId(e.target.value || null)}>
-              <option value="">— nobody in particular —</option>
+              <option value="">{t('— nobody in particular —')}</option>
               {contacts.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -1119,12 +1160,12 @@ ${original}` : original))
         )}
 
         <label>
-          Notes
+          {t('Notes')}
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            placeholder="Bring the old X-rays…"
+            placeholder={t('Bring the old X-rays…')}
           />
         </label>
         <div className="row">
@@ -1133,7 +1174,7 @@ ${original}` : original))
       </section>
 
       {reviewing && (
-        <Modal title="Is this what you meant?" onClose={() => setReviewing(null)}>
+        <Modal title={t('Is this what you meant?')} onClose={() => setReviewing(null)}>
           <ExtractReview
             text={reviewing}
             onCancel={() => setReviewing(null)}
@@ -1157,24 +1198,24 @@ ${original}` : original))
           disabled={saving || (!seriesRule && blocked) || !title.trim()}
         >
           {saving
-            ? 'Saving…'
+            ? t('Saving…')
             : seriesRule
-              ? 'Add repeating plan'
+              ? t('Add repeating plan')
               : blocked
-                ? 'Resolve the clash above'
-                : 'Add to my list'}
+                ? t('Resolve the clash above')
+                : t('Add to my list')}
         </button>
         <button
           className="ghost"
           onClick={() => {
             // Only worth confirming when there is something to lose.
             const started = title.trim() || notes.trim() || quick.trim()
-            if (started && !window.confirm('Discard this?')) return
+            if (started && !window.confirm(t('Discard this?'))) return
             onDone()
           }}
           disabled={saving}
         >
-          Cancel
+          {t('Cancel')}
         </button>
       </div>
     </div>

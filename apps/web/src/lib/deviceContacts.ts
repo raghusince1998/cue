@@ -15,6 +15,8 @@
  *   - A real user gesture; calling it from a timer silently fails.
  */
 
+import { t } from './i18n.tsx'
+
 export interface PickedContact {
   name: string
   phone: string | null
@@ -45,9 +47,9 @@ export function deviceContactsAvailable(): boolean {
 export function deviceContactsReason(): string {
   if (deviceContactsAvailable()) return ''
   if (!window.isSecureContext) {
-    return 'Reading your contacts needs a secure connection — it will work once this is on https.'
+    return t('Reading your contacts needs a secure connection — it will work once this is on https.')
   }
-  return 'Your phone’s contact picker is only offered by Chrome on Android. On this device you can add people by hand.'
+  return t('Your phone’s contact picker is only offered by Chrome on Android. On this device you can add people by hand.')
 }
 
 /**
@@ -64,7 +66,7 @@ export async function pickDeviceContacts(): Promise<PickedContact[]> {
   // photos to store a phone number is asking for trust it has not earned.
   const supported = await contacts.getProperties()
   const wanted = ['name', 'tel', 'email'].filter((p) => supported.includes(p))
-  if (wanted.length === 0) throw new Error('This phone does not share any contact details.')
+  if (wanted.length === 0) throw new Error(t('This phone does not share any contact details.'))
 
   const picked = await contacts.select(wanted, { multiple: true })
 

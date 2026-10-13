@@ -1,3 +1,5 @@
+import { locale, msg, t } from './i18n.tsx'
+
 /** Local-day boundaries, since the API deliberately knows nothing about the device timezone. */
 export function dayBounds(date = new Date()): { from: string; to: string } {
   const from = new Date(date)
@@ -8,7 +10,7 @@ export function dayBounds(date = new Date()): { from: string; to: string } {
 }
 
 export function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return new Date(iso).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })
 }
 
 export function formatDateTime(iso: string): string {
@@ -18,10 +20,10 @@ export function formatDateTime(iso: string): string {
   tomorrow.setDate(today.getDate() + 1)
 
   const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString()
-  if (sameDay(date, today)) return `Today ${formatTime(iso)}`
-  if (sameDay(date, tomorrow)) return `Tomorrow ${formatTime(iso)}`
+  if (sameDay(date, today)) return t('Today {time}', { time: formatTime(iso) })
+  if (sameDay(date, tomorrow)) return t('Tomorrow {time}', { time: formatTime(iso) })
 
-  return date.toLocaleString([], {
+  return date.toLocaleString(locale(), {
     day: 'numeric',
     month: 'short',
     hour: 'numeric',
@@ -31,12 +33,12 @@ export function formatDateTime(iso: string): string {
 
 export function overdueBy(iso: string): string {
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000)
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes} min`
+  if (minutes < 1) return t('just now')
+  if (minutes < 60) return t('{n} min', { n: minutes })
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h`
+  if (hours < 24) return t('{n}h', { n: hours })
   const days = Math.floor(hours / 24)
-  return `${days}d`
+  return t('{n}d', { n: days })
 }
 
 /** Value for an <input type="datetime-local">, which wants local time with no zone. */
@@ -52,12 +54,12 @@ export interface DuePreset {
   at: () => Date
 }
 
-/** The realistic answers to "when did they say to come back?" — one tap each. */
+/** The realistic answers to "when did they say to come back?" — one tap each. Show the label with t(). */
 export const duePresets: DuePreset[] = [
-  { label: 'In 1 hour', at: () => new Date(Date.now() + 60 * 60_000) },
-  { label: 'In 3 hours', at: () => new Date(Date.now() + 3 * 60 * 60_000) },
+  { label: msg('In 1 hour'), at: () => new Date(Date.now() + 60 * 60_000) },
+  { label: msg('In 3 hours'), at: () => new Date(Date.now() + 3 * 60 * 60_000) },
   {
-    label: 'Tomorrow 10am',
+    label: msg('Tomorrow 10am'),
     at: () => {
       const d = new Date()
       d.setDate(d.getDate() + 1)
@@ -66,7 +68,7 @@ export const duePresets: DuePreset[] = [
     },
   },
   {
-    label: 'In 3 days',
+    label: msg('In 3 days'),
     at: () => {
       const d = new Date()
       d.setDate(d.getDate() + 3)
@@ -75,7 +77,7 @@ export const duePresets: DuePreset[] = [
     },
   },
   {
-    label: 'Next week',
+    label: msg('Next week'),
     at: () => {
       const d = new Date()
       d.setDate(d.getDate() + 7)
@@ -110,13 +112,13 @@ export function formatSpan(
   }
 
   const dayOnly = (d: Date) =>
-    d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })
+    d.toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })
 
   if (!end || end.toDateString() === start.toDateString()) {
-    return `${dayOnly(start)} · all day`
+    return t('{day} · all day', { day: dayOnly(start) })
   }
   const days = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1
-  return `${dayOnly(start)} → ${dayOnly(end)} · ${days} days`
+  return t('{from} → {to} · {n} days', { from: dayOnly(start), to: dayOnly(end), n: days })
 }
 
 /**
@@ -130,7 +132,7 @@ export function formatSpan(
 export function dayLabel(value: string | Date): string {
   const d = typeof value === 'string' ? parseDay(value) : value
   const sameYear = d.getFullYear() === new Date().getFullYear()
-  return d.toLocaleDateString([], {
+  return d.toLocaleDateString(locale(), {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -146,7 +148,7 @@ export function spanLabel(from: string | Date, to: string | Date): string {
   if (a.toDateString() === b.toDateString()) return dayLabel(a)
 
   const sameMonth = a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()
-  const month = (d: Date) => d.toLocaleDateString([], { month: 'short' })
+  const month = (d: Date) => d.toLocaleDateString(locale(), { month: 'short' })
   const year = b.getFullYear() === new Date().getFullYear() ? '' : ` ${b.getFullYear()}`
 
   return sameMonth
@@ -162,12 +164,18 @@ export function relativeDay(value: string | Date): string {
   const target = new Date(d.getFullYear(), d.getMonth(), d.getDate())
   const days = Math.round((target.getTime() - today.getTime()) / 86_400_000)
 
-  if (days === 0) return 'today'
-  if (days === 1) return 'tomorrow'
-  if (days === -1) return 'yesterday'
+  if (days === 0) return t('today')
+  if (days === 1) return t('tomorrow')
+  if (days === -1) return t('yesterday')
   // Pluralised properly: "1 weeks ago" is the kind of detail that makes a
   // screen feel unfinished even when nobody can say why.
-  const unit = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+  const UNITS = {
+    day: [msg('1 day'), msg('{n} days')],
+    week: [msg('1 week'), msg('{n} weeks')],
+    month: [msg('1 month'), msg('{n} months')],
+    year: [msg('1 year'), msg('{n} years')],
+  } as const
+  const unit = (n: number, word: keyof typeof UNITS) => (n === 1 ? t(UNITS[word][0]) : t(UNITS[word][1], { n }))
   // Weeks stop meaning anything past a couple of months: a vaccination
   // schedule runs to sixteen years, and "in 825 weeks" is not a date anyone
   // can picture.
@@ -179,8 +187,8 @@ export function relativeDay(value: string | Date): string {
         : d < 730
           ? unit(Math.round(d / 30.44), 'month')
           : unit(Math.round(d / 365.25), 'year')
-  if (days > 0) return `in ${span(days)}`
-  return `${span(Math.abs(days))} ago`
+  if (days > 0) return t('in {span}', { span: span(days) })
+  return t('{span} ago', { span: span(Math.abs(days)) })
 }
 
 /**

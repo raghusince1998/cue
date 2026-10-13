@@ -5,6 +5,7 @@ import { openAdd } from '../lib/addSheet.ts'
 import { TargetBar, type WeekTargets } from './Targets.tsx'
 import { hasClients, hasWork } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
+import { locale, t } from '../lib/i18n.tsx'
 
 /**
  * What the app noticed, above what the app was told.
@@ -51,14 +52,14 @@ const ICON: Record<Tone, string> = {
 }
 
 function hoursLabel(minutes: number): string {
-  if (minutes <= 0) return 'none'
-  if (minutes < 60) return `${minutes}m`
+  if (minutes <= 0) return t('none')
+  if (minutes < 60) return t('{n}m', { n: minutes })
   const h = minutes / 60
-  return `${h % 1 === 0 ? h : h.toFixed(1)}h`
+  return t('{n}h', { n: h % 1 === 0 ? h : h.toFixed(1) })
 }
 
 function clock(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return new Date(iso).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })
 }
 
 export function DayBrief({
@@ -134,33 +135,39 @@ export function DayBrief({
   const ahead = summary.subject === 'tomorrow'
   const shown_day = ahead ? new Date(now.getTime() + 86_400_000) : now
   const greeting = ahead
-    ? 'Tomorrow'
+    ? t('Tomorrow')
     : now.getHours() < 12
-      ? 'This morning'
+      ? t('This morning')
       : now.getHours() < 17
-        ? 'This afternoon'
-        : 'This evening'
+        ? t('This afternoon')
+        : t('This evening')
 
   return (
     <section className="brief">
       <div className="brief-top">
         <div>
           <p className="brief-date">
-            {shown_day.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}
+            {shown_day.toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
           <h1 className="brief-headline">
             {summary.todayCount === 0
-              ? `${greeting} is yours`
-              : `${greeting}: ${summary.percentBooked}% booked`}
+              ? t('{when} is yours', { when: greeting })
+              : t('{when}: {pct}% booked', { when: greeting, pct: summary.percentBooked })}
           </h1>
           <p className="brief-sub">
             {summary.todayCount === 0
               ? summary.weekAhead > 0
-                ? `Nothing fixed ${ahead ? 'tomorrow' : 'today'}. ${summary.weekAhead} coming this week.`
-                : 'Nothing fixed, and nothing this week.'
+                ? ahead
+                  ? t('Nothing fixed tomorrow. {n} coming this week.', { n: summary.weekAhead })
+                  : t('Nothing fixed today. {n} coming this week.', { n: summary.weekAhead })
+                : t('Nothing fixed, and nothing this week.')
               : summary.nextGap
-                ? `${hoursLabel(summary.freeMinutes)} free — longest clear run ${clock(summary.nextGap.from)} to ${clock(summary.nextGap.to)}`
-                : `${hoursLabel(summary.freeMinutes)} free, in short gaps`}
+                ? t('{free} free — longest clear run {from} to {to}', {
+                    free: hoursLabel(summary.freeMinutes),
+                    from: clock(summary.nextGap.from),
+                    to: clock(summary.nextGap.to),
+                  })
+                : t('{free} free, in short gaps', { free: hoursLabel(summary.freeMinutes) })}
           </p>
         </div>
 
@@ -169,7 +176,7 @@ export function DayBrief({
           className="brief-dial"
           style={{ ['--pct' as string]: `${summary.percentBooked}` }}
           role="img"
-          aria-label={`${summary.percentBooked} percent booked`}
+          aria-label={t('{pct} percent booked', { pct: summary.percentBooked })}
         >
           <span>{summary.percentBooked}%</span>
         </div>
@@ -178,30 +185,30 @@ export function DayBrief({
       {/* The shape of the day, not just its numbers. */}
       <div className="brief-links">
         <button className="brief-day-link" onClick={() => onNavigate('/?day=1')}>
-          Your day, hour by hour →
+          {t('Your day, hour by hour →')}
         </button>
         <button className="brief-day-link" onClick={() => onNavigate('/?review=1')}>
-          Review your week →
+          {t('Review your week →')}
         </button>
         {/* Mornings are for the standup; the rest of the day, for the report. */}
         {!work ? null : new Date().getHours() < 12 ? (
           <button className="brief-day-link" onClick={() => onNavigate('/?report=standup')}>
-            Write your standup →
+            {t('Write your standup →')}
           </button>
         ) : (
           <button className="brief-day-link" onClick={() => onNavigate('/?report=1')}>
-            Send today&rsquo;s report →
+            {t('Send today’s report →')}
           </button>
         )}
         <button className="brief-day-link" onClick={() => onNavigate('/?focusnow=1')}>
-          Start focus time →
+          {t('Start focus time →')}
         </button>
         <button className="brief-day-link" onClick={() => openAdd({ share: true })}>
-          Share when you&rsquo;re free →
+          {t('Share when you’re free →')}
         </button>
         {clients && targets && !targets.tracking && (
           <button className="brief-day-link" onClick={() => onNavigate('/?targets=1')}>
-            Set weekly targets →
+            {t('Set weekly targets →')}
           </button>
         )}
       </div>
@@ -215,7 +222,7 @@ export function DayBrief({
             .map((m) => (
               <span className="brief-target" key={m.key}>
                 <span className="brief-target-label">
-                  {m.label}
+                  {t(m.label)}
                   <span className={`target-status is-${m.status}`}>
                     {m.done}/{m.target}
                   </span>
@@ -229,18 +236,18 @@ export function DayBrief({
       <div className="brief-stats">
         <button className="stat" onClick={() => onNavigate('/')}>
           <strong>{summary.todayCount}</strong>
-          <span>{ahead ? 'tomorrow' : 'today'}</span>
+          <span>{ahead ? t('tomorrow') : t('today')}</span>
         </button>
         <button
           className={`stat${summary.overdue > 0 ? ' is-alert' : ''}`}
           onClick={() => onNavigate('/')}
         >
           <strong>{summary.overdue}</strong>
-          <span>overdue</span>
+          <span>{t('overdue')}</span>
         </button>
         <button className="stat" onClick={() => onNavigate('/')}>
           <strong>{summary.weekAhead}</strong>
-          <span>this week</span>
+          <span>{t('this week')}</span>
         </button>
         {(summary.waitingOnOthers ?? 0) > 0 && (
           <button
@@ -249,20 +256,20 @@ export function DayBrief({
           >
             <strong>{summary.waitingOnOthers}</strong>
             <span>
-              waiting on others
-              {(summary.checkInsDue ?? 0) > 0 ? ` · ${summary.checkInsDue} to chase` : ''}
+              {t('waiting on others')}
+              {(summary.checkInsDue ?? 0) > 0 ? ` · ${t('{n} to chase', { n: summary.checkInsDue ?? 0 })}` : ''}
             </span>
           </button>
         )}
         {reachOut > 0 && (
           <button className="stat is-alert" onClick={() => onNavigate('/people')}>
             <strong>{reachOut}</strong>
-            <span>to reach out</span>
+            <span>{t('to reach out')}</span>
           </button>
         )}
         <button className="stat" onClick={() => onNavigate('/trips')}>
           <strong>{summary.waiting}</strong>
-          <span>waiting on a trip</span>
+          <span>{t('waiting on a trip')}</span>
         </button>
       </div>
 
@@ -272,20 +279,21 @@ export function DayBrief({
         !data.sample && (
           <div className="brief-empty">
             <p>
-              Nothing in here yet, so there is nothing for me to notice. Load a realistic week and
-              you will see what this does that a list cannot.
+              {t(
+                'Nothing in here yet, so there is nothing for me to notice. Load a realistic week and you will see what this does that a list cannot.',
+              )}
             </p>
             <button className="primary small-btn" disabled={busy} onClick={() => void sample(true)}>
-              {busy ? 'Filling…' : 'Show me with sample data'}
+              {busy ? t('Filling…') : t('Show me with sample data')}
             </button>
           </div>
         )}
 
       {data.sample && (
         <div className="brief-sample">
-          <span>Showing sample data</span>
+          <span>{t('Showing sample data')}</span>
           <button disabled={busy} onClick={() => void sample(false)}>
-            Clear it
+            {t('Clear it')}
           </button>
         </div>
       )}
@@ -311,7 +319,7 @@ export function DayBrief({
               </div>
               <button
                 className="insight-close"
-                aria-label="Dismiss"
+                aria-label={t('Dismiss')}
                 onClick={() => setDismissed((d) => [...d, insight.id])}
               >
                 ×
@@ -321,7 +329,11 @@ export function DayBrief({
 
           {visible.length > preview && (
             <button className="insight-more" onClick={() => setExpanded((v) => !v)}>
-              {expanded ? 'Show less' : `${visible.length - preview} more thing${visible.length - preview === 1 ? '' : 's'} I noticed`}
+              {expanded
+                ? t('Show less')
+                : visible.length - preview === 1
+                  ? t('1 more thing I noticed')
+                  : t('{n} more things I noticed', { n: visible.length - preview })}
             </button>
           )}
         </div>

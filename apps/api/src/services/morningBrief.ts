@@ -6,8 +6,9 @@ import { keepInTouch, orgOf } from './keepInTouch.ts'
 import { behindLine, weekTargets } from './targets.ts'
 import { occasionLabel, upcomingOccasions } from './occasions.ts'
 import { canBeOverdue, isAwaitingWrapUp, managedByCue, meetingEnd } from './overdue.ts'
-import { formatRupees, hasWork } from '@cue/shared'
+import { formatRupees, hasWork, type Lang, type TargetMetric, type TargetProgress } from '@cue/shared'
 import { planSphere } from './workLife.ts'
+import { langOf, localeOf, msg, t } from '../i18n.ts'
 
 /**
  * The morning brief.
@@ -64,7 +65,31 @@ function dayBounds(now: Date, timezone: string) {
   return { start, end }
 }
 
-export async function briefStats(userId: string, timezone: string, now = new Date()): Promise<BriefStats> {
+/** Each weekly target, as the brief names it when behind. */
+const METRIC_WORDS: Record<TargetMetric, string> = {
+  calls: msg('calls'),
+  conversations: msg('conversations'),
+  visits: msg('visits'),
+  meetings: msg('meetings'),
+  done: msg('things done'),
+  people: msg('new contacts'),
+}
+
+/** "Behind on calls (12 of 40)": targets.ts says it in English; this, in the person's language. */
+function behindSaid(metrics: TargetProgress[], lang: Lang): string | null {
+  if (lang === 'en') return behindLine(metrics)
+  const behind = metrics.filter((m) => m.status === 'behind')
+  if (behind.length === 0) return null
+  const parts = behind
+    .slice(0, 2)
+    .map((m) => t(lang, '{what} ({done} of {target})', { what: t(lang, METRIC_WORDS[m.key]), done: m.done, target: m.target ?? 0 }))
+  const list = parts.length === 2 ? t(lang, '{a} and {b}', { a: parts[0]!, b: parts[1]! }) : parts[0]!
+  return behind.length > 2
+    ? t(lang, 'Behind on {list} and {n} more.', { list, n: behind.length - 2 })
+    : t(lang, 'Behind on {list}.', { list })
+}
+
+export async function briefStats(userId: string, timezone: string, now = new Date(), lang: Lang = 'en'): Promise<BriefStats> {
   const c = schema.commitments
   const { start, end } = dayBounds(now, timezone)
   const today = and(gte(c.dueAt, start), lt(c.dueAt, end))
@@ -156,8 +181,8 @@ export async function briefStats(userId: string, timezone: string, now = new Dat
         ? { from: new Date(summary.nextGap.from), to: new Date(summary.nextGap.to) }
         : null,
     reachOut,
-    behind: behindLine((await weekTargets(userId, now)).metrics),
-    occasions: orgId ? (await upcomingOccasions(orgId, 0, now)).map(occasionLabel) : [],
+    behind: behindSaid((await weekTargets(userId, now)).metrics, lang),
+    occasions: orgId ? (await upcomingOccasions(orgId, 0, now)).map((o) => occasionLabel(o, lang)) : [],
     split: Boolean(person?.keepApart && hasWork(person.uses)),
     work: half('work'),
     personal: half('personal'),
@@ -175,28 +200,28 @@ export async function briefStats(userId: string, timezone: string, now = new Dat
     },
     bills: billRows
       .filter((r) => !r.autopay)
-      .map((r) => `${r.name} (${r.dueOn === todayOn ? 'today' : 'tomorrow'})`),
+      .map((r) => (r.dueOn === todayOn ? t(lang, '{name} (today)', { name: r.name }) : t(lang, '{name} (tomorrow)', { name: r.name }))),
   }
 }
 
-function clockIn(d: Date, timezone: string): string {
-  return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: timezone })
+function clockIn(d: Date, timezone: string, lang: Lang): string {
+  return d.toLocaleTimeString(localeOf(lang), { hour: 'numeric', minute: '2-digit', timeZone: timezone })
 }
 
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'}`
-}
-
-function listNames(names: string[]): string {
+function listNames(names: string[], lang: Lang): string {
   if (names.length <= 1) return names[0] ?? ''
-  if (names.length === 2) return `${names[0]} and ${names[1]}`
-  return `${names.slice(0, 2).join(', ')} and ${plural(names.length - 2, 'other')}`
+  if (names.length === 2) return t(lang, '{a} and {b}', { a: names[0]!, b: names[1]! })
+  const first = names.slice(0, 2).join(', ')
+  return names.length === 3
+    ? t(lang, '{names} and 1 other', { names: first })
+    : t(lang, '{names} and {n} others', { names: first, n: names.length - 2 })
 }
 
 /** The notification, or null when there is genuinely nothing to say. */
 export function composeBrief(
   stats: BriefStats,
   timezone: string,
+  lang: Lang = 'en',
 ): { title: string; body: string; url: string } | null {
   const nothing =
     stats.meetings === 0 &&
@@ -212,47 +237,76 @@ export function composeBrief(
     stats.bills.length === 0
   if (nothing) return null
 
+  const clock = (d: Date) => clockIn(d, timezone, lang)
   const head = [
-    stats.meetings > 0 ? plural(stats.meetings, 'meeting') : null,
-    stats.tasks > 0 ? `${stats.tasks} to do` : null,
+    stats.meetings === 1 ? t(lang, '1 meeting') : stats.meetings > 1 ? t(lang, '{n} meetings', { n: stats.meetings }) : null,
+    stats.tasks > 0 ? t(lang, '{n} to do', { n: stats.tasks }) : null,
   ].filter(Boolean)
-  const title = head.length > 0 ? `Today: ${head.join(', ')}` : 'Nothing booked today'
+  const title = head.length > 0 ? t(lang, 'Today: {list}', { list: head.join(', ') }) : t(lang, 'Nothing booked today')
 
   const lines: string[] = []
-  if (stats.occasions.length > 0) lines.push(`Today: ${listNames(stats.occasions)}.`)
+  if (stats.occasions.length > 0) lines.push(t(lang, 'Today: {list}.', { list: listNames(stats.occasions, lang) }))
   if (stats.travel) {
     lines.push(
-      `${stats.travel.title} at ${clockIn(stats.travel.dueAt, timezone)} — leave by ${clockIn(stats.travel.leaveAt, timezone)}.`,
+      t(lang, '{title} at {time} — leave by {leave}.', {
+        title: stats.travel.title,
+        time: clock(stats.travel.dueAt),
+        leave: clock(stats.travel.leaveAt),
+      }),
     )
   }
-  const firstOf = (h: BriefStats['work']) => (h.first ? `, first ${h.first.title} at ${clockIn(h.first.dueAt, timezone)}` : '')
   if (stats.split && (stats.work.count > 0 || stats.personal.count > 0)) {
     // Work and personal, each with its first thing: the day in two halves.
-    if (stats.work.count > 0) lines.push(`Work: ${stats.work.count}${firstOf(stats.work)}.`)
-    if (stats.personal.count > 0) lines.push(`Personal: ${stats.personal.count}${firstOf(stats.personal)}.`)
+    const { work, personal } = stats
+    if (work.count > 0) {
+      lines.push(
+        work.first
+          ? t(lang, 'Work: {n}, first {title} at {time}.', { n: work.count, title: work.first.title, time: clock(work.first.dueAt) })
+          : t(lang, 'Work: {n}.', { n: work.count }),
+      )
+    }
+    if (personal.count > 0) {
+      lines.push(
+        personal.first
+          ? t(lang, 'Personal: {n}, first {title} at {time}.', {
+              n: personal.count,
+              title: personal.first.title,
+              time: clock(personal.first.dueAt),
+            })
+          : t(lang, 'Personal: {n}.', { n: personal.count }),
+      )
+    }
   } else if (stats.first) {
-    lines.push(`First up: ${stats.first.title} at ${clockIn(stats.first.dueAt, timezone)}.`)
+    lines.push(t(lang, 'First up: {title} at {time}.', { title: stats.first.title, time: clock(stats.first.dueAt) }))
   }
   if (stats.parcels.count > 0) {
-    const cod = stats.parcels.codPaise > 0 ? ` (${formatRupees(stats.parcels.codPaise)} cash on delivery)` : ''
+    const cod = stats.parcels.codPaise > 0 ? formatRupees(stats.parcels.codPaise) : null
+    const n = stats.parcels.count
+    const what = stats.parcels.first ?? t(lang, 'a parcel')
     lines.push(
-      stats.parcels.count === 1
-        ? `Arriving today: ${stats.parcels.first ?? 'a parcel'}${cod}.`
-        : `${stats.parcels.count} parcels arriving today${cod}.`,
+      n === 1
+        ? cod
+          ? t(lang, 'Arriving today: {what} ({cod} cash on delivery).', { what, cod })
+          : t(lang, 'Arriving today: {what}.', { what })
+        : cod
+          ? t(lang, '{n} parcels arriving today ({cod} cash on delivery).', { n, cod })
+          : t(lang, '{n} parcels arriving today.', { n }),
     )
   }
-  if (stats.bills.length > 0) lines.push(`To pay: ${listNames(stats.bills)}.`)
+  if (stats.bills.length > 0) lines.push(t(lang, 'To pay: {list}.', { list: listNames(stats.bills, lang) }))
   if (stats.longestGap && (stats.meetings > 0 || stats.tasks > 0)) {
+    lines.push(t(lang, 'Longest free stretch {from}–{to}.', { from: clock(stats.longestGap.from), to: clock(stats.longestGap.to) }))
+  }
+  if (stats.checkIns.length > 0) lines.push(t(lang, 'Check in with {names}.', { names: listNames(stats.checkIns, lang) }))
+  if (stats.wrapUps > 0) {
     lines.push(
-      `Longest free stretch ${clockIn(stats.longestGap.from, timezone)}–${clockIn(stats.longestGap.to, timezone)}.`,
+      stats.wrapUps === 1
+        ? t(lang, '1 meeting still needs follow-ups.')
+        : t(lang, '{n} meetings still need follow-ups.', { n: stats.wrapUps }),
     )
   }
-  if (stats.checkIns.length > 0) lines.push(`Check in with ${listNames(stats.checkIns)}.`)
-  if (stats.wrapUps > 0) {
-    lines.push(`${plural(stats.wrapUps, 'meeting')} still ${stats.wrapUps === 1 ? 'needs' : 'need'} follow-ups.`)
-  }
-  if (stats.overdue > 0) lines.push(`${stats.overdue} overdue.`)
-  if (stats.reachOut.length > 0) lines.push(`Time to reach out to ${listNames(stats.reachOut)}.`)
+  if (stats.overdue > 0) lines.push(t(lang, '{n} overdue.', { n: stats.overdue }))
+  if (stats.reachOut.length > 0) lines.push(t(lang, 'Time to reach out to {names}.', { names: listNames(stats.reachOut, lang) }))
   if (stats.behind) lines.push(stats.behind)
 
   return { title, body: lines.join(' '), url: '/?day=1' }
@@ -263,9 +317,10 @@ export async function sendBriefTo(
   timezone: string,
   now = new Date(),
 ): Promise<{ delivered: number; title: string; body: string } | null> {
-  const brief = composeBrief(await briefStats(userId, timezone, now), timezone)
+  const lang = await langOf(userId)
+  const brief = composeBrief(await briefStats(userId, timezone, now, lang), timezone, lang)
   if (!brief) return null
-  const delivered = await sendToUser(userId, { ...brief, tag: 'morning-brief' })
+  const delivered = await sendToUser(userId, { ...brief, tag: 'morning-brief', lang })
   return { delivered, title: brief.title, body: brief.body }
 }
 

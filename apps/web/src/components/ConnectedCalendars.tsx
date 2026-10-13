@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
+import { msg, rich, t } from '../lib/i18n.tsx'
 
 /**
  * Connecting a Google or Microsoft account, and choosing what to mirror.
@@ -42,27 +43,27 @@ interface Calendar {
  * in a URL the browser was sent to by a third party. The wording lives here.
  */
 const OUTCOME: Record<string, { text: string; bad: boolean }> = {
-  connected: { text: 'Connected. Choose which calendars to mirror.', bad: false },
-  cancelled: { text: 'No change — you cancelled at the sign-in screen.', bad: false },
-  access_denied: { text: 'No change — you cancelled at the sign-in screen.', bad: false },
+  connected: { text: msg('Connected. Choose which calendars to mirror.'), bad: false },
+  cancelled: { text: msg('No change — you cancelled at the sign-in screen.'), bad: false },
+  access_denied: { text: msg('No change — you cancelled at the sign-in screen.'), bad: false },
   no_refresh_token: {
-    text: 'That account did not grant lasting access. Remove Cue from your account permissions, then connect again.',
+    text: msg('That account did not grant lasting access. Remove Cue from your account permissions, then connect again.'),
     bad: true,
   },
   scope_missing: {
-    text: 'Calendar permission was not granted, so there is nothing to read. Connect again and leave the calendar box ticked.',
+    text: msg('Calendar permission was not granted, so there is nothing to read. Connect again and leave the calendar box ticked.'),
     bad: true,
   },
-  bad_state: { text: 'That sign-in link had already been used. Start again.', bad: true },
+  bad_state: { text: msg('That sign-in link had already been used. Start again.'), bad: true },
   // You signed in, but the provider would not hand the connection over. With
   // a sign-in that otherwise works, this is almost always the server's client
   // id or secret for that provider being wrong or swapped.
   exchange_failed: {
-    text: 'You signed in, but the provider would not hand the connection to Cue. The client id or secret this server has for it is probably wrong.',
+    text: msg('You signed in, but the provider would not hand the connection to Cue. The client id or secret this server has for it is probably wrong.'),
     bad: true,
   },
-  expired_state: { text: 'That sign-in took too long. Start again.', bad: true },
-  not_configured: { text: 'This server has no credentials for that provider.', bad: true },
+  expired_state: { text: msg('That sign-in took too long. Start again.'), bad: true },
+  not_configured: { text: msg('This server has no credentials for that provider.'), bad: true },
 }
 
 function messageOf(err: unknown): string {
@@ -73,8 +74,8 @@ function messageOf(err: unknown): string {
 }
 
 function calendarsLine(n: number): string {
-  if (n === 0) return 'no calendars chosen yet'
-  return `reading ${n} calendar${n === 1 ? '' : 's'}`
+  if (n === 0) return t('no calendars chosen yet')
+  return n === 1 ? t('reading 1 calendar') : t('reading {n} calendars', { n })
 }
 
 export function ConnectedCalendars({
@@ -136,7 +137,12 @@ export function ConnectedCalendars({
     // Reading email has its own section and its own outcomes.
     if (!code || code.startsWith('mail') || code.startsWith('all')) return
 
-    setOutcome(OUTCOME[code] ?? { text: 'That did not work. Try connecting again.', bad: true })
+    const known = OUTCOME[code]
+    setOutcome(
+      known
+        ? { text: t(known.text), bad: known.bad }
+        : { text: t('That did not work. Try connecting again.'), bad: true },
+    )
     // The answer to "did it connect?" is the first thing to see, not
     // something to scroll down a sheet for.
     requestAnimationFrame(() => root.current?.scrollIntoView({ block: 'start' }))
@@ -192,11 +198,15 @@ export function ConnectedCalendars({
     const n = account.calendarCount
     if (
       !window.confirm(
-        `Remove ${account.email} from Cue?\n\n` +
+        `${t('Remove {email} from Cue?', { email: account.email })}\n\n` +
           (n > 0
-            ? `The ${n} calendar${n === 1 ? '' : 's'} read from it, and everything brought in from them, will be removed from Cue. `
+            ? `${
+                n === 1
+                  ? t('The 1 calendar read from it, and everything brought in from them, will be removed from Cue.')
+                  : t('The {n} calendars read from it, and everything brought in from them, will be removed from Cue.', { n })
+              } `
             : '') +
-          `Your ${label} calendar itself is not touched.`,
+          t('Your {provider} calendar itself is not touched.', { provider: label }),
       )
     ) {
       return
@@ -210,7 +220,7 @@ export function ConnectedCalendars({
       // Microsoft publishes no revocation endpoint, so saying nothing here
       // would imply Cue had been removed at their end too.
       if (r.alsoRemoveAt) {
-        setNote(`Removed here. ${label} keeps its own record — remove Cue at ${r.alsoRemoveAt}.`)
+        setNote(t('Removed here. {provider} keeps its own record — remove Cue at {url}.', { provider: label, url: r.alsoRemoveAt }))
       }
       setOpenFor(null)
       await load()
@@ -230,13 +240,13 @@ export function ConnectedCalendars({
         {outcome && <p className={outcome.bad ? 'error small' : 'muted small'}>{outcome.text}</p>}
         {error ? (
           <>
-            <p className="error small">Could not load your connected accounts: {error}</p>
+            <p className="error small">{t('Could not load your connected accounts: {error}', { error })}</p>
             <button className="ghost small-btn fit-btn" onClick={() => void load()}>
-              Try again
+              {t('Try again')}
             </button>
           </>
         ) : (
-          <p className="muted small">Loading your connected accounts…</p>
+          <p className="muted small">{t('Loading your connected accounts…')}</p>
         )}
       </div>
     )
@@ -254,12 +264,12 @@ export function ConnectedCalendars({
           list was there before but read like more calendar cards, with
           nothing saying how many accounts there were or which was which. */}
       <div className="accounts-head">
-        <span className="label-text">Connected accounts</span>
+        <span className="label-text">{t('Connected accounts')}</span>
         <span className="accounts-count">{accounts.length}</span>
       </div>
 
       {accounts.length === 0 && (
-        <p className="muted small">None yet. Connect Google or Microsoft to bring your meetings in.</p>
+        <p className="muted small">{t('None yet. Connect Google or Microsoft to bring your meetings in.')}</p>
       )}
 
       {accounts.length > 0 && (
@@ -279,7 +289,7 @@ export function ConnectedCalendars({
                     <p className="muted small">
                       {account.status === 'revoked' ? (
                         <span className="error">
-                          Access was withdrawn — connect again to keep reading it.
+                          {t('Access was withdrawn — connect again to keep reading it.')}
                         </span>
                       ) : account.lastError ? (
                         <span className="error">{account.lastError}</span>
@@ -294,42 +304,42 @@ export function ConnectedCalendars({
                       onClick={() => (open ? setOpenFor(null) : void openCalendars(account.id))}
                       disabled={busy}
                     >
-                      {open ? 'Hide' : 'Calendars'}
+                      {open ? t('Hide') : t('Calendars')}
                     </button>
                     <button
                       className="ghost small-btn danger"
                       onClick={() => void disconnect(account)}
                       disabled={busy}
                     >
-                      Remove
+                      {t('Remove')}
                     </button>
                   </div>
                 </div>
 
                 {open && (
                   <div className="account-calendars">
-                    {calendars === null && <p className="muted small">Reading your calendars…</p>}
+                    {calendars === null && <p className="muted small">{t('Reading your calendars…')}</p>}
                     {calendars?.length === 0 && (
-                      <p className="muted small">No calendars this account can read.</p>
+                      <p className="muted small">{t('No calendars this account can read.')}</p>
                     )}
                     {calendars?.map((calendar) => (
                       <div className="account-calendar" key={calendar.id}>
                         <div>
                           <p className="account-address">{calendar.name}</p>
                           <p className="muted small">
-                            {calendar.primary ? 'Your main calendar' : calendar.accessRole}
-                            {calendar.hidden ? ' · hidden at the source' : ''}
+                            {calendar.primary ? t('Your main calendar') : calendar.accessRole}
+                            {calendar.hidden ? ` · ${t('hidden at the source')}` : ''}
                           </p>
                         </div>
                         {calendar.added ? (
-                          <span className="tag is-live">Reading</span>
+                          <span className="tag is-live">{t('Reading')}</span>
                         ) : (
                           <button
                             className="ghost small-btn"
                             onClick={() => void addCalendar(account.id, calendar)}
                             disabled={busy}
                           >
-                            Read this
+                            {t('Read this')}
                           </button>
                         )}
                       </div>
@@ -351,7 +361,7 @@ export function ConnectedCalendars({
               onClick={() => void connect(provider.id)}
               disabled={busy}
             >
-              + Connect {provider.label}
+              + {t('Connect {name}', { name: provider.label })}
             </button>
           ))}
         </div>
@@ -359,10 +369,18 @@ export function ConnectedCalendars({
 
       {unconfigured.length > 0 && (
         <p className="muted small">
-          {unconfigured.map((p) => p.label).join(' and ')}{' '}
-          {unconfigured.length > 1 ? 'sign-ins are' : 'sign-in is'} not set up on this server — it
-          needs that provider&rsquo;s client id and secret, plus <code>ENCRYPTION_KEY</code>. All
-          free to create, none of them billed.
+          {unconfigured.length > 1
+            ? rich(
+                '{names} sign-ins are not set up on this server — it needs that provider’s client id and secret, plus <code>ENCRYPTION_KEY</code>. All free to create, none of them billed.',
+                {
+                  names: unconfigured.map((p) => p.label).reduce((a, b) => t('{a} and {b}', { a, b })),
+                  code: (s) => <code>{s}</code>,
+                },
+              )
+            : rich(
+                '{names} sign-in is not set up on this server — it needs that provider’s client id and secret, plus <code>ENCRYPTION_KEY</code>. All free to create, none of them billed.',
+                { names: unconfigured[0]!.label, code: (s) => <code>{s}</code> },
+              )}
         </p>
       )}
 

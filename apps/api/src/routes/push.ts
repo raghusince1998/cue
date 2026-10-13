@@ -6,6 +6,7 @@ import { db, schema } from '../db/index.ts'
 import { env, pushConfigured } from '../env.ts'
 import { scope } from '../auth.ts'
 import { sendToUser } from '../push.ts'
+import { langOf, t } from '../i18n.ts'
 
 export async function pushRoutes(app: FastifyInstance) {
   // The public key is not a secret — the browser needs it before login too.
@@ -55,9 +56,10 @@ export async function pushRoutes(app: FastifyInstance) {
   /** Proves the whole delivery path works without waiting for a real due date. */
   app.post('/push/test', { onRequest: [app.authenticate] }, async (req) => {
     const { sub: userId } = scope(req)
+    const lang = await langOf(userId)
     const delivered = await sendToUser(userId, {
-      title: 'Cue is wired up',
-      body: 'Reminders will arrive here even when the app is closed.',
+      title: t(lang, 'Cue is wired up'),
+      body: t(lang, 'Reminders will arrive here even when the app is closed.'),
       tag: 'test',
       url: '/',
     })

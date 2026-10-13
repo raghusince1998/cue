@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { findCity, type IntentionDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
+import { t } from '../lib/i18n.tsx'
 
 /**
  * Wishes onto a plan: tick the ones that belong to it, and they become its
@@ -57,12 +58,11 @@ export function WishPicker({
     }
   }
 
-  if (wishes === null) return <p className="muted small">Loading your wishlist…</p>
+  if (wishes === null) return <p className="muted small">{t('Loading your wishlist…')}</p>
   if (wishes.length === 0) {
     return (
       <p className="muted small wish-picker">
-        Your wishlist is empty. Add to it on Trips, or type &ldquo;wishlist: learn swimming, read
-        Deep Work&rdquo; in the box on Today.
+        {t('Your wishlist is empty. Add to it on Trips, or type “wishlist: learn swimming, read Deep Work” in the box on Today.')}
       </p>
     )
   }
@@ -82,7 +82,7 @@ export function WishPicker({
               />
               <span>
                 {w.title}
-                <span className="muted small"> · {w.placeLabel ?? 'any time'}</span>
+                <span className="muted small"> · {w.placeLabel ?? t('any time')}</span>
               </span>
             </label>
           </li>
@@ -90,7 +90,7 @@ export function WishPicker({
       </ul>
       {error && <p className="error small">{error}</p>}
       <button className="primary small-btn fit-btn" disabled={busy || picked.length === 0} onClick={() => void add()}>
-        {busy ? 'Adding…' : `Add ${picked.length || ''} to this plan`.replace('  ', ' ')}
+        {busy ? t('Adding…') : picked.length ? t('Add {n} to this plan', { n: picked.length }) : t('Add to this plan')}
       </button>
     </div>
   )

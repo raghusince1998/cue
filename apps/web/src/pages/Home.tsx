@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth.tsx'
+import { language, msg, rich, setLanguage, t, type Lang } from '../lib/i18n.tsx'
 import { SITE } from '../lib/site.ts'
 
 /**
@@ -14,90 +15,99 @@ interface Example {
   kind: string
   result: string
   note: string
+  /** In Hindi, a line typed the way Hindi speakers type it, and what Cue makes of that. */
+  hi?: { typed: string; result: string; note: string }
 }
 
 /** One line in, the thing Cue makes of it out: the hero, cycling. */
 const EXAMPLES: Example[] = [
-  { typed: 'call Ravi tomorrow 4pm about the quote', kind: 'Planned', result: 'Call Ravi about the quote — Tue, 4:00 pm', note: 'Linked to Ravi Kumar · reminder at 4' },
-  { typed: 'rent ₹15,000 on the 1st every month', kind: 'Bill', result: 'Rent · ₹15,000 · every month', note: 'A reminder 3 days before, each time' },
-  { typed: 'applied to Infosys for data analyst', kind: 'Job hunt', result: 'Infosys · Data analyst · Applied', note: 'Nudged if nothing moves in a week' },
-  { typed: 'going to Goa 18 to 21 Oct', kind: 'Trip', result: 'Goa · 18 – 21 Oct', note: 'Everything saved for Goa comes with it' },
-  { typed: 'Ravi owes me ₹450 for the cab', kind: 'Owed to you', result: '₹450 from Ravi · the cab', note: 'Remind on WhatsApp, with your UPI ID' },
-  { typed: 'gym every mon wed fri at 7am', kind: 'Repeating', result: 'Gym · Mon, Wed, Fri at 7:00 am', note: 'On your calendar, every week' },
+  { typed: 'call Ravi tomorrow 4pm about the quote', kind: msg('Planned'), result: msg('Call Ravi about the quote — Tue, 4:00 pm'), note: msg('Linked to Ravi Kumar · reminder at 4') },
+  { typed: 'rent ₹15,000 on the 1st every month', kind: msg('Bill'), result: msg('Rent · ₹15,000 · every month'), note: msg('A reminder 3 days before, each time') },
+  { typed: 'applied to Infosys for data analyst', kind: msg('Job hunt'), result: msg('Infosys · Data analyst · Applied'), note: msg('Nudged if nothing moves in a week') },
+  { typed: 'going to Goa 18 to 21 Oct', kind: msg('Trip'), result: msg('Goa · 18 – 21 Oct'), note: msg('Everything saved for Goa comes with it') },
+  { typed: 'Ravi owes me ₹450 for the cab', kind: msg('Owed to you'), result: msg('₹450 from Ravi · the cab'), note: msg('Remind on WhatsApp, with your UPI ID') },
+  {
+    typed: 'gym every mon wed fri at 7am',
+    kind: msg('Repeating'),
+    result: msg('Gym · Mon, Wed, Fri at 7:00 am'),
+    note: msg('On your calendar, every week'),
+    hi: { typed: 'roz subah 7 baje gym', result: msg('Gym · every day at 7:00 am'), note: msg('On your calendar, every day') },
+  },
 ]
 
 /** What arrives on its own once an inbox is connected. */
 const FROM_EMAIL = [
-  { mark: '🚆', title: 'Trains, flights, buses', text: 'IRCTC and airline tickets become plans with the PNR to hand, reminded hours before — and a web check-in reminder for flights.' },
-  { mark: '📦', title: 'Parcels', text: 'Amazon, Flipkart, Myntra and more: what is arriving today, and the cash to keep ready for cash on delivery.' },
-  { mark: '💳', title: 'Card and utility bills', text: 'This month’s card statement and electricity bill, with the amount and due date, reminded before it is late.' },
-  { mark: '🛡', title: 'Insurance', text: 'Car, bike, health and life: a reminder a month before cover ends, moved on by itself when you renew.' },
-  { mark: '🚗', title: 'PUC and service', text: 'Pollution certificates and service due dates for each vehicle, by its number plate.' },
-  { mark: '🛣', title: 'FASTag and challans', text: 'A to-do when your FASTag runs low that closes when you recharge; traffic challans until they are paid.' },
+  { mark: '🚆', title: msg('Trains, flights, buses'), text: msg('IRCTC and airline tickets become plans with the PNR to hand, reminded hours before — and a web check-in reminder for flights.') },
+  { mark: '📦', title: msg('Parcels'), text: msg('Amazon, Flipkart, Myntra and more: what is arriving today, and the cash to keep ready for cash on delivery.') },
+  { mark: '💳', title: msg('Card and utility bills'), text: msg('This month’s card statement and electricity bill, with the amount and due date, reminded before it is late.') },
+  { mark: '🛡', title: msg('Insurance'), text: msg('Car, bike, health and life: a reminder a month before cover ends, moved on by itself when you renew.') },
+  { mark: '🚗', title: msg('PUC and service'), text: msg('Pollution certificates and service due dates for each vehicle, by its number plate.') },
+  { mark: '🛣', title: msg('FASTag and challans'), text: msg('A to-do when your FASTag runs low that closes when you recharge; traffic challans until they are paid.') },
 ]
 
 /** Who it is for, and what each of them gets first. */
 const PEOPLE = [
-  { title: 'Home and family', points: ['Bills, rent and renewals', 'Birthdays and anniversaries', 'Money lent, and reminders to get it back'] },
-  { title: 'Looking for a job', points: ['Every application and where it stands', 'Interviews linked to the right company', 'A nudge when one goes quiet'] },
-  { title: 'Hiring and HR', points: ['Candidates from new to hired', 'Interviews and next steps', 'Birthdays and work anniversaries'] },
-  { title: 'Sales and clients', points: ['Calls, visits and follow-ups', 'Weekly targets and a daily report', 'Deals from lead to won'] },
-  { title: 'Office work', points: ['Meetings and what came out of them', 'Waiting on someone, chased politely', 'A standup written for you'] },
-  { title: 'Freelance and business', points: ['Clients and payments due', 'Expenses and claims', 'Bills and renewals'] },
+  { title: msg('Home and family'), points: [msg('Bills, rent and renewals'), msg('Birthdays and anniversaries'), msg('Money lent, and reminders to get it back')] },
+  { title: msg('Looking for a job'), points: [msg('Every application and where it stands'), msg('Interviews linked to the right company'), msg('A nudge when one goes quiet')] },
+  { title: msg('Hiring and HR'), points: [msg('Candidates from new to hired'), msg('Interviews and next steps'), msg('Birthdays and work anniversaries')] },
+  { title: msg('Sales and clients'), points: [msg('Calls, visits and follow-ups'), msg('Weekly targets and a daily report'), msg('Deals from lead to won')] },
+  { title: msg('Office work'), points: [msg('Meetings and what came out of them'), msg('Waiting on someone, chased politely'), msg('A standup written for you')] },
+  { title: msg('Freelance and business'), points: [msg('Clients and payments due'), msg('Expenses and claims'), msg('Bills and renewals')] },
 ]
 
 /** Everything else, in a line each. */
 const FEATURES = [
-  { mark: '⚡', title: 'One line is enough', text: 'Type or speak a plan in plain words — Hindi time words too. Cue works out what, when, who and where.' },
-  { mark: '🔔', title: 'Reminders that follow up', text: 'On your phone at the right time, and again if it is still open. Things do not quietly slip.' },
-  { mark: '☀️', title: 'Your day, at a glance', text: 'Today shows what is due, what is overdue, what is waiting on others, and what Cue noticed.' },
-  { mark: '📅', title: 'Your calendar, in one step', text: 'Google or Microsoft calendar mirrored in, alongside everything else you plan here.' },
-  { mark: '✈️', title: 'Trips', text: 'Save things for a city; they surface when you plan a trip there, with tickets and stays attached.' },
-  { mark: '👥', title: 'People', text: 'Who you know, where they work, when you last spoke, and a nudge to keep in touch.' },
-  { mark: '📋', title: 'Trackers', text: 'Job applications, candidates and deals, each with its next step and a nudge when it stalls.' },
-  { mark: '🧾', title: 'Bills and renewals', text: 'Due dates, amounts and one-tap “paid” that moves each to its next date.' },
-  { mark: '💸', title: 'Expenses and money owed', text: 'Log spending, claim it back from work, split with friends and remind them to pay.' },
-  { mark: '📱', title: 'Works like an app', text: 'Add it to your home screen. Works offline and catches up when you are back online.' },
+  { mark: '⚡', title: msg('One line is enough'), text: msg('Type or speak a plan in plain words — Hindi time words too. Cue works out what, when, who and where.') },
+  { mark: '🔔', title: msg('Reminders that follow up'), text: msg('On your phone at the right time, and again if it is still open. Things do not quietly slip.') },
+  { mark: '☀️', title: msg('Your day, at a glance'), text: msg('Today shows what is due, what is overdue, what is waiting on others, and what Cue noticed.') },
+  { mark: '📅', title: msg('Your calendar, in one step'), text: msg('Google or Microsoft calendar mirrored in, alongside everything else you plan here.') },
+  { mark: '✈️', title: msg('Trips'), text: msg('Save things for a city; they surface when you plan a trip there, with tickets and stays attached.') },
+  { mark: '👥', title: msg('People'), text: msg('Who you know, where they work, when you last spoke, and a nudge to keep in touch.') },
+  { mark: '📋', title: msg('Trackers'), text: msg('Job applications, candidates and deals, each with its next step and a nudge when it stalls.') },
+  { mark: '🧾', title: msg('Bills and renewals'), text: msg('Due dates, amounts and one-tap “paid” that moves each to its next date.') },
+  { mark: '💸', title: msg('Expenses and money owed'), text: msg('Log spending, claim it back from work, split with friends and remind them to pay.') },
+  { mark: '📱', title: msg('Works like an app'), text: msg('Add it to your home screen. Works offline and catches up when you are back online.') },
 ]
 
-function CaptureDemo() {
+function CaptureDemo({ lang }: { lang: Lang }) {
   const [index, setIndex] = useState(0)
   // The first example arrives complete, so the first look is never a half-typed line.
   const [shown, setShown] = useState(EXAMPLES[0]!.typed.length)
   const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  const ex = EXAMPLES[index]!
+  const at = EXAMPLES[index]!
+  const ex = { ...at, ...(lang === 'hi' ? at.hi : undefined) }
   const done = shown >= ex.typed.length
 
   useEffect(() => {
     if (reduce) {
       setShown(ex.typed.length)
-      const t = setTimeout(() => setIndex((i) => (i + 1) % EXAMPLES.length), 3500)
-      return () => clearTimeout(t)
+      const timer = setTimeout(() => setIndex((i) => (i + 1) % EXAMPLES.length), 3500)
+      return () => clearTimeout(timer)
     }
     if (!done) {
-      const t = setTimeout(() => setShown((n) => n + 1), 38)
-      return () => clearTimeout(t)
+      const timer = setTimeout(() => setShown((n) => n + 1), 38)
+      return () => clearTimeout(timer)
     }
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setIndex((i) => (i + 1) % EXAMPLES.length)
       setShown(0)
     }, 2800)
-    return () => clearTimeout(t)
+    return () => clearTimeout(timer)
   }, [done, ex.typed.length, reduce])
 
   return (
-    <div className="site-capture" aria-label="An example of typing a plan into Cue">
+    <div className="site-capture" aria-label={t('An example of typing a plan into Cue')}>
       <div className="site-capture-box">
         <span className="site-capture-text">
           {ex.typed.slice(0, shown)}
           <span className="site-caret" aria-hidden />
         </span>
-        <span className="site-capture-btn">Plan it</span>
+        <span className="site-capture-btn">{t('Plan it')}</span>
       </div>
       <div className={`site-capture-result${done ? ' is-shown' : ''}`} aria-live="polite">
-        <span className="site-kind">{ex.kind}</span>
-        <strong>{ex.result}</strong>
-        <span className="site-note">{ex.note}</span>
+        <span className="site-kind">{t(ex.kind)}</span>
+        <strong>{t(ex.result)}</strong>
+        <span className="site-note">{t(ex.note)}</span>
       </div>
       <div className="site-capture-dots" aria-hidden>
         {EXAMPLES.map((_, i) => (
@@ -113,13 +123,21 @@ export default function Home() {
   const navigate = useNavigate()
   const [demoBusy, setDemoBusy] = useState(false)
   const [demoError, setDemoError] = useState<string | null>(null)
+  // Before anyone signs in, the visitor picks: the device's language to begin
+  // with, and an account made from here starts in the one picked.
+  const [lang, setLang] = useState<Lang>(language)
 
   useEffect(() => {
-    document.title = 'Cue — say it once, Cue remembers the rest'
+    document.title = t('Cue — say it once, Cue remembers the rest')
     return () => {
       document.title = 'Cue'
     }
-  }, [])
+  }, [lang])
+
+  function choose(next: Lang) {
+    setLanguage(next)
+    setLang(next)
+  }
 
   async function demo() {
     setDemoBusy(true)
@@ -128,37 +146,46 @@ export default function Home() {
       await enterDemo()
       navigate('/', { replace: true })
     } catch {
-      setDemoError('The demo could not start just now. Try again in a minute, or create a free account.')
+      setDemoError(t('The demo could not start just now. Try again in a minute, or create a free account.'))
       setDemoBusy(false)
     }
   }
 
   const DemoButton = ({ big = false }: { big?: boolean }) => (
     <button className={`site-btn ghost-btn${big ? ' is-big' : ''}`} onClick={() => void demo()} disabled={demoBusy}>
-      {demoBusy ? 'Opening the demo…' : 'Try the demo'}
+      {demoBusy ? t('Opening the demo…') : t('Try the demo')}
     </button>
   )
 
   return (
-    <div className="site">
+    <div className="site" lang={lang}>
       <header className="site-header">
         <div className="site-wrap site-header-row">
           <Link to="/" className="site-brand">
             <img className="brand-mark" src="/brand/cue-mark.svg" alt="" />
             Cue
           </Link>
-          <nav className="site-nav" aria-label="Sections">
-            <a href="#from-email">From your email</a>
-            <a href="#for-you">Who it is for</a>
-            <a href="#features">Features</a>
-            <Link to="/privacy">Privacy</Link>
+          <nav className="site-nav" aria-label={t('Sections')}>
+            <a href="#from-email">{t('From your email')}</a>
+            <a href="#for-you">{t('Who it is for')}</a>
+            <a href="#features">{t('Features')}</a>
+            <Link to="/privacy">{t('Privacy')}</Link>
           </nav>
           <div className="site-header-actions">
+            {/* Each language named in itself, so whoever needs it can find it. */}
+            <button
+              className="site-lang"
+              onClick={() => choose(lang === 'hi' ? 'en' : 'hi')}
+              lang={lang === 'hi' ? 'en' : 'hi'}
+              aria-label={lang === 'hi' ? 'Read in English' : 'हिन्दी में पढ़ें'}
+            >
+              {lang === 'hi' ? 'English' : 'हिन्दी'}
+            </button>
             <Link to="/login" className="site-link">
-              Sign in
+              {t('Sign in')}
             </Link>
             <Link to="/register" className="site-btn primary-btn">
-              Get started
+              {t('Get started')}
             </Link>
           </div>
         </div>
@@ -168,35 +195,35 @@ export default function Home() {
         <section className="site-hero">
           <div className="site-wrap site-hero-grid">
             <div className="site-hero-copy">
-              <span className="site-eyebrow">A planner that remembers for you</span>
+              <span className="site-eyebrow">{t('A planner that remembers for you')}</span>
               <h1>
-                Say it once.
+                {t('Say it once.')}
                 <br />
-                <span className="site-gradient">Cue remembers the rest.</span>
+                <span className="site-gradient">{t('Cue remembers the rest.')}</span>
               </h1>
               <p className="site-lead">
-                Type a plan in one line — or let Cue find it in your email. Train tickets, parcels,
-                bills, insurance renewals and follow-ups turn up on their own, each with a reminder
-                at the right time.
+                {t(
+                  'Type a plan in one line — or let Cue find it in your email. Train tickets, parcels, bills, insurance renewals and follow-ups turn up on their own, each with a reminder at the right time.',
+                )}
               </p>
               <div className="site-ctas">
                 <Link to="/register" className="site-btn primary-btn is-big">
-                  Get started — it’s free
+                  {t('Get started — it’s free')}
                 </Link>
                 <DemoButton big />
               </div>
               <p className="site-small">
-                No card needed. The demo opens a sample week, ready to explore, and is deleted after a day.
+                {t('No card needed. The demo opens a sample week, ready to explore, and is deleted after a day.')}
               </p>
               {demoError && <p className="error small">{demoError}</p>}
             </div>
-            <CaptureDemo />
+            <CaptureDemo lang={lang} />
           </div>
         </section>
 
-        <section className="site-strip" aria-label="Messages Cue understands">
+        <section className="site-strip" aria-label={t('Messages Cue understands')}>
           <div className="site-wrap">
-            <span className="site-strip-label">Understands messages from</span>
+            <span className="site-strip-label">{t('Understands messages from')}</span>
             <div className="site-strip-names">
               {['IRCTC', 'IndiGo', 'Air India', 'Amazon', 'Flipkart', 'Myntra', 'BookMyShow', 'HDFC', 'ICICI', 'ACKO', 'LIC', 'Parivahan', 'redBus', 'Paytm FASTag'].map((n) => (
                 <span key={n}>{n}</span>
@@ -208,11 +235,12 @@ export default function Home() {
         <section className="site-section" id="from-email">
           <div className="site-wrap">
             <div className="site-section-head">
-              <span className="site-eyebrow">Connect once</span>
-              <h2>Things come in by themselves</h2>
+              <span className="site-eyebrow">{t('Connect once')}</span>
+              <h2>{t('Things come in by themselves')}</h2>
               <p>
-                Connect Google or Microsoft in one step. Your calendar comes in, and Cue reads only the
-                emails that matter — from booking sites, shops, banks, insurers and the transport department.
+                {t(
+                  'Connect Google or Microsoft in one step. Your calendar comes in, and Cue reads only the emails that matter — from booking sites, shops, banks, insurers and the transport department.',
+                )}
               </p>
             </div>
             <div className="site-cards">
@@ -221,8 +249,8 @@ export default function Home() {
                   <span className="site-mark" aria-hidden>
                     {f.mark}
                   </span>
-                  <h3>{f.title}</h3>
-                  <p>{f.text}</p>
+                  <h3>{t(f.title)}</h3>
+                  <p>{t(f.text)}</p>
                 </article>
               ))}
             </div>
@@ -232,24 +260,24 @@ export default function Home() {
         <section className="site-section is-tinted">
           <div className="site-wrap">
             <div className="site-section-head">
-              <span className="site-eyebrow">How it works</span>
-              <h2>Three steps, then it runs itself</h2>
+              <span className="site-eyebrow">{t('How it works')}</span>
+              <h2>{t('Three steps, then it runs itself')}</h2>
             </div>
             <ol className="site-steps">
               <li>
                 <span className="site-step-n">1</span>
-                <h3>Create your account</h3>
-                <p>Or try the demo first. Tell Cue what you use it for, and it leads with that.</p>
+                <h3>{t('Create your account')}</h3>
+                <p>{t('Or try the demo first. Tell Cue what you use it for, and it leads with that.')}</p>
               </li>
               <li>
                 <span className="site-step-n">2</span>
-                <h3>Connect your account</h3>
-                <p>Google (Calendar and Gmail) or Microsoft (Outlook and Calendar), in a single step.</p>
+                <h3>{t('Connect your account')}</h3>
+                <p>{t('Google (Calendar and Gmail) or Microsoft (Outlook and Calendar), in a single step.')}</p>
               </li>
               <li>
                 <span className="site-step-n">3</span>
-                <h3>Get reminded</h3>
-                <p>On your phone, at the right time. Add Cue to your home screen and it works like an app.</p>
+                <h3>{t('Get reminded')}</h3>
+                <p>{t('On your phone, at the right time. Add Cue to your home screen and it works like an app.')}</p>
               </li>
             </ol>
           </div>
@@ -258,17 +286,17 @@ export default function Home() {
         <section className="site-section" id="for-you">
           <div className="site-wrap">
             <div className="site-section-head">
-              <span className="site-eyebrow">Made for your kind of day</span>
-              <h2>One app, whoever you are</h2>
-              <p>Pick what you use Cue for and it shapes itself around you. Everything else stays one tap away.</p>
+              <span className="site-eyebrow">{t('Made for your kind of day')}</span>
+              <h2>{t('One app, whoever you are')}</h2>
+              <p>{t('Pick what you use Cue for and it shapes itself around you. Everything else stays one tap away.')}</p>
             </div>
             <div className="site-people">
               {PEOPLE.map((p) => (
                 <article key={p.title} className="site-person">
-                  <h3>{p.title}</h3>
+                  <h3>{t(p.title)}</h3>
                   <ul>
                     {p.points.map((x) => (
-                      <li key={x}>{x}</li>
+                      <li key={x}>{t(x)}</li>
                     ))}
                   </ul>
                 </article>
@@ -278,8 +306,8 @@ export default function Home() {
             <Link to="/exams-app" className="site-card exams-callout">
               <img src="/brand/cue-exams-mark.svg" alt="" width={44} height={44} />
               <span>
-                <strong>Preparing for an exam? Try Cue Exams.</strong>
-                <span className="muted"> Every exam from the form to the result — last dates, admit cards, results — in Hindi too. परीक्षा की हर तारीख याद।</span>
+                <strong>{t('Preparing for an exam? Try Cue Exams.')}</strong>
+                <span className="muted"> {t('Every exam from the form to the result — last dates, admit cards, results — in Hindi too. परीक्षा की हर तारीख याद।')}</span>
               </span>
             </Link>
           </div>
@@ -288,8 +316,8 @@ export default function Home() {
         <section className="site-section is-tinted" id="features">
           <div className="site-wrap">
             <div className="site-section-head">
-              <span className="site-eyebrow">Everything in one place</span>
-              <h2>Less to remember. Nothing that slips.</h2>
+              <span className="site-eyebrow">{t('Everything in one place')}</span>
+              <h2>{t('Less to remember. Nothing that slips.')}</h2>
             </div>
             <div className="site-features">
               {FEATURES.map((f) => (
@@ -298,8 +326,8 @@ export default function Home() {
                     {f.mark}
                   </span>
                   <div>
-                    <h3>{f.title}</h3>
-                    <p>{f.text}</p>
+                    <h3>{t(f.title)}</h3>
+                    <p>{t(f.text)}</p>
                   </div>
                 </div>
               ))}
@@ -310,16 +338,16 @@ export default function Home() {
         <section className="site-section">
           <div className="site-wrap site-privacy">
             <div>
-              <span className="site-eyebrow">Your email stays yours</span>
-              <h2>Read-only, and only what matters</h2>
+              <span className="site-eyebrow">{t('Your email stays yours')}</span>
+              <h2>{t('Read-only, and only what matters')}</h2>
               <ul className="site-checks">
-                <li>Cue can only read — it can never send, delete or change your email.</li>
-                <li>It opens only messages from booking sites, shops, banks, insurers and utilities.</li>
-                <li>No email is stored: only what was found in it, like a ticket or a due date.</li>
-                <li>Never sold, never used for ads. Disconnect, or delete your account, at any time.</li>
+                <li>{t('Cue can only read — it can never send, delete or change your email.')}</li>
+                <li>{t('It opens only messages from booking sites, shops, banks, insurers and utilities.')}</li>
+                <li>{t('No email is stored: only what was found in it, like a ticket or a due date.')}</li>
+                <li>{t('Never sold, never used for ads. Disconnect, or delete your account, at any time.')}</li>
               </ul>
               <Link to="/privacy" className="site-link">
-                Read the privacy policy →
+                {t('Read the privacy policy →')}
               </Link>
             </div>
           </div>
@@ -327,16 +355,16 @@ export default function Home() {
 
         <section className="site-final">
           <div className="site-wrap">
-            <h2>Start remembering less.</h2>
-            <p>Free to use. Set up in a minute.</p>
+            <h2>{t('Start remembering less.')}</h2>
+            <p>{t('Free to use. Set up in a minute.')}</p>
             <div className="site-ctas center">
               <Link to="/register" className="site-btn primary-btn is-big">
-                Create your account
+                {t('Create your account')}
               </Link>
               <DemoButton big />
             </div>
             <p className="site-small">
-              Already have an account? <Link to="/login">Sign in</Link>
+              {rich('Already have an account? <link>Sign in</link>', { link: (s) => <Link to="/login">{s}</Link> })}
             </p>
           </div>
         </section>
@@ -345,10 +373,10 @@ export default function Home() {
       <footer className="site-footer">
         <div className="site-wrap site-footer-row">
           <span>© 2026 Cue</span>
-          <nav aria-label="Legal">
-            <Link to="/privacy">Privacy policy</Link>
-            <Link to="/terms">Terms of service</Link>
-            <a href={`mailto:${SITE.supportEmail}`}>Contact</a>
+          <nav aria-label={t('Legal')}>
+            <Link to="/privacy">{t('Privacy policy')}</Link>
+            <Link to="/terms">{t('Terms of service')}</Link>
+            <a href={`mailto:${SITE.supportEmail}`}>{t('Contact')}</a>
           </nav>
         </div>
       </footer>

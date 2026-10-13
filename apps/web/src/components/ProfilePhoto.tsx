@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { BASE, getToken } from '../lib/api.ts'
+import { t } from '../lib/i18n.tsx'
 
 /**
  * The photo on the account.
@@ -36,12 +37,12 @@ async function toSquareJpeg(file: File): Promise<Blob> {
     canvas.width = SIZE
     canvas.height = SIZE
     const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('This browser cannot resize images.')
+    if (!ctx) throw new Error(t('This browser cannot resize images.'))
     ctx.drawImage(bitmap, sx, sy, edge, edge, 0, 0, SIZE, SIZE)
 
     return await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
-        (blob) => (blob ? resolve(blob) : reject(new Error('Could not read that image.'))),
+        (blob) => (blob ? resolve(blob) : reject(new Error(t('Could not read that image.')))),
         'image/jpeg',
         0.85,
       )
@@ -131,7 +132,7 @@ export function ProfilePhoto({
         },
         body: blob,
       })
-      if (!res.ok) throw new Error('That image was not accepted.')
+      if (!res.ok) throw new Error(t('That image was not accepted.'))
       onChanged()
     } catch (err) {
       setError((err as Error).message)
@@ -166,15 +167,15 @@ export function ProfilePhoto({
             onClick={() => input.current?.click()}
             disabled={busy}
           >
-            {busy ? 'Working…' : src ? 'Change photo' : 'Add a photo'}
+            {busy ? t('Working…') : src ? t('Change photo') : t('Add a photo')}
           </button>
           {src && (
             <button className="ghost small-btn" onClick={() => void remove()} disabled={busy}>
-              Remove
+              {t('Remove')}
             </button>
           )}
         </div>
-        <p className="muted small">Square works best. It is resized on this device before it goes.</p>
+        <p className="muted small">{t('Square works best. It is resized on this device before it goes.')}</p>
         {error && <p className="error small">{error}</p>}
       </div>
 

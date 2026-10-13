@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { WINDOW_LABELS, type IntentionDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { getFix } from '../lib/geo.ts'
+import { t } from '../lib/i18n.tsx'
 
 interface Near {
   intention: IntentionDTO
@@ -49,28 +50,29 @@ export function NearbyIntentions() {
   if (dismissed || near.length === 0) return null
 
   // They are all within the same radius, so the closest names the place.
-  const place = near[0]!.intention.placeLabel
+  const place = near[0]!.intention.placeLabel ?? ''
 
   return (
     <div className="banner">
       <div>
         <strong>
-          You are near {place} — {near.length}{' '}
-          {near.length === 1 ? 'thing' : 'things'} saved for here
+          {near.length === 1
+            ? t('You are near {place} — 1 thing saved for here', { place })
+            : t('You are near {place} — {n} things saved for here', { place, n: near.length })}
         </strong>
         <ul className="plain">
           {near.map(({ intention }) => (
             <li key={intention.id} className="muted small">
               {intention.title}
               {intention.preferredWindow
-                ? ` · ${WINDOW_LABELS[intention.preferredWindow]}`
+                ? ` · ${t(WINDOW_LABELS[intention.preferredWindow])}`
                 : ''}
             </li>
           ))}
         </ul>
       </div>
       <button className="ghost small-btn" onClick={() => setDismissed(true)}>
-        Not now
+        {t('Not now')}
       </button>
     </div>
   )

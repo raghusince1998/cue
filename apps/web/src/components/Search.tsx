@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api.ts'
+import { locale, msg, t } from '../lib/i18n.tsx'
 
 /**
  * One box, everything behind it.
@@ -22,21 +23,22 @@ interface Hit {
   href: string
 }
 
+/** Shown with t(). */
 const KIND_LABEL: Record<Kind, string> = {
-  commitment: 'Plan',
-  trip: 'Trip',
-  intention: 'Saved for',
-  contact: 'Person',
-  place: 'Place',
-  recurrence: 'Repeats',
-  visit: 'Visit',
+  commitment: msg('Plan'),
+  trip: msg('Trip'),
+  intention: msg('Saved for'),
+  contact: msg('Person'),
+  place: msg('Place'),
+  recurrence: msg('Repeats'),
+  visit: msg('Visit'),
 }
 
 function when(value: string | null): string {
   if (!value) return ''
   const d = new Date(value.length === 10 ? `${value}T00:00:00` : value)
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 export function Search({
@@ -103,11 +105,11 @@ export function Search({
           className="search-input"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder={inline ? 'Search anything…' : 'A person, a place, a word in a note…'}
-          aria-label="Search everything"
+          placeholder={inline ? t('Search anything…') : t('A person, a place, a word in a note…')}
+          aria-label={t('Search everything')}
         />
         {q && (
-          <button className="search-clear" aria-label="Clear" onClick={() => setQ('')}>
+          <button className="search-clear" aria-label={t('Clear')} onClick={() => setQ('')}>
             ×
           </button>
         )}
@@ -115,21 +117,20 @@ export function Search({
 
       {!inline && q.trim().length < 2 && (
         <p className="muted small">
-          Try a name, a town, or anything you wrote in a note — &ldquo;Ramesh&rdquo;,
-          &ldquo;Mathura&rdquo;, &ldquo;invoice&rdquo;.
+          {t('Try a name, a town, or anything you wrote in a note — “Ramesh”, “Mathura”, “invoice”.')}
         </p>
       )}
 
-      {busy && hits === null && <p className="muted small">Looking…</p>}
+      {busy && hits === null && <p className="muted small">{t('Looking…')}</p>}
 
       {hits !== null && hits.length === 0 && !busy && (
-        <p className="muted small">Nothing matches that.</p>
+        <p className="muted small">{t('Nothing matches that.')}</p>
       )}
 
       {Object.entries(grouped).map(([kind, list]) => (
         <section key={kind}>
           <h3 className="section-title muted-title">
-            {KIND_LABEL[kind as Kind]} · {list.length}
+            {t(KIND_LABEL[kind as Kind])} · {list.length}
           </h3>
           <ul className="plain">
             {list.map((hit) => (

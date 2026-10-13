@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { db, schema } from '../db/index.ts'
+import { langsOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
 import { managedByCue } from './overdue.ts'
 
@@ -127,8 +128,10 @@ export async function promptPrep(now = new Date()): Promise<number> {
   `)) as unknown as Omit<Upcoming, 'open'>[]
 
   let sent = 0
+  const langs = await langsOf(rows.map((r) => r.user_id))
   for (const row of rows) {
     try {
+      const lang = langs.get(row.user_id) ?? 'en'
       const related = await relatedMeetings(row.user_id, row.id)
       const ids = (related ?? []).map((m) => m.id)
       const open = ids.length
@@ -143,12 +146,16 @@ export async function promptPrep(now = new Date()): Promise<number> {
       const named = open.slice(0, 2).map((o) =>
         o.waitingOn ? `${o.title.replace(/^Waiting on [^:]+:\s*/i, '')} (${o.waitingOn})` : o.title,
       )
-      const more = open.length > 2 ? ` and ${open.length - 2} more` : ''
+      const list = named.join('; ')
       await sendToUser(row.user_id, {
-        title: `${row.title} in ${minutesUntil(new Date(row.due_at), now)} min`,
-        body: `${open.length} open from last time: ${named.join('; ')}${more}.`,
+        title: t(lang, '{title} in {n} min', { title: row.title, n: minutesUntil(new Date(row.due_at), now) }),
+        body:
+          open.length > 2
+            ? t(lang, '{n} open from last time: {list} and {more} more.', { n: open.length, list, more: open.length - 2 })
+            : t(lang, '{n} open from last time: {list}.', { n: open.length, list }),
         tag: `prep-${row.id}`,
         url: `/?prep=${row.id}`,
+        lang,
       })
       sent += 1
     } catch (err) {

@@ -6,12 +6,14 @@ import {
   updateRecurrenceInput,
   describeRecurrence,
   type CommitmentKind,
+  type Lang,
   type Priority,
   type RecurrenceDTO,
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { takeFirst } from '../db/util.ts'
 import { scope } from '../auth.ts'
+import { langOf } from '../i18n.ts'
 import { anchorOf, detach, materialise, regenerate, ruleOf, stopSeries } from '../services/recurrence.ts'
 
 type RecurrenceRow = typeof schema.recurrences.$inferSelect
@@ -19,6 +21,7 @@ type RecurrenceRow = typeof schema.recurrences.$inferSelect
 function toDTO(
   row: RecurrenceRow,
   extra: { placeName?: string | null; nextAt?: Date | null; upcomingCount?: number } = {},
+  lang: Lang = 'en',
 ): RecurrenceDTO {
   const rule = ruleOf(row)
   return {
@@ -37,7 +40,7 @@ function toDTO(
     minute: row.minute,
     rule,
     status: row.status,
-    summary: describeRecurrence(rule, anchorOf(row)),
+    summary: describeRecurrence(rule, anchorOf(row), lang),
     nextAt: extra.nextAt ? extra.nextAt.toISOString() : null,
     upcomingCount: extra.upcomingCount ?? 0,
     createdAt: row.createdAt.toISOString(),
@@ -80,6 +83,7 @@ export async function recurrenceRoutes(app: FastifyInstance) {
   app.get('/recurrences', async (req) => {
     const { sub: userId } = scope(req)
     const now = new Date()
+    const lang = await langOf(userId)
 
     const rows = await db
       .select({ r: schema.recurrences, placeName: schema.places.name })
@@ -91,7 +95,7 @@ export async function recurrenceRoutes(app: FastifyInstance) {
     return {
       recurrences: await Promise.all(
         rows.map(async ({ r, placeName }) =>
-          toDTO(r, { placeName, ...(await upcoming(r.id, now)) }),
+          toDTO(r, { placeName, ...(await upcoming(r.id, now)) }, lang),
         ),
       ),
     }
@@ -133,7 +137,7 @@ export async function recurrenceRoutes(app: FastifyInstance) {
       return created
     })
 
-    return reply.code(201).send({ recurrence: toDTO(row, await upcoming(row.id, new Date())) })
+    return reply.code(201).send({ recurrence: toDTO(row, await upcoming(row.id, new Date()), await langOf(userId)) })
   })
 
   app.get('/recurrences/:id', async (req, reply) => {
@@ -156,7 +160,7 @@ export async function recurrenceRoutes(app: FastifyInstance) {
       .orderBy(asc(schema.commitments.dueAt))
 
     return {
-      recurrence: toDTO(row, await upcoming(id, new Date())),
+      recurrence: toDTO(row, await upcoming(id, new Date()), await langOf(userId)),
       occurrences: occurrences.map((o) => ({
         id: o.id,
         title: o.title,
@@ -210,7 +214,7 @@ export async function recurrenceRoutes(app: FastifyInstance) {
       return updated
     })
 
-    return { recurrence: toDTO(row, await upcoming(id, new Date())) }
+    return { recurrence: toDTO(row, await upcoming(id, new Date()), await langOf(userId)) }
   })
 
   /**

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api.ts'
+import { locale, msg, rich, t } from '../lib/i18n.tsx'
 import { waNumber } from './PersonSheet.tsx'
 
 type Format = 'report' | 'standup'
@@ -31,10 +32,10 @@ interface Recipient {
 
 const parseDay = (ymd: string) => new Date(`${ymd}T00:00:00`)
 const dayName = (ymd: string) =>
-  parseDay(ymd).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short' })
-const weekday = (ymd: string) => parseDay(ymd).toLocaleDateString([], { weekday: 'long' })
-const shortDay = (iso: string) => new Date(iso).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })
-const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  parseDay(ymd).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'short' })
+const weekday = (ymd: string) => parseDay(ymd).toLocaleDateString(locale(), { weekday: 'long' })
+const shortDay = (iso: string) => new Date(iso).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })
+const clock = (iso: string) => new Date(iso).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })
 
 function daysBetween(a: string, b: string): number {
   return Math.round((parseDay(b).getTime() - parseDay(a).getTime()) / 86_400_000)
@@ -47,10 +48,10 @@ function daysBetween(a: string, b: string): number {
 function withoutRepeat(title: string, who: string | null): string | null {
   if (!who) return null
   const m = /^(.*) \((.*)\)$/.exec(who)
-  const t = title.toLowerCase()
-  if (!m) return t.includes(who.toLowerCase()) ? null : who
+  const said = title.toLowerCase()
+  if (!m) return said.includes(who.toLowerCase()) ? null : who
   const [, name, org] = m
-  const keep = [t.includes(name!.toLowerCase()) ? null : name, t.includes(org!.toLowerCase()) ? null : org]
+  const keep = [said.includes(name!.toLowerCase()) ? null : name, said.includes(org!.toLowerCase()) ? null : org]
   if (keep[0] && keep[1]) return who
   return keep[0] ?? keep[1] ?? null
 }
@@ -71,27 +72,32 @@ function compose(r: Report, format: Format, o: Options, toName: string | null): 
   const lines: string[] = []
   const meeting = (m: Item) => {
     const who = withoutRepeat(m.title, m.who)
-    return `• ${m.at ? `${clock(m.at)} ` : ''}${m.title}${who ? ` with ${who}` : ''}${o.notes && m.note ? `. ${m.note}` : ''}`
+    const what = who ? t('{title} with {who}', { title: m.title, who }) : m.title
+    return `• ${m.at ? `${clock(m.at)} ` : ''}${what}${o.notes && m.note ? `. ${m.note}` : ''}`
   }
   const visit = (v: Item) => `• ${v.title}${v.who ? `, ${v.who}` : ''}${o.notes && v.note ? `: ${v.note}` : ''}`
-  const call = (c: Item) => `• ${c.title}: ${(c.who ?? 'Call').toLowerCase()}${o.notes && c.note ? `. ${c.note}` : ''}`
+  const call = (c: Item) => `• ${c.title}: ${(c.who ?? t('call')).toLowerCase()}${o.notes && c.note ? `. ${c.note}` : ''}`
   const planned = (n: Item) => `• ${n.at ? `${clock(n.at)} ` : ''}${n.title}`
 
   if (format === 'report') {
-    if (toName?.trim()) lines.push(`Hi ${toName.trim().split(/\s+/)[0]},`, '')
-    lines.push(`Update for ${dayName(r.date)}:`)
+    if (toName?.trim()) lines.push(t('Hi {name},', { name: toName.trim().split(/\s+/)[0]! }), '')
+    lines.push(t('Update for {day}:', { day: dayName(r.date) }))
     const body: string[] = []
-    section(body, 'Meetings', r.meetings.map(meeting))
-    section(body, 'Visits', r.visits.map(visit))
-    section(body, 'Calls', (r.calls ?? []).map(call))
-    section(body, 'Done', r.done.map((d) => `• ${d.title}`))
-    section(body, 'Next steps agreed', r.agreed.map((a) => `• ${a.title}${a.at ? ` (by ${shortDay(a.at)})` : ''}`))
-    if (o.waiting) section(body, 'Waiting on', r.waiting.map((w) => `• ${w.title}`))
+    section(body, t('Meetings'), r.meetings.map(meeting))
+    section(body, t('Visits'), r.visits.map(visit))
+    section(body, t('Calls'), (r.calls ?? []).map(call))
+    section(body, t('Done'), r.done.map((d) => `• ${d.title}`))
+    section(
+      body,
+      t('Next steps agreed'),
+      r.agreed.map((a) => `• ${a.at ? t('{title} (by {day})', { title: a.title, day: shortDay(a.at) }) : a.title}`),
+    )
+    if (o.waiting) section(body, t('Waiting on'), r.waiting.map((w) => `• ${w.title}`))
     if (o.next) {
       const gap = daysBetween(r.date, r.next.date)
-      section(body, gap === 1 ? 'Tomorrow' : weekday(r.next.date), r.next.items.map(planned))
+      section(body, gap === 1 ? t('Tomorrow') : weekday(r.next.date), r.next.items.map(planned))
     }
-    if (body.length === 0) body.push('Nothing recorded for the day.')
+    if (body.length === 0) body.push(t('Nothing recorded for the day.'))
     lines.push('', ...body)
     return lines.join('\n')
   }
@@ -105,10 +111,18 @@ function compose(r: Report, format: Format, o: Options, toName: string | null): 
     ...(r.calls ?? []).map(call),
     ...r.done.map((d) => `• ${d.title}`),
   ]
-  section(lines, daysBetween(r.date, todayYmd) === 1 ? 'Yesterday' : weekday(r.date), past.length ? past : ['• Nothing recorded'])
-  section(lines, 'Today', r.next.items.length ? r.next.items.map(planned) : ['• Nothing booked yet'])
+  section(
+    lines,
+    daysBetween(r.date, todayYmd) === 1 ? t('Yesterday') : weekday(r.date),
+    past.length ? past : [`• ${t('Nothing recorded')}`],
+  )
+  section(lines, t('Today'), r.next.items.length ? r.next.items.map(planned) : [`• ${t('Nothing booked yet')}`])
   if (o.waiting) {
-    section(lines, 'Blockers', r.waiting.length ? r.waiting.map((w) => `• Waiting on ${w.title}`) : ['• None'])
+    section(
+      lines,
+      t('Blockers'),
+      r.waiting.length ? r.waiting.map((w) => `• ${t('Waiting on {title}', { title: w.title })}`) : [`• ${t('None')}`],
+    )
   }
   return lines.join('\n')
 }
@@ -153,7 +167,12 @@ export function DailyReport({ initialFormat = 'report' }: { initialFormat?: Form
   }, [r, format, opts, to.reportToName, edited])
 
   const subject = useMemo(
-    () => (r ? (format === 'report' ? `Daily update: ${dayName(r.date)}` : `Standup: ${dayName(r.next.date)}`) : ''),
+    () =>
+      r
+        ? format === 'report'
+          ? t('Daily update: {day}', { day: dayName(r.date) })
+          : t('Standup: {day}', { day: dayName(r.next.date) })
+        : '',
     [r, format],
   )
 
@@ -176,7 +195,7 @@ export function DailyReport({ initialFormat = 'report' }: { initialFormat?: Form
       await navigator.clipboard.writeText(message)
       setCopied(true)
     } catch {
-      setError('Could not copy — select the message and copy it yourself.')
+      setError(t('Could not copy — select the message and copy it yourself.'))
     }
   }
 
@@ -191,36 +210,36 @@ export function DailyReport({ initialFormat = 'report' }: { initialFormat?: Form
     <div className="stack tight daily-report">
       <div className="viewswitch">
         <button className={format === 'report' ? 'selected' : ''} onClick={() => setFormat('report')}>
-          Today&rsquo;s report
+          {t('Today’s report')}
         </button>
         <button className={format === 'standup' ? 'selected' : ''} onClick={() => setFormat('standup')}>
-          Standup
+          {t('Standup')}
         </button>
       </div>
       <p className="muted small">
         {format === 'report'
-          ? 'What happened today, for whoever you report to.'
-          : 'Your last working day, today, and anything blocking you, for the morning standup.'}
+          ? t('What happened today, for whoever you report to.')
+          : t('Your last working day, today, and anything blocking you, for the morning standup.')}
       </p>
 
       <div className="chips">
         {format === 'report' && (
           <button className={`chip${opts.notes ? ' selected' : ''}`} onClick={() => toggle('notes')}>
-            Meeting notes
+            {t('Meeting notes')}
           </button>
         )}
         <button className={`chip${opts.waiting ? ' selected' : ''}`} onClick={() => toggle('waiting')}>
-          {format === 'report' ? 'Waiting on' : 'Blockers'}
+          {format === 'report' ? t('Waiting on') : t('Blockers')}
         </button>
         {format === 'report' && (
           <button className={`chip${opts.next ? ' selected' : ''}`} onClick={() => toggle('next')}>
-            What&rsquo;s next
+            {t('What’s next')}
           </button>
         )}
       </div>
 
       {r === null ? (
-        <p className="muted small">Writing up your day…</p>
+        <p className="muted small">{t('Writing up your day…')}</p>
       ) : (
         <>
           <textarea
@@ -232,11 +251,11 @@ export function DailyReport({ initialFormat = 'report' }: { initialFormat?: Form
               setEdited(true)
               setCopied(false)
             }}
-            aria-label="Report"
+            aria-label={t('Report')}
           />
           {edited && (
             <button className="link small fit-btn" onClick={() => setEdited(false)}>
-              Rewrite it from the day
+              {t('Rewrite it from the day')}
             </button>
           )}
         </>
@@ -248,30 +267,30 @@ export function DailyReport({ initialFormat = 'report' }: { initialFormat?: Form
           <input
             value={draftTo.name}
             onChange={(e) => setDraftTo((d) => ({ ...d, name: e.target.value }))}
-            placeholder="Their name, e.g. Suresh"
-            aria-label="Name"
+            placeholder={t('Their name, e.g. Suresh')}
+            aria-label={t('Name')}
             autoFocus
           />
           <input
             type="email"
             value={draftTo.email}
             onChange={(e) => setDraftTo((d) => ({ ...d, email: e.target.value }))}
-            placeholder="Email (optional)"
-            aria-label="Email"
+            placeholder={t('Email (optional)')}
+            aria-label={t('Email')}
           />
           <input
             type="tel"
             value={draftTo.phone}
             onChange={(e) => setDraftTo((d) => ({ ...d, phone: e.target.value }))}
-            placeholder="WhatsApp number (optional)"
-            aria-label="WhatsApp number"
+            placeholder={t('WhatsApp number (optional)')}
+            aria-label={t('WhatsApp number')}
           />
           <div className="row">
             <button className="primary small-btn" onClick={() => void saveRecipient()}>
-              Save
+              {t('Save')}
             </button>
             <button className="ghost small-btn" onClick={() => setEditingTo(false)}>
-              Cancel
+              {t('Cancel')}
             </button>
           </div>
         </div>
@@ -279,13 +298,19 @@ export function DailyReport({ initialFormat = 'report' }: { initialFormat?: Form
         <p className="muted small">
           {to.reportToName || to.reportToEmail || to.reportToPhone ? (
             <>
-              Goes to <strong>{to.reportToName ?? to.reportToEmail ?? to.reportToPhone}</strong>
-              {[to.reportToEmail && 'email', to.reportToPhone && 'WhatsApp'].filter(Boolean).length > 0 &&
-                ` by ${[to.reportToEmail && 'email', to.reportToPhone && 'WhatsApp'].filter(Boolean).join(' or ')}`}
-              .{' '}
+              {rich(
+                to.reportToEmail && to.reportToPhone
+                  ? msg('Goes to {who} by email or WhatsApp.')
+                  : to.reportToEmail
+                    ? msg('Goes to {who} by email.')
+                    : to.reportToPhone
+                      ? msg('Goes to {who} by WhatsApp.')
+                      : msg('Goes to {who}.'),
+                { who: <strong>{to.reportToName ?? to.reportToEmail ?? to.reportToPhone}</strong> },
+              )}{' '}
             </>
           ) : (
-            'Save who you send it to, and it is one tap from here every day. '
+            `${t('Save who you send it to, and it is one tap from here every day.')} `
           )}
           <button
             className="link small"
@@ -298,7 +323,7 @@ export function DailyReport({ initialFormat = 'report' }: { initialFormat?: Form
               setEditingTo(true)
             }}
           >
-            {to.reportToName || to.reportToEmail || to.reportToPhone ? 'Change' : 'Set who it goes to'}
+            {to.reportToName || to.reportToEmail || to.reportToPhone ? t('Change') : t('Set who it goes to')}
           </button>
         </p>
       )}
@@ -315,7 +340,7 @@ export function DailyReport({ initialFormat = 'report' }: { initialFormat?: Form
             )
           }
         >
-          {to.reportToPhone && first ? `WhatsApp ${first}` : 'WhatsApp'}
+          {to.reportToPhone && first ? t('WhatsApp {name}', { name: first }) : 'WhatsApp'}
         </button>
         <button
           className="ghost small-btn"
@@ -328,10 +353,10 @@ export function DailyReport({ initialFormat = 'report' }: { initialFormat?: Form
             )
           }
         >
-          {to.reportToEmail && first ? `Email ${first}` : 'Email'}
+          {to.reportToEmail && first ? t('Email {name}', { name: first }) : t('Email')}
         </button>
         <button className="ghost small-btn" disabled={!message.trim()} onClick={() => void copy()}>
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? t('Copied') : t('Copy')}
         </button>
         {typeof navigator.share === 'function' && (
           <button
@@ -339,7 +364,7 @@ export function DailyReport({ initialFormat = 'report' }: { initialFormat?: Form
             disabled={!message.trim()}
             onClick={() => void navigator.share({ title: subject, text: message }).catch(() => undefined)}
           >
-            Share…
+            {t('Share…')}
           </button>
         )}
       </div>

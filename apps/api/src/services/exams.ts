@@ -28,6 +28,7 @@ import {
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import type { Executor } from '../db/util.ts'
+import { langOf } from '../i18n.ts'
 import { cancelPendingReminders, scheduleFirstReminder } from './reminders.ts'
 import { materialise, stopSeries } from './recurrence.ts'
 import { tripForBooking } from './tripAssembly.ts'
@@ -101,10 +102,7 @@ function stepNotes(step: ExamStep, exam: { examKey: string | null }): string | n
 export type ExamRow = typeof e.$inferSelect
 
 /** The language someone's exam plans are written in. */
-export async function langOf(userId: string, exec: Executor = db): Promise<Lang> {
-  const [u] = await exec.select({ language: schema.users.language }).from(schema.users).where(eq(schema.users.id, userId))
-  return u?.language === 'hi' ? 'hi' : 'en'
-}
+export { langOf }
 
 /** The board's site for a step's notes, as stepNotes gives it. */
 function siteFor(step: ExamStep, exam: { examKey: string | null }): string | null {

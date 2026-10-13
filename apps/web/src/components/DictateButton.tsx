@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { dictationSupported, startDictation, type DictationHandle } from '../lib/dictation.ts'
+import { t } from '../lib/i18n.tsx'
 
 /**
  * Speaks into a text field using the browser's own recogniser. Renders nothing
@@ -9,12 +10,13 @@ export function DictateButton({
   value,
   onChange,
   autoStart = false,
-  label = 'Dictate',
+  label,
 }: {
   value: string
   onChange: (next: string) => void
   /** Start listening at once — opened from "Speak a reminder". */
   autoStart?: boolean
+  /** The button's word; Dictate when not given. */
   label?: string
 }) {
   const [listening, setListening] = useState(false)
@@ -68,7 +70,7 @@ export function DictateButton({
         className={listening ? 'primary small-btn' : 'ghost small-btn'}
         onClick={toggle}
       >
-        {listening ? 'Stop' : label}
+        {listening ? t('Stop') : (label ?? t('Dictate'))}
       </button>
       {error && <p className="error small">{error}</p>}
     </>

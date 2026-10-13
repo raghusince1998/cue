@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, notInArray, or, sql } from 'drizzle-orm'
-import { DELIVERY_STATUS_RANK, formatRupees, type DeliveryDTO, type DeliveryStatus, type ParsedDelivery } from '@cue/shared'
+import { DELIVERY_STATUS_RANK, formatRupees, type DeliveryDTO, type DeliveryStatus, type Lang, type ParsedDelivery } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { langsOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
 
 /**
@@ -189,26 +190,34 @@ export async function deliveriesToRemind(now = new Date()): Promise<Arriving[]> 
   return rows as unknown as Arriving[]
 }
 
-const named = (x: { store: string | null; item: string | null }) =>
-  [x.store, x.item].filter(Boolean).join(' · ') || 'A parcel'
+const named = (x: { store: string | null; item: string | null }, lang: Lang) =>
+  [x.store, x.item].filter(Boolean).join(' · ') || t(lang, 'A parcel')
 
 /** One notification per person: what is coming, and the cash to keep ready. */
 export async function runDeliveryReminders(now = new Date()): Promise<number> {
   const due = await deliveriesToRemind(now)
   const byUser = new Map<string, Arriving[]>()
   for (const x of due) byUser.set(x.user_id, [...(byUser.get(x.user_id) ?? []), x])
+  const langs = await langsOf([...byUser.keys()])
   let sent = 0
   for (const [userId, list] of byUser) {
     try {
+      const lang = langs.get(userId) ?? 'en'
       await db
         .update(d)
         .set({ lastRemindedOn: list[0]!.local_date })
         .where(inArray(d.id, list.map((x) => x.id)))
       const cod = list.reduce((s, x) => s + Number(x.cod_paise ?? 0), 0)
-      const cash = cod ? ` Keep ${formatRupees(cod)} ready for cash on delivery.` : ''
-      const title = list.length === 1 ? `Arriving today: ${named(list[0]!)}` : `${list.length} parcels arriving today`
-      const body = (list.length === 1 ? 'Be around to collect it.' : list.map(named).join(', ') + '.') + cash
-      await sendToUser(userId, { title, body, url: '/', tag: 'deliveries' })
+      const cash = cod ? ` ${t(lang, 'Keep {cod} ready for cash on delivery.', { cod: formatRupees(cod) })}` : ''
+      const title =
+        list.length === 1
+          ? t(lang, 'Arriving today: {what}', { what: named(list[0]!, lang) })
+          : t(lang, '{n} parcels arriving today', { n: list.length })
+      const body =
+        (list.length === 1
+          ? t(lang, 'Be around to collect it.')
+          : t(lang, '{list}.', { list: list.map((x) => named(x, lang)).join(', ') })) + cash
+      await sendToUser(userId, { title, body, url: '/', tag: 'deliveries', lang })
       sent += 1
     } catch (err) {
       console.error('[deliveries] failed for user', userId, (err as Error).message)

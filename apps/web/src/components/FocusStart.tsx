@@ -1,17 +1,18 @@
 import { useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
+import { locale, t } from '../lib/i18n.tsx'
 
 const LENGTHS = [25, 50, 90, 120]
 
 function clock(d: Date): string {
-  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return d.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })
 }
 
 function lengthLabel(m: number): string {
-  if (m < 60) return `${m} min`
+  if (m < 60) return t('{n} min', { n: m })
   const h = m / 60
-  return h % 1 === 0 ? `${h}h` : `${Math.floor(h)}h ${m % 60}m`
+  return h % 1 === 0 ? t('{n}h', { n: h }) : t('{h}h {m}m', { h: Math.floor(h), m: m % 60 })
 }
 
 /**
@@ -77,7 +78,7 @@ export function FocusStart({
 
   return (
     <div className="stack tight focus-start">
-      <span className="label-text">How long?</span>
+      <span className="label-text">{t('How long?')}</span>
       <div className="chips">
         {lengths.map((m) => (
           <button
@@ -94,7 +95,7 @@ export function FocusStart({
       </div>
 
       <label>
-        What will you work on? (optional)
+        {t('What will you work on? (optional)')}
         <input
           value={what}
           onChange={(e) => setWhat(e.target.value)}
@@ -113,22 +114,32 @@ export function FocusStart({
       )}
 
       <p className="muted small">
-        {begins ? `${clock(start)} – ${clock(end)}` : `Now until ${clock(end)}`}. Reminders wait
-        until it ends — anything marked critical, and the note before a meeting, still come
-        through.
+        {begins ? `${clock(start)} – ${clock(end)}` : t('Now until {time}', { time: clock(end) })}.{' '}
+        {t(
+          'Reminders wait until it ends — anything marked critical, and the note before a meeting, still come through.',
+        )}
       </p>
 
       {clash && (
         <p className="error small">
-          That runs into {clash.map((x) => `${x.title} at ${clock(new Date(x.dueAt))}`).join(', ')}.
-          Pick a shorter length, or start it anyway.
+          {t('That runs into {list}. Pick a shorter length, or start it anyway.', {
+            list: clash
+              .map((x) => t('{title} at {time}', { title: x.title, time: clock(new Date(x.dueAt)) }))
+              .join(', '),
+          })}
         </p>
       )}
       {error && <p className="error small">{error}</p>}
 
       <div className="form-actions">
         <button className="primary" onClick={() => void go(Boolean(clash))} disabled={busy}>
-          {busy ? 'Starting…' : clash ? 'Start anyway' : begins ? 'Block this time' : 'Start focus'}
+          {busy
+            ? t('Starting…')
+            : clash
+              ? t('Start anyway')
+              : begins
+                ? t('Block this time')
+                : t('Start focus')}
         </button>
       </div>
     </div>

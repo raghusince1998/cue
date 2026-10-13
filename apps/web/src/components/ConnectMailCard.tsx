@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
+import { t } from '../lib/i18n.tsx'
 
 interface Status {
   providers: { id: string; label: string; configured: boolean }[]
@@ -56,21 +57,20 @@ export function ConnectMailCard() {
 
   return (
     <section className="card uses-card connect-mail-card">
-      <h2 className="section-title">Connect once, and things come in by themselves</h2>
+      <h2 className="section-title">{t('Connect once, and things come in by themselves')}</h2>
       <p className="muted small">
-        Your calendar, plus what your email already says: train and flight tickets, parcels, card and
-        electricity bills, insurance, PUC, service dues, FASTag and challans, exam registrations and admit cards, each
-        with a reminder. One step. Email is
-        read-only and only from the senders that send these; none of it is kept.
+        {t(
+          'Your calendar, plus what your email already says: train and flight tickets, parcels, card and electricity bills, insurance, PUC, service dues, FASTag and challans, exam registrations and admit cards, each with a reminder. One step. Email is read-only and only from the senders that send these; none of it is kept.',
+        )}
       </p>
       <div className="row">
         {usable.map((p) => (
           <button key={p.id} className="primary small-btn" onClick={() => void connect(p.id)} disabled={busy}>
-            Connect {NAME[p.id] ?? p.label}
+            {t('Connect {name}', { name: NAME[p.id] ?? p.label })}
           </button>
         ))}
         <button className="ghost small-btn" onClick={dismiss}>
-          Not now
+          {t('Not now')}
         </button>
       </div>
     </section>

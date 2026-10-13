@@ -13,6 +13,7 @@ import { Greetings } from '../components/Greetings.tsx'
 import { OCCASION_MESSAGES, hasClients, hasCompanies, type OccasionKind } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
 import { useOnChange } from '../lib/changes.ts'
+import { locale, t } from '../lib/i18n.tsx'
 import {
   deviceContactsAvailable,
   deviceContactsReason,
@@ -96,7 +97,7 @@ export default function People() {
     try {
       const picked = await pickDeviceContacts()
       if (picked.length === 0) {
-        setImportNote('Nobody picked.')
+        setImportNote(t('Nobody picked.'))
         return
       }
       const r = await api<{ added: number; updated: number; unchanged: number }>(
@@ -104,11 +105,11 @@ export default function People() {
         { method: 'POST', body: { contacts: picked } },
       )
       const parts = [
-        r.added ? `${r.added} added` : null,
-        r.updated ? `${r.updated} filled in` : null,
-        r.unchanged ? `${r.unchanged} already complete` : null,
+        r.added ? t('{n} added', { n: r.added }) : null,
+        r.updated ? t('{n} filled in', { n: r.updated }) : null,
+        r.unchanged ? t('{n} already complete', { n: r.unchanged }) : null,
       ].filter(Boolean)
-      setImportNote(parts.length ? `${parts.join(', ')}.` : 'Nothing changed.')
+      setImportNote(parts.length ? t('{text}.', { text: parts.join(', ') }) : t('Nothing changed.'))
       await load()
     } catch (err) {
       setImportNote((err as Error).message)
@@ -130,14 +131,14 @@ export default function People() {
   /** Wishing someone on their day: from Today's card, or the list below. */
   const [wishing, setWishing] = useState<{ contactId: string; kind: OccasionKind } | null>(null)
   const [greeting, setGreeting] = useState(false)
-  const dueToReach = touches.filter((t) => t.due)
-  const reachIds = new Set(dueToReach.map((t) => t.id))
+  const dueToReach = touches.filter((p) => p.due)
+  const reachIds = new Set(dueToReach.map((p) => p.id))
   /** The person open in their page, and a name to start a new person with. */
   const [viewing, setViewing] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
 
   const load = useCallback(async () => {
-    const [list, s, t, occ] = await Promise.all([
+    const [list, s, keep, occ] = await Promise.all([
       api<ContactDTO[]>('/contacts'),
       api<Summary>('/people/summary').catch(() => ({ people: {}, unsaved: [] })),
       api<{ people: Touch[] }>('/people/keep-in-touch').catch(() => ({ people: [] as Touch[] })),
@@ -145,7 +146,7 @@ export default function People() {
     ])
     setContacts(list)
     setSummary(s)
-    setTouches(t.people)
+    setTouches(keep.people)
     setOccasions(occ)
     setLoading(false)
   }, [])
@@ -166,7 +167,7 @@ export default function People() {
         )
     // People with something open between you first: they are the ones you
     // came here about. Alphabetical within each group, as before.
-    const due = new Set(touches.filter((t) => t.due).map((t) => t.id))
+    const due = new Set(touches.filter((p) => p.due).map((p) => p.id))
     const open = (id: string) => {
       const s = summary.people[id]
       if (s?.waitingDue || due.has(id)) return 3
@@ -194,10 +195,10 @@ export default function People() {
   return (
     <div className="stack">
       <div className="page-head">
-        <h1 className="page-title">People</h1>
+        <h1 className="page-title">{t('People')}</h1>
         <span className="page-count">
-          {contacts.length} saved
-          {withNumbers > 0 ? ` · ${withNumbers} with a number` : ''}
+          {t('{n} saved', { n: contacts.length })}
+          {withNumbers > 0 ? ` · ${t('{n} with a number', { n: withNumbers })}` : ''}
         </span>
       </div>
 
@@ -207,13 +208,13 @@ export default function People() {
           className={view === 'people' ? 'selected' : ''}
           onClick={() => setParams({}, { replace: true })}
         >
-          People
+          {t('People')}
         </button>
         <button
           className={view === 'accounts' ? 'selected' : ''}
           onClick={() => setParams({ view: 'accounts' }, { replace: true })}
         >
-          {clients ? 'Accounts' : 'Companies'}
+          {clients ? t('Accounts') : t('Companies')}
         </button>
       </div>
       )}
@@ -234,15 +235,15 @@ export default function People() {
           className="grow"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name, role, workplace or phone"
+          placeholder={t('Search by name, role, workplace or phone')}
         />
         <button className="primary" onClick={() => setEditing(null)}>
-          Add
+          {t('Add')}
         </button>
         {/* The native picker, where there is one. Not a sync, and the note
             below says so rather than implying one that cannot exist. */}
         <button className="ghost" onClick={() => setGreeting(true)} disabled={contacts.length === 0}>
-          Send greetings
+          {t('Send greetings')}
         </button>
         <button
           className="ghost"
@@ -250,7 +251,7 @@ export default function People() {
           title={canPick ? undefined : pickReason}
           onClick={() => void importFromPhone()}
         >
-          {importing ? 'Importing…' : 'From my phone'}
+          {importing ? t('Importing…') : t('From my phone')}
         </button>
       </div>
 
@@ -259,7 +260,7 @@ export default function People() {
       {/* Names checked-in on that nobody saved: one tap to make them people. */}
       {summary.unsaved.length > 0 && (
         <div className="unsaved-people">
-          <span className="muted small">Mentioned but not saved:</span>
+          <span className="muted small">{t('Mentioned but not saved:')}</span>
           {summary.unsaved.map((n) => (
             <button
               key={n}
@@ -279,8 +280,8 @@ export default function People() {
       {occasions.length > 0 && !query.trim() && (
         <section className="card occasions">
           <div className="reach-out-head">
-            <strong>Coming up</strong>
-            <span className="muted small">next 30 days</span>
+            <strong>{t('Coming up')}</strong>
+            <span className="muted small">{t('next 30 days')}</span>
           </div>
           {occasions.slice(0, 6).map((o) => (
             <div className="your-day-line" key={`${o.contactId}-${o.kind}`}>
@@ -291,17 +292,17 @@ export default function People() {
                 </button>
                 <span className="muted small">
                   {' '}
-                  · {o.kind} ·{' '}
+                  · {o.kind === 'birthday' ? t('birthday') : t('anniversary')} ·{' '}
                   {o.daysAway === 0
-                    ? 'today'
+                    ? t('today')
                     : o.daysAway === 1
-                      ? 'tomorrow'
-                      : new Date(`${o.date}T00:00:00`).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}
+                      ? t('tomorrow')
+                      : new Date(`${o.date}T00:00:00`).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })}
                 </span>
               </span>
               {o.daysAway <= 1 && (
                 <button className="ghost tiny-btn" onClick={() => setWishing({ contactId: o.contactId, kind: o.kind })}>
-                  Send wishes
+                  {t('Send wishes')}
                 </button>
               )}
             </div>
@@ -313,36 +314,36 @@ export default function People() {
       {dueToReach.length > 0 && !query.trim() && (
         <section className="card reach-out">
           <div className="reach-out-head">
-            <strong>Time to reach out</strong>
+            <strong>{t('Time to reach out')}</strong>
             <span className="muted small">
-              {dueToReach.length} {dueToReach.length === 1 ? 'person' : 'people'}
+              {dueToReach.length === 1 ? t('1 person') : t('{n} people', { n: dueToReach.length })}
             </span>
           </div>
-          {dueToReach.map((t) => (
-            <div className="your-day-line" key={t.id}>
+          {dueToReach.map((p) => (
+            <div className="your-day-line" key={p.id}>
               <span>
-                <button className="link" onClick={() => setViewing(t.id)}>
-                  {t.name}
+                <button className="link" onClick={() => setViewing(p.id)}>
+                  {p.name}
                 </button>
                 <span className="muted small">
-                  {t.organization ? ` · ${t.organization}` : ''} ·{' '}
-                  {t.lastTouch ? `last contact ${relativeDay(t.lastTouch)}` : 'no contact on record'}
+                  {p.organization ? ` · ${p.organization}` : ''} ·{' '}
+                  {p.lastTouch ? t('last contact {when}', { when: relativeDay(p.lastTouch) }) : t('no contact on record')}
                 </span>
               </span>
               <span className="row">
-                {t.phone && (
-                  <a className="ghost tiny-btn" href={`tel:${t.phone}`} data-contact-id={t.id} data-name={t.name}>
-                    Call
+                {p.phone && (
+                  <a className="ghost tiny-btn" href={`tel:${p.phone}`} data-contact-id={p.id} data-name={p.name}>
+                    {t('Call')}
                   </a>
                 )}
-                <button className="ghost tiny-btn" onClick={() => setMessaging(t)}>
-                  Message
+                <button className="ghost tiny-btn" onClick={() => setMessaging(p)}>
+                  {t('Message')}
                 </button>
-                <button className="ghost tiny-btn" onClick={() => void touch(t.id, 'touched')}>
-                  Talked
+                <button className="ghost tiny-btn" onClick={() => void touch(p.id, 'touched')}>
+                  {t('Talked')}
                 </button>
-                <button className="ghost tiny-btn" onClick={() => void touch(t.id, 'touch-later')}>
-                  Next week
+                <button className="ghost tiny-btn" onClick={() => void touch(p.id, 'touch-later')}>
+                  {t('Next week')}
                 </button>
               </span>
             </div>
@@ -355,27 +356,27 @@ export default function People() {
           <span className="blank-mark" aria-hidden>
             &#128100;
           </span>
-          <h3>Nobody here yet</h3>
+          <h3>{t('Nobody here yet')}</h3>
           <p>
-            Anyone you name while planning something is saved here on their own — say
-            &ldquo;call the plumber&rdquo; and they appear. Add one by hand, or bring them over
-            from your phone.
+            {t(
+              'Anyone you name while planning something is saved here on their own — say “call the plumber” and they appear. Add one by hand, or bring them over from your phone.',
+            )}
           </p>
           <div className="row">
             <button className="primary small-btn" onClick={() => setEditing(null)}>
-              Add someone
+              {t('Add someone')}
             </button>
             {canPick && (
               <button className="ghost small-btn" onClick={() => void importFromPhone()}>
-                From my phone
+                {t('From my phone')}
               </button>
             )}
           </div>
         </div>
       ) : filtered.length === 0 ? (
         <div className="blank">
-          <h3>Nobody matches &ldquo;{query}&rdquo;</h3>
-          <p>Try part of a name, a job like &ldquo;plumber&rdquo;, or a phone number.</p>
+          <h3>{t('Nobody matches “{query}”', { query })}</h3>
+          <p>{t('Try part of a name, a job like “plumber”, or a phone number.')}</p>
         </div>
       ) : (
         <div className="tiles two-up">
@@ -392,28 +393,28 @@ export default function People() {
                 {personLine(c) && <p className="tile-sub">{personLine(c)}</p>}
 
                 <div className="tile-tags">
-                  {reachIds.has(c.id) && <span className="tag is-warn">Reach out</span>}
+                  {reachIds.has(c.id) && <span className="tag is-warn">{t('Reach out')}</span>}
                   {summary.people[c.id]?.waiting ? (
                     <span className={`tag${summary.people[c.id]!.waitingDue ? ' is-warn' : ''}`}>
-                      Waiting · {summary.people[c.id]!.waiting}
+                      {t('Waiting · {n}', { n: summary.people[c.id]!.waiting })}
                     </span>
                   ) : null}
                   {summary.people[c.id]?.owe ? (
-                    <span className="tag">You owe · {summary.people[c.id]!.owe}</span>
+                    <span className="tag">{t('You owe · {n}', { n: summary.people[c.id]!.owe })}</span>
                   ) : null}
                   {summary.people[c.id]?.next ? (
-                    <span className="tag is-live">Next: {dayLabel(summary.people[c.id]!.next!)}</span>
+                    <span className="tag is-live">{t('Next: {day}', { day: dayLabel(summary.people[c.id]!.next!) })}</span>
                   ) : summary.people[c.id]?.lastMet ? (
-                    <span className="tag">Last met {relativeDay(summary.people[c.id]!.lastMet!)}</span>
+                    <span className="tag">{t('Last met {when}', { when: relativeDay(summary.people[c.id]!.lastMet!) })}</span>
                   ) : null}
                   {c.phone && <span className="tag is-live">{c.phone}</span>}
                   {c.visitCount ? (
                     <span className="tag">
-                      {c.visitCount} meeting{c.visitCount === 1 ? '' : 's'}
+                      {c.visitCount === 1 ? t('1 meeting') : t('{n} meetings', { n: c.visitCount })}
                       {c.lastSeenAt ? ` · ${relativeDay(c.lastSeenAt)}` : ''}
                     </span>
                   ) : null}
-                  {!c.phone && <span className="tag is-warn">No number</span>}
+                  {!c.phone && <span className="tag is-warn">{t('No number')}</span>}
                 </div>
               </div>
 
@@ -425,11 +426,11 @@ export default function People() {
                     data-contact-id={c.id}
                     data-name={c.name}
                   >
-                    Call
+                    {t('Call')}
                   </a>
                 )}
                 <button className="ghost small-btn" onClick={() => setViewing(c.id)}>
-                  Open
+                  {t('Open')}
                 </button>
               </div>
             </article>
@@ -441,7 +442,7 @@ export default function People() {
       )}
 
       {greeting && (
-        <Modal title="Send greetings" onClose={() => setGreeting(false)}>
+        <Modal title={t('Send greetings')} onClose={() => setGreeting(false)}>
           <Greetings contacts={contacts} onClose={() => setGreeting(false)} />
         </Modal>
       )}
@@ -450,11 +451,11 @@ export default function People() {
         const c = contacts.find((x) => x.id === wishing.contactId)
         if (!c) return null
         return (
-          <Modal title={`Wish ${c.name}`} onClose={() => setWishing(null)}>
+          <Modal title={t('Wish {name}', { name: c.name })} onClose={() => setWishing(null)}>
             <QuickMessage
               to={{ name: c.name, company: c.organization, phone: c.phone, email: c.email }}
               preset={{
-                title: wishing.kind === 'birthday' ? 'Birthday wishes' : 'Anniversary wishes',
+                title: wishing.kind === 'birthday' ? t('Birthday wishes') : t('Anniversary wishes'),
                 body: OCCASION_MESSAGES[wishing.kind],
               }}
               onDone={() => setWishing(null)}
@@ -464,7 +465,7 @@ export default function People() {
       })()}
 
       {messaging && (
-        <Modal title={`Message ${messaging.name}`} onClose={() => setMessaging(null)}>
+        <Modal title={t('Message {name}', { name: messaging.name })} onClose={() => setMessaging(null)}>
           <QuickMessage
             to={{ name: messaging.name, company: messaging.organization, phone: messaging.phone }}
             suggest={/remind|touch|catch/i}
@@ -474,7 +475,7 @@ export default function People() {
       )}
 
       {viewingAccount && (
-        <Modal title="Account" onClose={() => setViewingAccount(null)}>
+        <Modal title={t('Account')} onClose={() => setViewingAccount(null)}>
           <AccountSheet
             key={viewingAccount}
             name={viewingAccount}
@@ -501,7 +502,7 @@ export default function People() {
       )}
 
       {viewing && (
-        <Modal title="Person" onClose={() => setViewing(null)}>
+        <Modal title={t('Person')} onClose={() => setViewing(null)}>
           <PersonSheet
             key={viewing}
             contactId={viewing}
@@ -521,7 +522,7 @@ export default function People() {
 
       {editing !== undefined && (
         <Modal
-          title={editing ? 'Edit person' : 'Add person'}
+          title={editing ? t('Edit person') : t('Add person')}
           onClose={() => {
             setEditing(undefined)
             setNewName('')

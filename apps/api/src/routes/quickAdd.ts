@@ -53,15 +53,22 @@ import {
   REPEATS,
   type ParsedBill,
   isLaterStage,
-  stageOf,
-  BOARDS,
   type BoardKey,
   spentWhen,
   formatRupees,
   EXPENSE_CATEGORIES,
+  STAGE_HI,
+  STEP_HI,
+  boardLabel,
+  deliveryStatusLabel,
+  expenseCategoryLabel,
+  repeatLabel,
+  trackerStageLabel,
   type CommitmentKind,
+  type Lang,
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { langOf, msg, t } from '../i18n.ts'
 import { takeFirst } from '../db/util.ts'
 import { scope } from '../auth.ts'
 import { scheduleFirstReminder } from '../services/reminders.ts'
@@ -75,6 +82,7 @@ import {
   recallSimilar,
   rememberPerson,
   resolveAnchor,
+  type Learned,
 } from '../services/memory.ts'
 import { planWishes } from '../services/wishes.ts'
 import { createExpense, tripOn } from '../services/expenses.ts'
@@ -191,14 +199,21 @@ export async function quickAddRoutes(app: FastifyInstance) {
   app.post('/quick/preview', async (req) => {
     const { sub: userId, orgId } = scope(req)
     const { text, careful } = quickInput.parse(req.body)
-    return withSuggestions(userId, text, await enrich(userId, orgId, text, await read(userId, orgId, text, careful ? 'careful' : 'preview')))
+    const lang = await langOf(userId)
+    return withSuggestions(
+      userId,
+      text,
+      await enrich(userId, orgId, text, await read(userId, orgId, text, careful ? 'careful' : 'preview', lang), lang),
+      lang,
+    )
   })
 
   app.post('/quick', async (req, reply) => {
     const { sub: userId, orgId } = scope(req)
     const body = quickInput.parse(req.body)
     const { text, allowConflict } = body
-    const plan = await withSuggestions(userId, text, await enrich(userId, orgId, text, await read(userId, orgId, text, 'save')))
+    const lang = await langOf(userId)
+    const plan = await withSuggestions(userId, text, await enrich(userId, orgId, text, await read(userId, orgId, text, 'save', lang), lang), lang)
     // Worked out again here rather than trusted from the screen, and only the
     // ones the person accepted are applied.
     const accepted = plan.suggestions.filter((s) => body.accept?.includes(s.id))
@@ -206,7 +221,7 @@ export async function quickAddRoutes(app: FastifyInstance) {
     const moved = accepted.find((s) => s.moveTo)
     if (moved && plan.kind === 'commitment') {
       plan.dueAt = moved.moveTo!
-      plan.summary = `${plan.title} — ${new Date(plan.dueAt).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`
+      plan.summary = `${plan.title} — ${new Date(plan.dueAt).toLocaleString(inLocale(lang, []), WHEN)}`
     }
 
     // What the person chose about what the preview offered.
@@ -728,8 +743,8 @@ export interface QuickPlan {
  * certain person is attached; everything else is offered, never assumed.
  */
 /** What the preview shows for a line: read, then linked to what it mentions. */
-export async function enrichForTest(userId: string, orgId: string, raw: string): Promise<QuickPlan> {
-  return enrich(userId, orgId, raw, await interpret(userId, orgId, raw))
+export async function enrichForTest(userId: string, orgId: string, raw: string, lang: Lang = 'en'): Promise<QuickPlan> {
+  return enrich(userId, orgId, raw, await interpret(userId, orgId, raw, new Date(), lang), lang)
 }
 
 /**
@@ -741,22 +756,28 @@ export async function enrichForTest(userId: string, orgId: string, raw: string):
  * reading the preview already showed (it is cached), so what is saved is what
  * was seen.
  */
-async function read(userId: string, orgId: string, text: string, mode: 'preview' | 'careful' | 'save'): Promise<QuickPlan> {
+async function read(
+  userId: string,
+  orgId: string,
+  text: string,
+  mode: 'preview' | 'careful' | 'save',
+  lang: Lang = 'en',
+): Promise<QuickPlan> {
   const now = new Date()
-  const plan = await interpret(userId, orgId, text, now)
+  const plan = await interpret(userId, orgId, text, now, lang)
   // Hindi left in the title ("sabzi lana", "call karna hai") means the rules
   // read the time and not the rest: worth a careful look too.
   const halfRead =
     (plan.kind === 'commitment' || plan.kind === 'recurrence' || plan.kind === 'needsTime') && HINDI_LEFTOVER.test(plan.title)
   if (!(plan.unsure || halfRead) || !captureAiEnabled()) return plan
 
-  let reading = cachedReading(userId, text)
+  let reading = cachedReading(userId, text, lang)
   if (!reading && mode === 'careful') {
     const [user] = await db.select({ isDemo: schema.users.isDemo }).from(schema.users).where(eq(schema.users.id, userId))
-    reading = await readWithAi(userId, text, now, { isDemo: user?.isDemo })
+    reading = await readWithAi(userId, text, now, { isDemo: user?.isDemo, lang })
   }
   if (!reading) return mode === 'preview' ? { ...plan, canReadCarefully: true } : plan
-  return planFromAi(plan, reading, now, text)
+  return planFromAi(plan, reading, now, text, lang)
 }
 
 /** `read` for the tests, which have no HTTP server to go through. */
@@ -769,8 +790,8 @@ const PART_HOUR: Record<AiPart, number> = { morning: 9, afternoon: 14, evening: 
  * it cannot be used — a date gone by, a trip with no place — the rules'
  * reading stands rather than a broken one.
  */
-export function planFromAi(rules: QuickPlan, r: AiReading, now: Date, line: string): QuickPlan {
-  const note = 'Read carefully by Cue’s AI, as the usual rules were not sure.'
+export function planFromAi(rules: QuickPlan, r: AiReading, now: Date, line: string, lang: Lang = 'en'): QuickPlan {
+  const note = t(lang, 'Read carefully by Cue’s AI, as the usual rules were not sure.')
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const day = r.date ? new Date(`${r.date}T00:00:00`) : today
   if (day < today) return rules
@@ -792,14 +813,21 @@ export function planFromAi(rules: QuickPlan, r: AiReading, now: Date, line: stri
 
   switch (r.kind) {
     case 'not_a_plan':
-      return { ...rules, readBy: 'ai', unsure: false, kind: 'unclear', problem: 'That does not look like something to plan. Say what, and when.', summary: '' }
+      return {
+        ...rules,
+        readBy: 'ai',
+        unsure: false,
+        kind: 'unclear',
+        problem: t(lang, 'That does not look like something to plan. Say what, and when.'),
+        summary: '',
+      }
 
     case 'ask':
       // Understood, bar one thing: ask exactly that, with answers to tap.
       return {
         ...common,
         kind: 'needsTime',
-        question: r.question ?? 'When is it?',
+        question: r.question ?? t(lang, 'When is it?'),
         choices: r.choices.map((c) => ({ label: c, line: `${line.trim()} ${c}` })),
         assumptions: r.assumptions,
         summary: r.title,
@@ -811,8 +839,8 @@ export function planFromAi(rules: QuickPlan, r: AiReading, now: Date, line: stri
         ...common,
         kind: 'intention',
         placeLabel: r.place,
-        assumptions: [`No date — it waits until you plan a trip to ${r.place}.`, note],
-        summary: `"${r.title}" saved for ${r.place}`,
+        assumptions: [t(lang, 'No date — it waits until you plan a trip to {place}.', { place: r.place }), note],
+        summary: t(lang, '"{title}" saved for {place}', { title: r.title, place: r.place }),
       }
 
     case 'trip': {
@@ -825,7 +853,7 @@ export function planFromAi(rules: QuickPlan, r: AiReading, now: Date, line: stri
         placeLabel: r.place,
         startsOn: r.date,
         endsOn,
-        summary: `Trip to ${r.place}, ${tripSpan(r.date, endsOn)}`,
+        summary: t(lang, 'Trip to {place}, {dates}', { place: r.place, dates: tripSpan(r.date, endsOn, lang) }),
       }
     }
 
@@ -851,8 +879,12 @@ export function planFromAi(rules: QuickPlan, r: AiReading, now: Date, line: stri
         minute,
         rule,
         alsoAt: [],
-        assumptions: [...(said || r.partOfDay ? [] : ['No time given, so 9am.']), ...common.assumptions],
-        summary: `${r.title} — ${describeRecurrence(rule, { startsOn: first, hour, minute })}, from ${first.toLocaleDateString()}`,
+        assumptions: [...(said || r.partOfDay ? [] : [t(lang, 'No time given, so 9am.')]), ...common.assumptions],
+        summary: t(lang, '{title} — {repeat}, from {date}', {
+          title: r.title,
+          repeat: describeRecurrence(rule, { startsOn: first, hour, minute }, lang),
+          date: first.toLocaleDateString(inLocale(lang)),
+        }),
       }
     }
 
@@ -878,11 +910,13 @@ export function planFromAi(rules: QuickPlan, r: AiReading, now: Date, line: stri
         flexibility: flexible && window ? 'flexible' : 'fixed',
         preferredWindow: flexible ? window : null,
         assumptions: [
-          ...(said || r.partOfDay || isToday ? [] : ['No time given, so 9am.']),
-          ...(flexible && isToday && !r.partOfDay ? [`No time given, so this ${window}, whenever suits.`] : []),
+          ...(said || r.partOfDay || isToday ? [] : [t(lang, 'No time given, so 9am.')]),
+          ...(flexible && isToday && !r.partOfDay
+            ? [t(lang, 'No time given, so {when}, whenever suits.', { when: t(lang, THIS_WINDOW[window ?? ''] ?? `this ${window}`) })]
+            : []),
           ...common.assumptions,
         ],
-        summary: `${r.title} — ${due.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`,
+        summary: `${r.title} — ${due.toLocaleString(inLocale(lang, []), WHEN)}`,
       }
     }
   }
@@ -891,7 +925,7 @@ export function planFromAi(rules: QuickPlan, r: AiReading, now: Date, line: stri
 /** A sentence that starts by saying money is still to go out is a to-do. */
 const TO_PAY = /^\s*(?:pay|send|transfer|give|buy|book|renew|deposit|collect|get|withdraw)\b/i
 
-async function enrich(userId: string, orgId: string, raw: string, plan: QuickPlan): Promise<QuickPlan> {
+async function enrich(userId: string, orgId: string, raw: string, plan: QuickPlan, lang: Lang = 'en'): Promise<QuickPlan> {
   if (plan.kind === 'intention' && plan.placeLabel) {
     return { ...plan, upcomingTrip: await upcomingTripTo(userId, plan.placeLabel) }
   }
@@ -930,7 +964,7 @@ async function enrich(userId: string, orgId: string, raw: string, plan: QuickPla
     return {
       ...next,
       title: `${who} owes you ${formatRupees(plan.owed.amountPaise)}`,
-      summary: `${formatRupees(plan.owed.amountPaise)} from ${who}${plan.owed.note ? ` · ${plan.owed.note}` : ''}`,
+      summary: `${t(lang, '{amount} from {name}', { amount: formatRupees(plan.owed.amountPaise), name: who })}${plan.owed.note ? ` · ${plan.owed.note}` : ''}`,
       links: { ...links, places: [], accounts: [] },
     }
   }
@@ -943,12 +977,7 @@ async function enrich(userId: string, orgId: string, raw: string, plan: QuickPla
       const moveTo = interview && isLaterStage(item.board, item.stage, 'interview') ? 'interview' : null
       const label = item.board === 'jobs' ? 'application' : item.board === 'hiring' ? 'candidate' : 'deal'
       next.trackerItem = { id: item.id, board: item.board, title: item.title, stage: item.stage, moveTo }
-      next.assumptions = [
-        ...next.assumptions,
-        moveTo
-          ? `Part of your ${item.title} ${label}; it moves to Interviewing.`
-          : `Part of your ${item.title} ${label}.`,
-      ]
+      next.assumptions = [...next.assumptions, t(lang, PART_OF[label][moveTo ? 1 : 0], { title: item.title })]
     }
   }
 
@@ -976,10 +1005,10 @@ const NAMES_SOMEONE =
  * Suggestions worked out for a plan, from what it has become after linking,
  * and which half of life it reads as.
  */
-async function withSuggestions(userId: string, line: string, plan: QuickPlan): Promise<QuickPlan> {
+async function withSuggestions(userId: string, line: string, plan: QuickPlan, lang: Lang = 'en'): Promise<QuickPlan> {
   return {
     ...plan,
-    suggestions: await suggestionsFor(userId, plan, line, new Date()),
+    suggestions: await suggestionsFor(userId, plan, line, new Date(), lang),
     sphere: sphereOf(plan.title, { kind: plan.commitmentKind, booking: Boolean(plan.booking), board: plan.tracker?.board ?? null }),
   }
 }
@@ -1054,15 +1083,136 @@ async function askWhatTime(
   title: string,
   now: Date,
   day: Date | null,
+  lang: Lang,
 ): Promise<{ question: string; choices: Choice[] }> {
-  const choices = await timeChoices(userId, line.trim(), DEFAULT_DURATION_MINUTES.meeting, now, day)
-  const on = day ? ` on ${day.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}` : ''
-  const question = day ? `What time is “${title}”${on}?` : `When is “${title}”?`
-  return { question: choices.length ? `${question} You’re free at:` : question, choices }
+  const choices = await timeChoices(userId, line.trim(), DEFAULT_DURATION_MINUTES.meeting, now, day, lang)
+  const question = day
+    ? t(lang, 'What time is “{title}” on {day}?', {
+        title,
+        day: day.toLocaleDateString(inLocale(lang, 'en-IN'), { weekday: 'long', day: 'numeric', month: 'short' }),
+      })
+    : t(lang, 'When is “{title}”?', { title })
+  return { question: choices.length ? `${question} ${t(lang, 'You’re free at:')}` : question, choices }
 }
 
-/** Where a journey's first reminder sends you. */
-const LEAVING_FOR: Record<string, string> = { flight: 'for the airport', train: 'for the station', bus: 'for the bus' }
+/**
+ * A journey's first reminder, by where it sends you: with the reference to
+ * hand, or with the details. Said with t(lang, line).
+ */
+const LEAVING_FOR: Record<string, [string, string]> = {
+  flight: [
+    msg('A reminder at {time} to leave for the airport, {lead}, with the reference to hand.'),
+    msg('A reminder at {time} to leave for the airport, {lead}, with the details to hand.'),
+  ],
+  train: [
+    msg('A reminder at {time} to leave for the station, {lead}, with the reference to hand.'),
+    msg('A reminder at {time} to leave for the station, {lead}, with the details to hand.'),
+  ],
+  bus: [
+    msg('A reminder at {time} to leave for the bus, {lead}, with the reference to hand.'),
+    msg('A reminder at {time} to leave for the bus, {lead}, with the details to hand.'),
+  ],
+}
+
+/** Day and time in a summary, as they have always been written. */
+const WHEN: Intl.DateTimeFormatOptions = { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }
+
+/** The locale a date is written in: the one it always was, or Hindi's day and month names. */
+function inLocale(lang: Lang, en?: string | string[]): string | string[] | undefined {
+  return lang === 'hi' ? 'hi-IN' : en
+}
+
+/** " and " between times, in the person's language. */
+const andWord = (lang: Lang) => (lang === 'hi' ? ' और ' : ' and ')
+
+/** Part of the day, for a plan filed with no set slot. Said with t(lang, …). */
+const THIS_WINDOW: Record<string, string> = {
+  morning: msg('this morning'),
+  afternoon: msg('this afternoon'),
+  evening: msg('this evening'),
+}
+
+/** "No time given, so lunch time, 1 pm." — a line per meal, as Hindi says each its own way. */
+const MEAL_NOTE: Record<string, string> = {
+  breakfast: msg('No time given, so breakfast time, {time}.'),
+  brunch: msg('No time given, so brunch time, {time}.'),
+  lunch: msg('No time given, so lunch time, {time}.'),
+  dinner: msg('No time given, so dinner time, {time}.'),
+}
+
+function mealNote(meal: string, time: string, lang: Lang): string {
+  const line = MEAL_NOTE[meal]
+  return line ? t(lang, line, { time }) : `No time given, so ${meal} time, ${time}.`
+}
+
+/** A plan that is the next step of something tracked: what it is part of, and whether it moves on. */
+const PART_OF: Record<'application' | 'candidate' | 'deal', [string, string]> = {
+  application: [msg('Part of your {title} application.'), msg('Part of your {title} application; it moves to Interviewing.')],
+  candidate: [msg('Part of your {title} candidate.'), msg('Part of your {title} candidate; it moves to Interviewing.')],
+  deal: [msg('Part of your {title} deal.'), msg('Part of your {title} deal; it moves to Interviewing.')],
+}
+
+/** An anchor not found: named or not, that day or the next week, before or after it. */
+const NOT_FOUND = {
+  named: {
+    day: {
+      before: msg('I could not find "{anchor}" that day to go before, so: when?'),
+      after: msg('I could not find "{anchor}" that day to go after, so: when?'),
+    },
+    week: {
+      before: msg('I could not find "{anchor}" in the next week to go before, so: when?'),
+      after: msg('I could not find "{anchor}" in the next week to go after, so: when?'),
+    },
+  },
+  anything: {
+    day: {
+      before: msg('I could not find anything that day to go before, so: when?'),
+      after: msg('I could not find anything that day to go after, so: when?'),
+    },
+    week: {
+      before: msg('I could not find anything in the next week to go before, so: when?'),
+      after: msg('I could not find anything in the next week to go after, so: when?'),
+    },
+  },
+}
+
+/** The kinds of appointment the role reader names, for "Read as: …". */
+const KIND_WORD: Record<string, string> = {
+  appointment: msg('appointment'),
+  meeting: msg('meeting'),
+  call: msg('call'),
+  visit: msg('visit'),
+  demo: msg('demo'),
+  interview: msg('interview'),
+}
+
+/**
+ * Why history suggested what it did, in the person's language. memory.ts says
+ * it in English; for Hindi the same facts are said again, whole.
+ */
+function learnedWhy(learned: Learned | null, lang: Lang): string {
+  const because = learned?.because ?? ''
+  if (lang === 'en' || !learned || !because) return because
+  const place = learned.placeLabel && because.includes(`at ${learned.placeLabel}`) ? learned.placeLabel : null
+  if (learned.timesSeen === 1) return place ? t(lang, 'Last time this was at {place}.', { place }) : because
+  const n = learned.timesSeen
+  const min = /— usually (\d+) min\b/.exec(because)?.[1]
+  if (min && place) return t(lang, 'You have done this {n} times — usually {min} min, at {place}.', { n, min, place })
+  if (min) return t(lang, 'You have done this {n} times — usually {min} min.', { n, min })
+  if (place) return t(lang, 'You have done this {n} times — at {place}.', { n, place })
+  return because
+}
+
+/** The time history supplied, said the same way. */
+function learnedHourWhy(learned: Learned | null, lang: Lang): string | null {
+  const because = learned?.becauseHour ?? null
+  if (lang === 'en' || !learned || !because) return because
+  if (learned.hour !== null) return t(lang, 'You usually do this around {time}.', { time: clockLabel(learned.hour, 0) })
+  if (learned.lastHour !== null) {
+    return t(lang, 'Last time this was at {time}.', { time: clockLabel(learned.lastHour, learned.lastMinute ?? 0) })
+  }
+  return because
+}
 
 /** Birthdays and anniversaries come round every year, whether or not the line says so. */
 const OCCASION = /\b(?:birthday|bday|b'day|anniversary)\b/i
@@ -1083,16 +1233,22 @@ function occasionRepeat(text: string, now: Date): Repeat | null {
 }
 
 /** What the date reader decided on its own, said plainly so it can be checked. */
-function timeNotes(when: ParsedWhen, now: Date): string[] {
+function timeNotes(when: ParsedWhen, now: Date, lang: Lang): string[] {
   const notes: string[] = []
   if (when.halfGuessed) {
     const other = clockLabel((when.date.getHours() + 12) % 24, when.date.getMinutes())
-    notes.push(`Read as ${clockLabel(when.date.getHours(), when.date.getMinutes())}. Say ${other} if you meant that.`)
+    notes.push(t(lang, 'Read as {time}. Say {other} if you meant that.', { time: clockLabel(when.date.getHours(), when.date.getMinutes()), other }))
   }
   if (when.deadline) {
-    notes.push(`Due by ${when.date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: when.date.getFullYear() === now.getFullYear() ? undefined : 'numeric' })}.`)
+    const date = when.date.toLocaleDateString(inLocale(lang, 'en-IN'), {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: when.date.getFullYear() === now.getFullYear() ? undefined : 'numeric',
+    })
+    notes.push(t(lang, 'Due by {date}.', { date }))
   }
-  if (when.meal) notes.push(`No time given, so ${when.meal} time, ${clockLabel(when.date.getHours(), when.date.getMinutes())}.`)
+  if (when.meal) notes.push(mealNote(when.meal, clockLabel(when.date.getHours(), when.date.getMinutes()), lang))
   return notes
 }
 
@@ -1122,17 +1278,17 @@ function prepDue(text: string, when: ParsedWhen, now: Date): Date | null {
   return dayBefore(when.date, now, WORK_PREP.test(text))
 }
 
-function prepNote(due: Date): string {
-  const day = due.toLocaleDateString('en-IN', { weekday: 'long' })
-  return `Due ${day} at 5 pm, so it is ready in time.`
+function prepNote(due: Date, lang: Lang): string {
+  const day = due.toLocaleDateString(inLocale(lang, 'en-IN'), { weekday: 'long' })
+  return t(lang, 'Due {day} at 5 pm, so it is ready in time.', { day })
 }
 
 /** "2 – 4 Nov", "30 Oct – 2 Nov", "2 Nov": dates as a person writes them. */
-function tripSpan(from: string, to: string): string {
+function tripSpan(from: string, to: string, lang: Lang): string {
   const day = (s: string) => new Date(`${s}T00:00:00`)
   const a = day(from)
   const b = day(to)
-  const month = (d: Date) => d.toLocaleDateString('en-IN', { month: 'short' })
+  const month = (d: Date) => d.toLocaleDateString(inLocale(lang, 'en-IN'), { month: 'short' })
   if (from === to) return `${a.getDate()} ${month(a)}`
   if (a.getMonth() === b.getMonth()) return `${a.getDate()} – ${b.getDate()} ${month(b)}`
   return `${a.getDate()} ${month(a)} – ${b.getDate()} ${month(b)}`
@@ -1149,7 +1305,7 @@ function ymd(d: Date): string {
  * Shared by preview and save so the two can never disagree — a preview that
  * promises one thing and a save that writes another is worse than no preview.
  */
-export async function interpret(userId: string, orgId: string, raw: string, now = new Date()): Promise<QuickPlan> {
+export async function interpret(userId: string, orgId: string, raw: string, now = new Date(), lang: Lang = 'en'): Promise<QuickPlan> {
   const assumptions: string[] = []
 
   // The list comes off first, so every parser below sees "go shopping this
@@ -1218,10 +1374,12 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       parcel.status === 'delivered' || parcel.status === 'cancelled' || !parcel.expectedOn
         ? null
         : parcel.expectedOn === today
-          ? 'arriving today'
+          ? t(lang, 'arriving today')
           : parcel.expectedOn === tomorrow
-            ? 'arriving tomorrow'
-            : `expected ${new Date(`${parcel.expectedOn}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}`
+            ? t(lang, 'arriving tomorrow')
+            : t(lang, 'expected {date}', {
+                date: new Date(`${parcel.expectedOn}T00:00:00`).toLocaleDateString(inLocale(lang, 'en-IN'), { weekday: 'short', day: 'numeric', month: 'short' }),
+              })
     return {
       ...base,
       kind: 'delivery',
@@ -1229,14 +1387,14 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       checklist: [],
       delivery: parcel,
       summary: [
-        parcel.store ?? 'Parcel',
+        parcel.store ?? t(lang, 'Parcel'),
         parcel.item,
-        when ?? DELIVERY_STATUS_LABEL[parcel.status].toLowerCase(),
-        parcel.codPaise ? `${formatRupees(parcel.codPaise)} cash on delivery` : null,
+        when ?? (lang === 'hi' ? deliveryStatusLabel(parcel.status, lang) : DELIVERY_STATUS_LABEL[parcel.status].toLowerCase()),
+        parcel.codPaise ? t(lang, '{amount} cash on delivery', { amount: formatRupees(parcel.codPaise) }) : null,
       ]
         .filter(Boolean)
         .join(' · '),
-      assumptions: when ? ['A reminder on the morning it arrives.'] : [],
+      assumptions: when ? [t(lang, 'A reminder on the morning it arrives.')] : [],
     }
   }
 
@@ -1247,9 +1405,16 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
   if (examSaid) {
     const tracked = await trackedExam(userId, examSaid.examKey, examSaid.cycle)
     const label = examLabel({ name: examSaid.name, cycle: examSaid.cycle ?? tracked?.cycle ?? null })
-    const day = (on: string) => localAt(on, null).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+    const day = (on: string) => localAt(on, null).toLocaleDateString(inLocale(lang, 'en-IN'), { weekday: 'short', day: 'numeric', month: 'short' })
+    // A stage or a round, in Hindi when there is Hindi for it.
+    const stageWord = (key: string) => (lang === 'hi' ? STAGE_HI[key] : undefined) ?? examStage(examSaid.examKey, key)?.label
     const dates = examSaid.dates.map((d) => {
-      const what = d.step === 'exam' && d.round ? examStage(examSaid.examKey, d.round)?.label : EXAM_STEPS.find((s) => s.key === d.step)?.label
+      const what =
+        d.step === 'exam' && d.round
+          ? stageWord(d.round)
+          : lang === 'hi'
+            ? STEP_HI[d.step]
+            : EXAM_STEPS.find((s) => s.key === d.step)?.label
       return `${what} ${day(d.on)}${d.at ? ` ${d.at}` : ''}`
     })
     return {
@@ -1259,22 +1424,28 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       checklist: [],
       exam: { ...examSaid, trackedId: tracked?.id ?? null },
       summary: [
-        `Exams: ${label}`,
+        t(lang, 'Exams: {exam}', { exam: label }),
         examSaid.region,
-        examSaid.stage ? examStage(examSaid.examKey, examSaid.stage)?.label : null,
-        examSaid.registrationNo ? `reg no ${examSaid.registrationNo}` : null,
-        examSaid.mock ? `mock ${examSaid.mock.score}/${examSaid.mock.outOf} (${Math.round((examSaid.mock.score / examSaid.mock.outOf) * 100)}%)` : null,
+        examSaid.stage ? stageWord(examSaid.stage) : null,
+        examSaid.registrationNo ? t(lang, 'reg no {number}', { number: examSaid.registrationNo }) : null,
+        examSaid.mock
+          ? t(lang, 'mock {score}/{outOf} ({percent}%)', {
+              score: examSaid.mock.score,
+              outOf: examSaid.mock.outOf,
+              percent: Math.round((examSaid.mock.score / examSaid.mock.outOf) * 100),
+            })
+          : null,
         ...dates,
       ]
         .filter(Boolean)
         .join(' · '),
       assumptions: [
-        tracked ? `Added to the ${label} you are tracking.` : null,
-        examSaid.mock ? 'Kept with your mock scores, on the exam’s page.' : null,
+        tracked ? t(lang, 'Added to the {exam} you are tracking.', { exam: label }) : null,
+        examSaid.mock ? t(lang, 'Kept with your mock scores, on the exam’s page.') : null,
         examSaid.dates.some((d) => d.step === 'apply_by' || d.step === 'fee_by')
-          ? 'Reminders 3 days before the last date, the evening before, and on the day.'
+          ? t(lang, 'Reminders 3 days before the last date, the evening before, and on the day.')
           : null,
-        examSaid.dates.some((d) => d.step === 'exam') ? 'Reminders a week before the exam, the evening before, and that morning.' : null,
+        examSaid.dates.some((d) => d.step === 'exam') ? t(lang, 'Reminders a week before the exam, the evening before, and that morning.') : null,
       ].filter((a): a is string => a !== null),
     }
   }
@@ -1295,8 +1466,8 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       title: name,
       checklist: [],
       bill: { name, kind: 'bill', category: 'vehicle', amountPaise: challan.amountPaise, dueOn, repeat: 'none' },
-      summary: [name, challan.amountPaise ? formatRupees(challan.amountPaise) : null, dueLabel(dueOn, 'bill', now)].filter(Boolean).join(' · '),
-      assumptions: challan.dueOn ? [] : ['No date to pay by in the message, so a month from when it was issued.'],
+      summary: [name, challan.amountPaise ? formatRupees(challan.amountPaise) : null, dueLabel(dueOn, 'bill', now, lang)].filter(Boolean).join(' · '),
+      assumptions: challan.dueOn ? [] : [t(lang, 'No date to pay by in the message, so a month from when it was issued.')],
     }
   }
 
@@ -1315,8 +1486,11 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       durationMinutes: 10,
       flexibility: 'flexible',
       checklist: [],
-      notes: `${tag.balancePaise !== null ? `Balance ${formatRupees(tag.balancePaise)}` : 'Low balance'}. Running out can mean paying double at the toll.`,
-      summary: `${title} — ${dueAt.toLocaleString('en-IN', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`,
+      notes:
+        tag.balancePaise !== null
+          ? t(lang, 'Balance {amount}. Running out can mean paying double at the toll.', { amount: formatRupees(tag.balancePaise) })
+          : t(lang, 'Low balance. Running out can mean paying double at the toll.'),
+      summary: `${title} — ${dueAt.toLocaleString(inLocale(lang, 'en-IN'), { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`,
     }
   }
 
@@ -1330,8 +1504,8 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       title: name,
       checklist: [],
       bill: { name, kind: 'renewal', category: 'vehicle', amountPaise: null, dueOn: vehicle.dueOn, repeat: 'none' },
-      summary: `${name} · ${dueLabel(vehicle.dueOn, 'renewal', now)}`,
-      assumptions: ['A reminder 10 days before it runs out.'],
+      summary: `${name} · ${dueLabel(vehicle.dueOn, 'renewal', now, lang)}`,
+      assumptions: [t(lang, 'A reminder 10 days before it runs out.')],
     }
   }
 
@@ -1342,7 +1516,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
         ...base,
         kind: 'unclear',
         title: booked.title,
-        problem: `That booking was for ${booked.startsAt.toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}, which has passed.`,
+        problem: t(lang, 'That booking was for {when}, which has passed.', { when: booked.startsAt.toLocaleString(inLocale(lang, 'en-IN'), WHEN) }),
       }
     }
     const city =
@@ -1351,10 +1525,13 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     // A journey's reminder is the time to leave, so it says so, by the clock.
     const leaveAt = new Date(booked.startsAt.getTime() - booked.remindBeforeMinutes * 60_000)
     const leaving = LEAVING_FOR[booked.type]
+    const lead = leadLabel(booked.remindBeforeMinutes, lang)
     const firstReminder =
       leaving && booked.timeKnown && leaveAt > now
-        ? `A reminder at ${clockLabel(leaveAt.getHours(), leaveAt.getMinutes())} to leave ${leaving}, ${leadLabel(booked.remindBeforeMinutes)}, with ${booked.ref ? 'the reference' : 'the details'} to hand.`
-        : `A reminder ${leadLabel(booked.remindBeforeMinutes)}, with ${booked.ref ? 'the reference' : 'the details'} to hand.`
+        ? t(lang, leaving[booked.ref ? 0 : 1], { time: clockLabel(leaveAt.getHours(), leaveAt.getMinutes()), lead })
+        : booked.ref
+          ? t(lang, 'A reminder {lead}, with the reference to hand.', { lead })
+          : t(lang, 'A reminder {lead}, with the details to hand.', { lead })
     return {
       ...base,
       kind: 'commitment',
@@ -1378,12 +1555,12 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       },
       assumptions: [
         firstReminder,
-        ...(booked.type === 'flight' && webCheckIn > now ? ['A web check-in reminder 48 hours before.'] : []),
+        ...(booked.type === 'flight' && webCheckIn > now ? [t(lang, 'A web check-in reminder 48 hours before.')] : []),
         ...(booked.timeKnown
           ? []
-          : [`No time given, so ${clockLabel(booked.startsAt.getHours(), booked.startsAt.getMinutes())}; change it if you know.`]),
+          : [t(lang, 'No time given, so {time}; change it if you know.', { time: clockLabel(booked.startsAt.getHours(), booked.startsAt.getMinutes()) })]),
       ],
-      summary: `${booked.title} — ${booked.startsAt.toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`,
+      summary: `${booked.title} — ${booked.startsAt.toLocaleString(inLocale(lang, 'en-IN'), WHEN)}`,
     }
   }
 
@@ -1403,12 +1580,12 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       checklist: [],
       assumptions: [
         place
-          ? `No date: they wait until you plan a trip to ${place}, then go on it together.`
-          : 'No date and no place: add them to any plan from its details, whenever it suits.',
+          ? t(lang, 'No date: they wait until you plan a trip to {place}, then go on it together.', { place })
+          : t(lang, 'No date and no place: add them to any plan from its details, whenever it suits.'),
       ],
       summary: place
-        ? `${n} things saved for ${place}: ${wishList.titles.join(', ')}`
-        : `${n} things on your wishlist: ${wishList.titles.join(', ')}`,
+        ? t(lang, '{n} things saved for {place}: {list}', { n, place, list: wishList.titles.join(', ') })
+        : t(lang, '{n} things on your wishlist: {list}', { n, list: wishList.titles.join(', ') }),
     }
   }
 
@@ -1431,11 +1608,13 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       summary: [
         policy.name,
         policy.amountPaise ? formatRupees(policy.amountPaise) : null,
-        dueLabel(policy.dueOn, policy.kind, now),
+        dueLabel(policy.dueOn, policy.kind, now, lang),
       ]
         .filter(Boolean)
         .join(' · '),
-      assumptions: [policy.kind === 'renewal' ? 'A reminder a month before it runs out.' : 'A reminder a week before it is due.'],
+      assumptions: [
+        policy.kind === 'renewal' ? t(lang, 'A reminder a month before it runs out.') : t(lang, 'A reminder a week before it is due.'),
+      ],
     }
   }
 
@@ -1452,15 +1631,15 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       summary: [
         bill.name,
         bill.amountPaise ? formatRupees(bill.amountPaise) : null,
-        dueLabel(bill.dueOn, bill.kind, now),
-        bill.repeat === 'none' ? null : repeat.label.toLowerCase(),
+        dueLabel(bill.dueOn, bill.kind, now, lang),
+        bill.repeat === 'none' ? null : lang === 'hi' ? repeatLabel(bill.repeat, lang) : repeat.label.toLowerCase(),
       ]
         .filter(Boolean)
         .join(' · '),
       assumptions:
         bill.kind === 'renewal'
-          ? ['A reminder a month before it expires.']
-          : [`A reminder 3 days before${bill.repeat === 'none' ? '' : ', each time'}.`],
+          ? [t(lang, 'A reminder a month before it expires.')]
+          : [bill.repeat === 'none' ? t(lang, 'A reminder 3 days before.') : t(lang, 'A reminder 3 days before, each time.')],
     }
   }
 
@@ -1468,13 +1647,12 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
   // Priya for designer". "apply for … by friday" has a date, so it is a plan.
   const tracked = parseTrackerLine(text)
   if (tracked && (tracked.stage !== 'saved' || !parseWhen(text, now))) {
-    const board = BOARDS[tracked.board]
     return {
       ...base,
       kind: 'tracker',
       title: tracked.detail ? `${tracked.title} · ${tracked.detail}` : tracked.title,
       tracker: tracked,
-      summary: `${board.label}: ${tracked.title}${tracked.detail ? `, ${tracked.detail}` : ''} · ${stageOf(tracked.board, tracked.stage)!.label}`,
+      summary: `${boardLabel(tracked.board, lang)}: ${tracked.title}${tracked.detail ? `, ${tracked.detail}` : ''} · ${trackerStageLabel(tracked.board, tracked.stage, lang)}`,
     }
   }
 
@@ -1488,7 +1666,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       title: `${lent.name} owes you ${formatRupees(lent.amountPaise)}`,
       personName: lent.name,
       owed: lent,
-      summary: `${formatRupees(lent.amountPaise)} from ${lent.name}${lent.note ? ` · ${lent.note}` : ''}`,
+      summary: `${t(lang, '{amount} from {name}', { amount: formatRupees(lent.amountPaise), name: lent.name })}${lent.note ? ` · ${lent.note}` : ''}`,
     }
   }
 
@@ -1514,10 +1692,12 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
         title: note ?? category.label,
         expense: { amountPaise: spend.amountPaise, category: spend.category, note, spentOn },
         assumptions: [
-          ...(trip ? [`On your ${trip.placeLabel} trip.`] : []),
-          ...(isToday ? [] : [`Spent on ${day.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}.`]),
+          ...(trip ? [t(lang, 'On your {place} trip.', { place: trip.placeLabel })] : []),
+          ...(isToday
+            ? []
+            : [t(lang, 'Spent on {date}.', { date: day.toLocaleDateString(inLocale(lang, 'en-IN'), { weekday: 'short', day: 'numeric', month: 'short' }) })]),
         ],
-        summary: `${formatRupees(spend.amountPaise)} · ${category.label}${note ? ` · ${note}` : ''}`,
+        summary: `${formatRupees(spend.amountPaise)} · ${expenseCategoryLabel(spend.category, lang)}${note ? ` · ${note}` : ''}`,
       }
     }
   }
@@ -1536,7 +1716,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       commitmentKind: /\b(?:call|ring|phone)\b/i.test(text) ? 'callback' : 'task',
       personName: word,
       people,
-      question: `Who is “${word}”?`,
+      question: t(lang, 'Who is “{word}”?', { word }),
       choices: people.map((p) => ({ label: p.name, line: text.trim().replace(new RegExp(`\\b${word}\\b`, 'i'), p.name) })),
       summary: text.trim(),
     }
@@ -1552,8 +1732,8 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       title: asIntention.title,
       placeLabel: asIntention.placeLabel,
       notes: originalIfInformative(text, asIntention.title),
-      assumptions: [`No date — it waits until you plan a trip to ${asIntention.placeLabel}.`],
-      summary: `"${asIntention.title}" saved for ${asIntention.placeLabel}`,
+      assumptions: [t(lang, 'No date — it waits until you plan a trip to {place}.', { place: asIntention.placeLabel })],
+      summary: t(lang, '"{title}" saved for {place}', { title: asIntention.title, place: asIntention.placeLabel }),
     }
   }
 
@@ -1567,7 +1747,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       startsOn: asTrip.startsOn,
       endsOn: asTrip.endsOn,
       notes: originalIfInformative(text, asTrip.placeLabel),
-      summary: `Trip to ${asTrip.placeLabel}, ${tripSpan(asTrip.startsOn, asTrip.endsOn)}`,
+      summary: t(lang, 'Trip to {place}, {dates}', { place: asTrip.placeLabel, dates: tripSpan(asTrip.startsOn, asTrip.endsOn, lang) }),
     }
   }
 
@@ -1590,7 +1770,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     if (!title) {
       return {
         ...base,
-        problem: 'That is all repeat and no plan — say what it is.',
+        problem: t(lang, 'That is all repeat and no plan — say what it is.'),
         summary: '',
       }
     }
@@ -1603,18 +1783,21 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       { from: now, to: horizon },
     )
     if (!firstAt) {
-      return { ...base, problem: 'That series has nothing left in it.', summary: '' }
+      return { ...base, problem: t(lang, 'That series has nothing left in it.'), summary: '' }
     }
 
     const learned = await recallSimilar(userId, title, { now })
-    if (learned?.because) assumptions.push(learned.because)
-    if (asRepeat.yearlyOccasion) assumptions.push('Every year, on the day.')
-    if (when) assumptions.push(...timeNotes(when, now))
-    else if (times.length > 1) assumptions.push(`${times.length} reminders a day: ${times.map((t) => clockLabel(t.hour, t.minute)).join(' and ')}.`)
-    else if (meal) assumptions.push(`No time given, so ${meal.name} time, ${clockLabel(meal.hour, meal.minute)}.`)
-    else assumptions.push('No time given, so 9am.')
+    if (learned?.because) assumptions.push(learnedWhy(learned, lang))
+    if (asRepeat.yearlyOccasion) assumptions.push(t(lang, 'Every year, on the day.'))
+    if (when) assumptions.push(...timeNotes(when, now, lang))
+    else if (times.length > 1) {
+      assumptions.push(t(lang, '{n} reminders a day: {times}.', { n: times.length, times: times.map((x) => clockLabel(x.hour, x.minute)).join(andWord(lang)) }))
+    } else if (meal) assumptions.push(mealNote(meal.name, clockLabel(meal.hour, meal.minute), lang))
+    else assumptions.push(t(lang, 'No time given, so 9am.'))
 
-    const at = [{ hour, minute }, ...alsoAt].map((t) => clockLabel(t.hour, t.minute)).join(' and ')
+    const at = [{ hour, minute }, ...alsoAt].map((x) => clockLabel(x.hour, x.minute)).join(andWord(lang))
+    const repeatWords = describeRecurrence(asRepeat.rule, { startsOn: firstAt, hour, minute }, lang)
+    const from = firstAt.toLocaleDateString(inLocale(lang))
     return {
       ...base,
       kind: 'recurrence',
@@ -1630,8 +1813,8 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       assumptions,
       summary:
         alsoAt.length > 0
-          ? `${title} — ${describeRecurrence(asRepeat.rule, { startsOn: firstAt, hour, minute }).replace(/\s+at\s+[^,]+$/, '')} at ${at}, from ${firstAt.toLocaleDateString()}`
-          : `${title} — ${describeRecurrence(asRepeat.rule, { startsOn: firstAt, hour, minute })}, from ${firstAt.toLocaleDateString()}`,
+          ? t(lang, '{title} — {repeat} at {times}, from {date}', { title, repeat: repeatWords.replace(/\s+at\s+[^,]+$/, ''), times: at, date: from })
+          : t(lang, '{title} — {repeat}, from {date}', { title, repeat: repeatWords, date: from }),
     }
   }
 
@@ -1640,7 +1823,10 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
   // tomorrow" as simply tomorrow and silently drop the anchor.
   if (checklist.length > 0) {
     assumptions.push(
-      `${checklist.length} things to tick off: ${checklist.slice(0, 3).join(', ')}${checklist.length > 3 ? '…' : ''}`,
+      t(lang, '{n} things to tick off: {items}', {
+        n: checklist.length,
+        items: `${checklist.slice(0, 3).join(', ')}${checklist.length > 3 ? '…' : ''}`,
+      }),
     )
   }
 
@@ -1684,10 +1870,12 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
         dueAt: resolved.at.toISOString(),
         notes: originalIfInformative(rest, name),
         assumptions: [
-          `${relative.relation === 'after' ? 'After' : 'Before'} "${resolved.anchorTitle}", which ${relative.relation === 'after' ? 'ends' : 'starts'} that day — ${gap} min ${relative.relation === 'after' ? 'later' : 'earlier'}.`,
-          ...(learned?.because ? [learned.because] : []),
+          relative.relation === 'after'
+            ? t(lang, 'After "{anchor}", which ends that day — {n} min later.', { anchor: resolved.anchorTitle, n: gap })
+            : t(lang, 'Before "{anchor}", which starts that day — {n} min earlier.', { anchor: resolved.anchorTitle, n: gap }),
+          ...(learned?.because ? [learnedWhy(learned, lang)] : []),
         ],
-        summary: `${name} — ${resolved.at.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`,
+        summary: `${name} — ${resolved.at.toLocaleString(inLocale(lang, []), WHEN)}`,
       }
     }
 
@@ -1695,13 +1883,13 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     // reminder pinned to a meeting that does not exist looks like it worked —
     // and ask for the one thing missing. A time picked then wins over the
     // anchor (above), so the answer saves rather than asking again.
-    const what = relative.anchor.kind === 'named' ? `"${relative.anchor.text}"` : 'anything'
-    const where = onDay ? 'that day' : 'in the next week'
+    const anchor = relative.anchor.kind === 'named' ? relative.anchor.text : ''
+    const notFound = NOT_FOUND[relative.anchor.kind === 'named' ? 'named' : 'anything'][onDay ? 'day' : 'week'][relative.relation]
     return {
       ...base,
       kind: 'needsTime',
       title: rest,
-      assumptions: [`I could not find ${what} ${where} to go ${relative.relation}, so: when?`],
+      assumptions: [t(lang, notFound, { anchor })],
       summary: rest,
     }
   }
@@ -1730,13 +1918,13 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     // Phrased for a person, not for a log. "person: \"for dentist\"" is the
     // shape of the data; "Who: dentist" is what someone can actually check.
     const LABEL: Record<string, string> = {
-      kind: 'Read as',
-      person: 'Who',
-      place: 'Where',
-      subject: 'About',
+      kind: msg('Read as: {value}'),
+      person: msg('Who: {value}'),
+      place: msg('Where: {value}'),
+      subject: msg('About: {value}'),
     }
     const VALUE: Record<string, string | null> = {
-      kind: roles.kind,
+      kind: roles.kind ? t(lang, KIND_WORD[roles.kind] ?? roles.kind) : null,
       person: roles.person,
       place: roles.place,
       subject: roles.subject,
@@ -1744,15 +1932,17 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     const assumptionsFromRoles = roles.evidence
       .map((e) => {
         const value = VALUE[e.field]
-        return value ? `${LABEL[e.field]}: ${value}` : null
+        return value ? t(lang, LABEL[e.field] ?? '{value}', { value }) : null
       })
       .filter((x): x is string => x !== null)
     if (!roles.place && remembered) {
-      assumptionsFromRoles.push(`You said ${roles.person} is in ${remembered} before.`)
+      assumptionsFromRoles.push(t(lang, 'You said {person} is in {place} before.', { person: String(roles.person), place: remembered }))
     }
     if (only) {
       assumptionsFromRoles.push(
-        `Matched ${only.name}${only.phone ? ` (${only.phone})` : ''} from your contacts.`,
+        only.phone
+          ? t(lang, 'Matched {name} ({phone}) from your contacts.', { name: only.name, phone: only.phone })
+          : t(lang, 'Matched {name} from your contacts.', { name: only.name }),
       )
     }
 
@@ -1769,7 +1959,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
         summary: roles.title,
       }
     }
-    if (learned?.because) assumptionsFromRoles.push(learned.because)
+    if (learned?.because) assumptionsFromRoles.push(learnedWhy(learned, lang))
 
     const kindMap: Record<string, CommitmentKind> = {
       appointment: 'meeting',
@@ -1806,7 +1996,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
         placeLabel: place,
         personName: roles.person,
         assumptions: assumptionsFromRoles,
-        ...(await askWhatTime(userId, text, roles.title, now, whenPart?.date ?? null)),
+        ...(await askWhatTime(userId, text, roles.title, now, whenPart?.date ?? null, lang)),
         summary: roles.title,
         problem: null,
       }
@@ -1817,9 +2007,9 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     if (guess <= now) guess.setDate(guess.getDate() + 1)
     const prep = whenPart ? prepDue(text, whenPart, now) : null
     const dueAt = prep ?? whenPart?.date ?? guess
-    if (!whenPart && learned?.becauseHour) assumptionsFromRoles.push(learned.becauseHour)
-    if (prep) assumptionsFromRoles.push(prepNote(prep))
-    if (whenPart) assumptionsFromRoles.push(...timeNotes(whenPart, now))
+    if (!whenPart && learned?.becauseHour) assumptionsFromRoles.push(learnedHourWhy(learned, lang)!)
+    if (prep) assumptionsFromRoles.push(prepNote(prep, lang))
+    if (whenPart) assumptionsFromRoles.push(...timeNotes(whenPart, now, lang))
 
     return {
       ...base,
@@ -1835,7 +2025,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       dueAt: dueAt.toISOString(),
       notes: roles.subject && roles.subject !== roles.title ? roles.subject : null,
       assumptions: assumptionsFromRoles,
-      summary: `${roles.title} — ${dueAt.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`,
+      summary: `${roles.title} — ${dueAt.toLocaleString(inLocale(lang, []), WHEN)}`,
       deadline: Boolean(whenPart?.deadline),
     }
   }
@@ -1874,10 +2064,10 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
         contactId: learned.contactId,
         dueAt: guess.toISOString(),
         notes: originalIfInformative(text, likely),
-        assumptions: [learned.becauseHour ?? learned.because, 'No date given, so this is the next one.'].filter(
+        assumptions: [learnedHourWhy(learned, lang) ?? learnedWhy(learned, lang), t(lang, 'No date given, so this is the next one.')].filter(
           Boolean,
         ) as string[],
-        summary: `${likely} — ${guess.toLocaleString()}`,
+        summary: `${likely} — ${guess.toLocaleString(inLocale(lang))}`,
       }
     }
 
@@ -1896,7 +2086,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
         title: likely,
         commitmentKind: 'meeting',
         durationMinutes: DEFAULT_DURATION_MINUTES.meeting,
-        ...(await askWhatTime(userId, text, likely, now, null)),
+        ...(await askWhatTime(userId, text, likely, now, null, lang)),
         summary: likely,
       }
     }
@@ -1907,6 +2097,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       const when = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Math.min(hour + 1, 20), 0)
       const late = hour >= 20
       if (late) when.setDate(when.getDate() + 1)
+      const slot = t(lang, late ? msg('tomorrow morning') : (THIS_WINDOW[window] ?? `this ${window}`))
 
       return {
         ...base,
@@ -1918,10 +2109,8 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
         preferredWindow: late ? 'morning' : window,
         dueAt: when.toISOString(),
         notes: originalIfInformative(text, likely),
-        assumptions: [
-          `No time given, so it is filed for ${late ? 'tomorrow morning' : `this ${window}`} with no set slot.`,
-        ],
-        summary: `${likely} — ${late ? 'tomorrow morning' : `this ${window}`}, whenever suits`,
+        assumptions: [t(lang, 'No time given, so it is filed for {when} with no set slot.', { when: slot })],
+        summary: t(lang, '{title} — {when}, whenever suits', { title: likely, when: slot }),
         // Nothing in the line said when, or even for sure what: the best the
         // rules can do, and worth a careful second reading.
         unsure: true,
@@ -1931,7 +2120,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     return {
       ...base,
       title: likely,
-      problem: problem?.message ?? 'I could not find a date or time in that.',
+      problem: (lang === 'hi' ? diagnose(text, lang)?.message : problem?.message) ?? t(lang, 'I could not find a date or time in that.'),
       summary: '',
       unsure: true,
     }
@@ -1939,7 +2128,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
 
   const title = titleFrom(text, when)
   if (!title) {
-    return { ...base, problem: 'I got the time but not what it is for.', summary: '' }
+    return { ...base, problem: t(lang, 'I got the time but not what it is for.'), summary: '' }
   }
 
   const learned = await recallSimilar(userId, title, { now })
@@ -1967,18 +2156,18 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       commitmentKind: 'meeting',
       durationMinutes: learned?.durationMinutes ?? DEFAULT_DURATION_MINUTES.meeting,
       placeLabel: parsedPlace ?? learned?.placeLabel ?? null,
-      ...(await askWhatTime(userId, text, title, now, when.date)),
+      ...(await askWhatTime(userId, text, title, now, when.date, lang)),
       summary: title,
     }
   }
 
-  if (learned?.because) assumptions.push(learned.because)
-  if (prep) assumptions.push(prepNote(prep))
-  else if (when.timeAssumed && !when.window) assumptions.push('No time given, so 9am.')
-  assumptions.push(...timeNotes(when, now))
+  if (learned?.because) assumptions.push(learnedWhy(learned, lang))
+  if (prep) assumptions.push(prepNote(prep, lang))
+  else if (when.timeAssumed && !when.window) assumptions.push(t(lang, 'No time given, so 9am.'))
+  assumptions.push(...timeNotes(when, now, lang))
 
   const ignored = findMalformedTime(text)
-  if (ignored) assumptions.push(`I could not read "${ignored}" as a time.`)
+  if (ignored) assumptions.push(t(lang, 'I could not read "{time}" as a time.', { time: ignored }))
 
   // "meeting with the builder", "dentist": an appointment, an hour long and
   // somewhere to be, unless history says otherwise.
@@ -2000,7 +2189,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     dueAt: dueAt.toISOString(),
     notes: originalIfInformative(text, title),
     assumptions,
-    summary: `${title} — ${dueAt.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`,
+    summary: `${title} — ${dueAt.toLocaleString(inLocale(lang, []), WHEN)}`,
     // "meeting tomorrow": a day, a 9am nobody said, and a word or two. A
     // careful reading may well ask what time instead.
     unsure: when.timeAssumed && !when.window && !when.deadline && !prep && title.split(/\s+/).length <= 2,

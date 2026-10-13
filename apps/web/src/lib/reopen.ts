@@ -1,6 +1,7 @@
 import { reopenTime } from '@cue/shared'
 import { api } from './api.ts'
 import { announceChange } from './changes.ts'
+import { t } from './i18n.tsx'
 import { formatDateTime } from './time.ts'
 
 /** Reopens a done or cancelled plan in one step. Says when it will remind you. */
@@ -18,5 +19,8 @@ export async function reopenPlan(c: { id: string; dueAt: string }): Promise<stri
     },
   })
   announceChange()
-  return `Reopened. It will remind you ${formatDateTime(at.toISOString())}${moved ? ', since its old time has passed' : ''}. Change anything below, or just close this.`
+  const when = formatDateTime(at.toISOString())
+  return moved
+    ? t('Reopened. It will remind you {when}, since its old time has passed. Change anything below, or just close this.', { when })
+    : t('Reopened. It will remind you {when}. Change anything below, or just close this.', { when })
 }

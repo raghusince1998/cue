@@ -20,10 +20,10 @@ interface Entry {
  * Letting go takes it off every list, and only that earns the dimmed row.
  */
 const KIND_TAG: Record<Entry['kind'], { label: string; className: string }> = {
-  visit: { label: 'Logged', className: '' },
-  done: { label: 'Done', className: 'is-live' },
-  cancelled: { label: 'Cancelled', className: 'is-warn' },
-  deleted: { label: 'Let go', className: 'is-warn' },
+  visit: { label: msg('Logged'), className: '' },
+  done: { label: msg('Done'), className: 'is-live' },
+  cancelled: { label: msg('Cancelled'), className: 'is-warn' },
+  deleted: { label: msg('Let go'), className: 'is-warn' },
 }
 
 /**
@@ -37,6 +37,7 @@ const KIND_TAG: Record<Entry['kind'], { label: string; className: string }> = {
  */
 const tagFor = (kind: Entry['kind']) => KIND_TAG[kind] ?? { label: kind, className: '' }
 import { api } from '../lib/api.ts'
+import { locale, msg, rich, t } from '../lib/i18n.tsx'
 import { openAdd } from '../lib/addSheet.ts'
 import { relativeDay } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
@@ -60,16 +61,20 @@ export default function History() {
    * something is gone that is not.
    */
   async function remove(entry: Entry) {
-    const what =
-      entry.kind === 'visit' ? 'this visit' : entry.kind === 'done' ? 'this finished plan' : 'this entry'
-    if (!window.confirm(`Remove ${what} from your history? This cannot be undone.`)) return
+    const question =
+      entry.kind === 'visit'
+        ? t('Remove this visit from your history? This cannot be undone.')
+        : entry.kind === 'done'
+          ? t('Remove this finished plan from your history? This cannot be undone.')
+          : t('Remove this entry from your history? This cannot be undone.')
+    if (!window.confirm(question)) return
 
     setRemoving(entry.id)
     try {
       await api(`/history/${entry.kind}/${entry.id}`, { method: 'DELETE' })
       setVisits((list) => list.filter((e) => !(e.id === entry.id && e.kind === entry.kind)))
     } catch (err) {
-      window.alert(`Could not remove it: ${(err as Error).message}`)
+      window.alert(t('Could not remove it: {error}', { error: (err as Error).message }))
     } finally {
       setRemoving(null)
     }
@@ -96,20 +101,21 @@ export default function History() {
     return (
       <div className="stack">
         <div className="page-head">
-          <h1 className="page-title">History</h1>
+          <h1 className="page-title">{t('History')}</h1>
         </div>
         <div className="blank">
           <span className="blank-mark" aria-hidden>
             &#128220;
           </span>
-          <h3>Nothing has happened yet</h3>
+          <h3>{t('Nothing has happened yet')}</h3>
           <p>
-            Everything you finish, log or decide against ends up here — ticked plans, meetings
-            you recorded, and the things you let go. Tick something off on <strong>Today</strong>,
-            or record a meeting with <strong>+ Add</strong> &rarr; <strong>Already happened</strong>.
+            {rich(
+              'Everything you finish, log or decide against ends up here — ticked plans, meetings you recorded, and the things you let go. Tick something off on <b>Today</b>, or record a meeting with <b>+ Add</b> → <b>Already happened</b>.',
+              { b: (s) => <strong>{s}</strong> },
+            )}
           </p>
           <button className="primary small-btn" onClick={() => openAdd({ mode: 'past' })}>
-            Record something
+            {t('Record something')}
           </button>
         </div>
       </div>
@@ -119,8 +125,8 @@ export default function History() {
   return (
     <div className="stack">
       <div className="page-head">
-        <h1 className="page-title">History</h1>
-        <span className="page-count">{visits.length} recorded</span>
+        <h1 className="page-title">{t('History')}</h1>
+        <span className="page-count">{t('{n} recorded', { n: visits.length })}</span>
       </div>
 
       <div className="tiles">
@@ -132,7 +138,7 @@ export default function History() {
                   is what the eye should land on first. */}
               <span className={`tile-mark${v.kind === 'done' ? ' is-done-mark' : ''}`} aria-hidden>
                 <span className="mark-top">
-                  {when.toLocaleDateString([], { month: 'short' })}
+                  {when.toLocaleDateString(locale(), { month: 'short' })}
                 </span>
                 <span className="mark-main">{when.getDate()}</span>
               </span>
@@ -140,12 +146,12 @@ export default function History() {
               <div className="tile-body">
                 <p className="tile-title">{v.title}</p>
                 <p className="tile-sub">
-                  {when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} ·{' '}
+                  {when.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })} ·{' '}
                   {relativeDay(v.at)}
                 </p>
 
                 <div className="tile-tags">
-                  <span className={`tag ${tagFor(v.kind).className}`}>{tagFor(v.kind).label}</span>
+                  <span className={`tag ${tagFor(v.kind).className}`}>{t(tagFor(v.kind).label)}</span>
                   {v.place && <span className="tag">{v.place}</span>}
                   {v.contact && v.contact !== v.title && <span className="tag">{v.contact}</span>}
                   {v.outcome && <span className="tag is-live">{v.outcome}</span>}
@@ -162,16 +168,16 @@ export default function History() {
                     className="ghost small-btn"
                     onClick={() => setEditing({ type: 'visit', id: v.id })}
                   >
-                    Edit
+                    {t('Edit')}
                   </button>
                 )}
                 <button
                   className="ghost small-btn danger-text"
                   onClick={() => void remove(v)}
                   disabled={removing === v.id}
-                  aria-label={`Remove ${v.title} from history`}
+                  aria-label={t('Remove {title} from history', { title: v.title })}
                 >
-                  {removing === v.id ? 'Removing…' : 'Delete'}
+                  {removing === v.id ? t('Removing…') : t('Delete')}
                 </button>
               </div>
             </article>
@@ -180,7 +186,7 @@ export default function History() {
       </div>
 
       {editing?.type === 'visit' && (
-        <Modal title="Edit entry" onClose={() => setEditing(null)}>
+        <Modal title={t('Edit entry')} onClose={() => setEditing(null)}>
           <VisitEditor
             visitId={editing.id}
             onClose={() => setEditing(null)}
@@ -194,7 +200,7 @@ export default function History() {
       )}
 
       {editing?.type === 'commitment' && (
-        <Modal title="Edit follow-up" onClose={() => setEditing(null)}>
+        <Modal title={t('Edit follow-up')} onClose={() => setEditing(null)}>
           <CommitmentEditor
             commitmentId={editing.id}
             onClose={() => setEditing(null)}

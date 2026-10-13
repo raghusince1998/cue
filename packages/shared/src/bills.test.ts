@@ -78,3 +78,17 @@ test('a subscription that renews is a monthly charge, not an expiry', () => {
   assert.equal(netflix.dueOn, '2026-10-18')
   assert.equal(parseBill('watch netflix tomorrow', now), null, 'watching it is not paying for it')
 })
+
+test('dueLabel in Hindi: देय for a bill, ख़त्म for a renewal', () => {
+  assert.equal(dueLabel('2026-10-11', 'bill', now, 'hi'), 'आज देय')
+  assert.equal(dueLabel('2026-10-12', 'bill', now, 'hi'), 'कल देय')
+  assert.equal(dueLabel('2026-10-16', 'bill', now, 'hi'), '5 दिन में देय')
+  assert.equal(dueLabel('2026-10-08', 'bill', now, 'hi'), '3 दिन पहले देय था')
+  assert.equal(dueLabel('2026-10-12', 'renewal', now, 'hi'), 'कल ख़त्म')
+  assert.equal(dueLabel('2027-04-11', 'renewal', now, 'hi'), '6 महीने में ख़त्म')
+  assert.equal(dueLabel('2029-10-11', 'renewal', now, 'hi'), '3 साल में ख़त्म')
+  assert.equal(dueLabel('2026-10-10', 'renewal', now, 'hi'), '1 दिन पहले ख़त्म')
+  // English unchanged.
+  assert.equal(dueLabel('2026-10-12', 'bill', now), 'due tomorrow')
+  assert.equal(dueLabel('2026-10-10', 'renewal', now, 'en'), 'expired yesterday')
+})

@@ -35,6 +35,7 @@ import { Search } from '../components/Search.tsx'
 import { CalendarView, type CalendarMode } from '../components/CalendarView.tsx'
 import { useOnChange } from '../lib/changes.ts'
 import { readNotes } from '../lib/sample.ts'
+import { locale, t } from '../lib/i18n.tsx'
 
 interface Agenda {
   overdue: CommitmentDTO[]
@@ -67,11 +68,11 @@ function endOf(c: CommitmentDTO): Date {
 
 function endedAgo(end: Date, now = new Date()): string {
   const minutes = Math.round((now.getTime() - end.getTime()) / 60_000)
-  if (minutes < 60) return `Ended ${Math.max(1, minutes)} min ago`
+  if (minutes < 60) return t('Ended {n} min ago', { n: Math.max(1, minutes) })
   const hours = Math.round(minutes / 60)
-  if (hours < 24) return `Ended ${hours}h ago`
+  if (hours < 24) return t('Ended {n}h ago', { n: hours })
   const days = Math.round(hours / 24)
-  return days === 1 ? 'Ended yesterday' : `Ended ${days} days ago`
+  return days === 1 ? t('Ended yesterday') : t('Ended {n} days ago', { n: days })
 }
 
 /** Mirrors toneOf in CalendarView, so a card and its chip agree on colour. */
@@ -133,7 +134,7 @@ function Card({
         className="commitment-main is-openable"
         role="button"
         tabIndex={0}
-        aria-label={`Open ${commitment.title}`}
+        aria-label={t('Open {title}', { title: commitment.title })}
         onClick={() => onOpen(commitment.id)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -146,42 +147,43 @@ function Card({
         <div>
           <p className="commitment-title">
             {commitment.title}
-            {sample && <span className="sample-tag">Sample</span>}
+            {sample && <span className="sample-tag">{t('Sample')}</span>}
             {showSphere && commitment.sphere && (
               <span className={`sphere-tag is-${commitment.sphere}`}>
-                {commitment.sphere === 'work' ? 'Work' : 'Personal'}
+                {commitment.sphere === 'work' ? t('Work') : t('Personal')}
               </span>
             )}
           </p>
           <p className="muted small">
             {commitment.flexibility === 'flexible' && commitment.preferredWindow
-              ? `${WINDOW_LABELS[commitment.preferredWindow]} — no set time`
+              ? t('{window} — no set time', { window: t(WINDOW_LABELS[commitment.preferredWindow]) })
               : formatSpan(commitment.dueAt, commitment.endsAt, commitment.allDay)}
             {commitment.placeName ? ` · ${commitment.placeName}` : ''}
             {commitment.contactName ? ` · ${commitment.contactName}` : ''}
             {/* Says why only one of a series is showing, and where the rest went. */}
-            {commitment.recurrenceId ? ' · repeats' : ''}
-            {commitment.feedId ? ' · from your calendar' : ''}
+            {commitment.recurrenceId ? ` · ${t('repeats')}` : ''}
+            {commitment.feedId ? ` · ${t('from your calendar')}` : ''}
           </p>
           {/* Prep at a glance: open the card for what they are. */}
           {(commitment.prepOpen ?? 0) > 0 && (
             <span className="prep-chip">
-              {commitment.prepOpen} open from last time
+              {t('{n} open from last time', { n: commitment.prepOpen ?? 0 })}
             </span>
           )}
         </div>
         {overdue && commitment.flexibility === 'fixed' && (
-          <span className="badge">{overdueBy(commitment.dueAt)} late</span>
+          <span className="badge">{t('{time} late', { time: overdueBy(commitment.dueAt) })}</span>
         )}
-        {commitment.priority === 'critical' && <span className="badge">Critical</span>}
+        {commitment.priority === 'critical' && <span className="badge">{t('Critical')}</span>}
       </div>
 
       {notes && <p className="notes">{notes}</p>}
 
       {commitment.escalationCount > 0 && (
         <p className="muted small">
-          Chased {commitment.escalationCount}{' '}
-          {commitment.escalationCount === 1 ? 'time' : 'times'}
+          {commitment.escalationCount === 1
+            ? t('Chased 1 time')
+            : t('Chased {n} times', { n: commitment.escalationCount })}
         </p>
       )}
       </div>
@@ -195,13 +197,13 @@ function Card({
               onMoved()
             }}
           >
-            Call it off
+            {t('Call it off')}
           </button>
         </div>
       ) : (
       <div className="row commitment-actions">
         <button className="primary small-btn" onClick={() => onDone(commitment.id)}>
-          Done
+          {t('Done')}
         </button>
         {/* The word "Snooze" is what makes the bare durations mean anything;
             with it they can stay short and the whole row fits on one line. */}
@@ -209,19 +211,19 @@ function Card({
             card offers a real time instead of three sizes of "later". */}
         {overdue ? (
           <button className="ghost small-btn" onClick={() => setMoving((v) => !v)}>
-            {moving ? 'Never mind' : 'Move it'}
+            {moving ? t('Never mind') : t('Move it')}
           </button>
         ) : (
           <span className="snooze-group">
-            <span className="snooze-label">Snooze</span>
+            <span className="snooze-label">{t('Snooze')}</span>
             <button className="ghost tiny-btn" onClick={() => onSnooze(commitment.id, 15)}>
-              15m
+              {t('15m')}
             </button>
             <button className="ghost tiny-btn" onClick={() => onSnooze(commitment.id, 60)}>
-              1h
+              {t('1h')}
             </button>
             <button className="ghost tiny-btn" onClick={() => onSnooze(commitment.id, 60 * 24)}>
-              1d
+              {t('1d')}
             </button>
           </span>
         )}
@@ -234,7 +236,7 @@ function Card({
             data-commitment-id={commitment.id}
             data-commitment-title={commitment.title}
           >
-            Call {commitment.contactName ?? ''}
+            {commitment.contactName ? t('Call {name}', { name: commitment.contactName }) : t('Call')}
           </a>
         )}
       </div>
@@ -268,19 +270,19 @@ function PushBanner() {
   if (state === 'granted') {
     return (
       <div className="banner subtle">
-        <span>Notifications are on.</span>
+        <span>{t('Notifications are on.')}</span>
         <button
           className="link"
           onClick={async () => {
             const delivered = await sendTestPush()
             setMessage(
               delivered > 0
-                ? 'Test sent — check your notification tray.'
-                : 'No device registered yet. Reload and enable again.',
+                ? t('Test sent — check your notification tray.')
+                : t('No device registered yet. Reload and enable again.'),
             )
           }}
         >
-          Send test
+          {t('Send test')}
         </button>
         {message && <span className="muted small">{message}</span>}
       </div>
@@ -290,8 +292,8 @@ function PushBanner() {
   return (
     <div className="banner">
       <div>
-        <strong>Turn on reminders</strong>
-        <p className="muted small">Nothing can reach you once the app is closed without them.</p>
+        <strong>{t('Turn on reminders')}</strong>
+        <p className="muted small">{t('Nothing can reach you once the app is closed without them.')}</p>
         {message && <p className="error small">{message}</p>}
       </div>
       <button
@@ -299,10 +301,10 @@ function PushBanner() {
         onClick={async () => {
           const result = await enablePush()
           setState(pushState())
-          setMessage(result.ok ? null : (result.reason ?? 'Could not enable notifications.'))
+          setMessage(result.ok ? null : (result.reason ?? t('Could not enable notifications.')))
         }}
       >
-        Enable
+        {t('Enable')}
       </button>
     </div>
   )
@@ -715,7 +717,7 @@ export default function Today() {
       {/* Opened from the brief, which is the only thing that raises it. */}
       {(params.get('triage') === '1' || params.get('triage') === 'all') && (
         <Modal
-          title={params.get('triage') === 'all' ? 'Clear what is overdue' : 'What stopped moving'}
+          title={params.get('triage') === 'all' ? t('Clear what is overdue') : t('What stopped moving')}
           onClose={() => {
             params.delete('triage')
             setParams(params, { replace: true })
@@ -735,7 +737,7 @@ export default function Today() {
       {/* Opened by the evening nudge, which deep-links here with ?plan=tomorrow. */}
       {params.get('plan') === 'tomorrow' && (
         <Modal
-          title="Tomorrow"
+          title={t('Tomorrow')}
           onClose={() => {
             params.delete('plan')
             setParams(params, { replace: true })
@@ -758,8 +760,7 @@ export default function Today() {
         {shared && (
           <div className="shared-note">
             <span className="muted small">
-              Shared from another app. Make it a plan, with a time if it needs one, and press
-              Enter.
+              {t('Shared from another app. Make it a plan, with a time if it needs one, and press Enter.')}
             </span>
             <button
               className="link small"
@@ -769,7 +770,7 @@ export default function Today() {
                 setCapture((c) => ({ key: c.key + 1, focus: false, listen: false }))
               }}
             >
-              Discard
+              {t('Discard')}
             </button>
           </div>
         )}
@@ -788,7 +789,7 @@ export default function Today() {
         />
         {me && me.uses.length === 0 && !usesAsked && (
           <section className="card uses-card">
-            <h2 className="section-title">What will you use Cue for?</h2>
+            <h2 className="section-title">{t('What will you use Cue for?')}</h2>
             <UsesPicker
               onDone={() => {
                 try {
@@ -804,7 +805,7 @@ export default function Today() {
         {me && !me.isDemo && (me.uses.length > 0 || usesAsked) && <ConnectMailCard />}
         {shared?.original && (
           <details className="shared-original">
-            <summary className="muted small">The whole message</summary>
+            <summary className="muted small">{t('The whole message')}</summary>
             <p className="small">{shared.original}</p>
           </details>
         )}
@@ -850,28 +851,28 @@ export default function Today() {
               className={view === v ? 'selected' : ''}
               onClick={() => chooseView(v)}
             >
-              {v === 'agenda' ? 'List' : v === 'week' ? 'Week' : 'Month'}
+              {v === 'agenda' ? t('List') : v === 'week' ? t('Week') : t('Month')}
             </button>
           ))}
         </div>
         {/* Work and personal on one day: both, or one half of it. */}
         {working && view === 'agenda' && (
-          <div className="viewswitch" role="group" aria-label="Show">
+          <div className="viewswitch" role="group" aria-label={t('Show')}>
             {(['all', 'work', 'personal'] as const).map((h) => (
               <button key={h} className={half === h ? 'selected' : ''} aria-pressed={half === h} onClick={() => chooseHalf(h)}>
-                {h === 'all' ? 'All' : h === 'work' ? 'Work' : 'Personal'}
+                {h === 'all' ? t('All') : h === 'work' ? t('Work') : t('Personal')}
               </button>
             ))}
           </div>
         )}
         {view === 'agenda' && (agenda.waiting ?? []).length === 0 && !addingWaiting && (
           <button className="link small" onClick={() => setAddingWaiting(true)}>
-            + Waiting on someone
+            {t('+ Waiting on someone')}
           </button>
         )}
         {agenda.overdue.length > 0 && view !== 'agenda' && (
           <button className="ghost small-btn danger" onClick={() => chooseView('agenda')}>
-            {agenda.overdue.length} overdue
+            {t('{n} overdue', { n: agenda.overdue.length })}
           </button>
         )}
       </div>
@@ -891,17 +892,25 @@ export default function Today() {
         <div className="focus-banner">
           <div>
             <strong>
-              Focusing{focusNow.title.startsWith('Focus: ') ? ` on ${focusNow.title.slice(7)}` : ''}
+              {focusNow.title.startsWith('Focus: ')
+                ? t('Focusing on {what}', { what: focusNow.title.slice(7) })
+                : t('Focusing')}
             </strong>
             <span className="muted small">
-              until {focusEnds.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+              {t('until {time}', {
+                time: focusEnds.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' }),
+              })}
               {(agenda.focus?.held ?? 0) > 0
-                ? ` · ${agenda.focus!.held} reminder${agenda.focus!.held === 1 ? '' : 's'} waiting`
-                : ' · reminders will wait'}
+                ? ` · ${
+                    agenda.focus!.held === 1
+                      ? t('1 reminder waiting')
+                      : t('{n} reminders waiting', { n: agenda.focus!.held })
+                  }`
+                : ` · ${t('reminders will wait')}`}
             </span>
           </div>
           <button className="ghost small-btn" onClick={() => void endFocusNow()}>
-            End now
+            {t('End now')}
           </button>
         </div>
       )}
@@ -911,7 +920,7 @@ export default function Today() {
       {view === 'agenda' && justFinished.length > 0 && (
         <section>
           <h2 className="section-title">
-            Just finished — any follow-ups? <span className="count is-calm">{justFinished.length}</span>
+            {t('Just finished — any follow-ups?')} <span className="count is-calm">{justFinished.length}</span>
           </h2>
           <ul className="list">
             {justFinished.map((c) => (
@@ -920,7 +929,7 @@ export default function Today() {
                   className="commitment-main is-openable"
                   role="button"
                   tabIndex={0}
-                  aria-label={`Open ${c.title}`}
+                  aria-label={t('Open {title}', { title: c.title })}
                   onClick={() => openPlan(c.id)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -933,15 +942,15 @@ export default function Today() {
                   <p className="muted small">
                     {endedAgo(endOf(c))}
                     {c.placeName ? ` · ${c.placeName}` : ''}
-                    {c.feedId ? ' · from your calendar' : ''}
+                    {c.feedId ? ` · ${t('from your calendar')}` : ''}
                   </p>
                 </div>
                 <div className="row commitment-actions">
                   <button className="primary small-btn" onClick={() => setWrapping(c)}>
-                    Add follow-ups
+                    {t('Add follow-ups')}
                   </button>
                   <button className="ghost small-btn" onClick={() => void nothingToAdd(c.id)}>
-                    Nothing to add
+                    {t('Nothing to add')}
                   </button>
                 </div>
               </li>
@@ -956,11 +965,11 @@ export default function Today() {
         <section id="waiting">
           <div className="row spread section-head">
             <h2 className="section-title">
-              Waiting on others <span className="count is-calm">{waiting.length}</span>
+              {t('Waiting on others')} <span className="count is-calm">{waiting.length}</span>
             </h2>
             {!addingWaiting && (
               <button className="link small" onClick={() => setAddingWaiting(true)}>
-                + Waiting on someone
+                {t('+ Waiting on someone')}
               </button>
             )}
           </div>
@@ -981,7 +990,7 @@ export default function Today() {
                     className="commitment-main is-openable"
                     role="button"
                     tabIndex={0}
-                    aria-label={`Open ${c.title}`}
+                    aria-label={t('Open {title}', { title: c.title })}
                     onClick={() => openPlan(c.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
@@ -996,23 +1005,23 @@ export default function Today() {
                     </p>
                     <p className="muted small">
                       {due ? (
-                        <span className="due-now">Check in now</span>
+                        <span className="due-now">{t('Check in now')}</span>
                       ) : (
-                        `Check in ${dayLabel(c.dueAt)}`
+                        t('Check in {day}', { day: dayLabel(c.dueAt) })
                       )}
-                      {c.fromTitle ? ` · from ${c.fromTitle}` : ''}
+                      {c.fromTitle ? ` · ${t('from {title}', { title: c.fromTitle })}` : ''}
                     </p>
                   </div>
                   <div className="row commitment-actions">
                     <button className={`${due ? 'primary' : 'ghost'} small-btn`} onClick={() => setNudging(c)}>
-                      Nudge
+                      {t('Nudge')}
                     </button>
                     <button className="ghost small-btn" onClick={() => void gotIt(c.id)}>
-                      Got it
+                      {t('Got it')}
                     </button>
                     {due && (
                       <button className="link small" onClick={() => void pushBack(c.id)}>
-                        Later
+                        {t('Later')}
                       </button>
                     )}
                   </div>
@@ -1022,7 +1031,7 @@ export default function Today() {
           </ul>
           {waiting.length > shownWaiting.length && (
             <button className="ghost small-btn" onClick={() => setShowAllWaiting(true)}>
-              Show all {waiting.length}
+              {t('Show all {n}', { n: waiting.length })}
             </button>
           )}
         </section>
@@ -1030,7 +1039,7 @@ export default function Today() {
 
       {view === 'agenda' && happeningNow.length > 0 && (
         <section>
-          <h2 className="section-title">Happening now</h2>
+          <h2 className="section-title">{t('Happening now')}</h2>
           <ul className="list">
             {happeningNow.map((c) => (
               <Card
@@ -1049,7 +1058,7 @@ export default function Today() {
       {view === 'agenda' && agenda.overdue.length > 0 && (
         <section>
           <h2 className="section-title danger">
-            You dropped these <span className="count">{agenda.overdue.length}</span>
+            {t('You dropped these')} <span className="count">{agenda.overdue.length}</span>
           </h2>
           <ul className="list">
             {agenda.overdue.map((c) => (
@@ -1069,9 +1078,9 @@ export default function Today() {
 
       {view === 'agenda' && (
       <section>
-        <h2 className="section-title">Rest of today</h2>
+        <h2 className="section-title">{t('Rest of today')}</h2>
         {fixedToday.length === 0 ? (
-          <p className="muted">Nothing else at a set time today.</p>
+          <p className="muted">{t('Nothing else at a set time today.')}</p>
         ) : (
           <ul className="list">
             {fixedToday.map((c) => (
@@ -1092,7 +1101,7 @@ export default function Today() {
       {/* Intentions, not appointments. Kept apart so the day reads as a day. */}
       {view === 'agenda' && flexibleToday.length > 0 && (
         <section>
-          <h2 className="section-title">Whenever you get a chance</h2>
+          <h2 className="section-title">{t('Whenever you get a chance')}</h2>
           <ul className="list">
             {flexibleToday.map((c) => (
               <Card
@@ -1110,7 +1119,7 @@ export default function Today() {
 
       {view === 'agenda' && upcomingTasks.length > 0 && (
         <section>
-          <h2 className="section-title">Coming up</h2>
+          <h2 className="section-title">{t('Coming up')}</h2>
           <ul className="list">
             {upcomingTasks.map((c) => (
               <Card
@@ -1129,7 +1138,7 @@ export default function Today() {
       {view === 'agenda' && upcomingContext.length > 0 && (
         <section>
           <h2 className="section-title muted-title">
-            From your calendar · {upcomingContext.length}
+            {t('From your calendar · {n}', { n: upcomingContext.length })}
           </h2>
           <ul className="plain">
             {upcomingContext.slice(0, showAllContext ? undefined : 5).map((c) => (
@@ -1140,7 +1149,7 @@ export default function Today() {
           </ul>
           {upcomingContext.length > 5 && (
             <button className="ghost small-btn" onClick={() => setShowAllContext((v) => !v)}>
-              {showAllContext ? 'Show fewer' : `Show all ${upcomingContext.length}`}
+              {showAllContext ? t('Show fewer') : t('Show all {n}', { n: upcomingContext.length })}
             </button>
           )}
         </section>
@@ -1148,7 +1157,9 @@ export default function Today() {
 
       {view === 'agenda' && agenda.doneToday.length > 0 && (
         <section>
-          <h2 className="section-title muted-title">Closed today · {agenda.doneToday.length}</h2>
+          <h2 className="section-title muted-title">
+            {t('Closed today · {n}', { n: agenda.doneToday.length })}
+          </h2>
           <ul className="list">
             {agenda.doneToday.map((c) => (
               <li key={c.id} className="card done">
@@ -1158,12 +1169,12 @@ export default function Today() {
                     {/* Two ways to close something, and they mean different
                         things, so the card says which one happened. */}
                     <p className="muted small">
-                      {c.status === 'cancelled' ? 'Cancelled' : 'Done'}
+                      {c.status === 'cancelled' ? t('Cancelled') : t('Done')}
                       {c.placeName ? ` · ${c.placeName}` : ''}
                     </p>
                   </div>
                   <button className="link" onClick={() => void reopen(c)}>
-                    Reopen
+                    {t('Reopen')}
                   </button>
                 </div>
               </li>
@@ -1174,16 +1185,16 @@ export default function Today() {
 
       {view === 'agenda' && nothingPending && agenda.doneToday.length === 0 && (
         <div className="empty">
-          <p>Nothing is waiting on you.</p>
+          <p>{t('Nothing is waiting on you.')}</p>
           <p className="muted small">
-            Log a visit and any callback they gave you becomes a reminder automatically.
+            {t('Log a visit and any callback they gave you becomes a reminder automatically.')}
           </p>
         </div>
       )}
       </div>
 
       {focusStart && (
-        <Modal title="Focus time" onClose={() => setFocusStart(null)}>
+        <Modal title={t('Focus time')} onClose={() => setFocusStart(null)}>
           <FocusStart
             startAt={focusStart.startAt}
             maxMinutes={focusStart.maxMinutes}
@@ -1197,7 +1208,7 @@ export default function Today() {
       )}
 
       {loggingCallAt !== null && (
-        <Modal title="Log a call" onClose={() => setLoggingCallAt(null)}>
+        <Modal title={t('Log a call')} onClose={() => setLoggingCallAt(null)}>
           <CallLog
             call={{ phone: '', contactId: null, name: null, commitmentId: null, commitmentTitle: null, startedAt: loggingCallAt }}
             onDone={() => setLoggingCallAt(null)}
@@ -1206,19 +1217,19 @@ export default function Today() {
       )}
 
       {targetsOpen && (
-        <Modal title="Weekly targets" onClose={() => setTargetsOpen(false)}>
+        <Modal title={t('Weekly targets')} onClose={() => setTargetsOpen(false)}>
           <Targets onSaved={() => setCalendarKey((k) => k + 1)} />
         </Modal>
       )}
 
       {reportOpen && (
-        <Modal title="Daily report" onClose={() => setReportOpen(null)}>
+        <Modal title={t('Daily report')} onClose={() => setReportOpen(null)}>
           <DailyReport initialFormat={reportOpen} />
         </Modal>
       )}
 
       {reviewOpen && (
-        <Modal title="Weekly review" onClose={() => setReviewOpen(false)}>
+        <Modal title={t('Weekly review')} onClose={() => setReviewOpen(false)}>
           <WeeklyReview
             onDecideSlipped={() => {
               setReviewOpen(false)
@@ -1234,7 +1245,7 @@ export default function Today() {
       )}
 
       {dayOpen && (
-        <Modal title="Your day" onClose={() => setDayOpen(false)}>
+        <Modal title={t('Your day')} onClose={() => setDayOpen(false)}>
           <YourDay
             waiting={agenda.waiting ?? []}
             justFinished={agenda.justFinished ?? []}
@@ -1259,7 +1270,7 @@ export default function Today() {
       )}
 
       {nudging && (
-        <Modal title="Nudge" onClose={() => setNudging(null)}>
+        <Modal title={t('Nudge')} onClose={() => setNudging(null)}>
           <Nudge
             item={nudging}
             onDone={() => {
@@ -1271,7 +1282,7 @@ export default function Today() {
       )}
 
       {wrapping && (
-        <Modal title="Wrap up" onClose={() => setWrapping(null)} closeOnBackdrop={false}>
+        <Modal title={t('Wrap up')} onClose={() => setWrapping(null)} closeOnBackdrop={false}>
           <WrapUp
             meeting={wrapping}
             onDone={() => {

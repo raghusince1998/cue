@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
+import { locale, msg, t } from '../lib/i18n.tsx'
 
 /**
  * Clearing what the nagging failed on.
@@ -30,15 +31,27 @@ interface Report {
   merelyLate: number
 }
 
+/** Shown with t(). */
 const LABEL: Record<Action, string> = {
-  done: 'Already did it',
-  reschedule: 'Give it a real slot',
-  someday: 'No deadline',
-  drop: 'Not happening',
+  done: msg('Already did it'),
+  reschedule: msg('Give it a real slot'),
+  someday: msg('No deadline'),
+  drop: msg('Not happening'),
 }
 
+/** The server names the weekday in English; these are its words, for t(). */
+const WEEKDAYS = [
+  msg('Sunday'),
+  msg('Monday'),
+  msg('Tuesday'),
+  msg('Wednesday'),
+  msg('Thursday'),
+  msg('Friday'),
+  msg('Saturday'),
+]
+
 function when(iso: string): string {
-  return new Date(iso).toLocaleString([], {
+  return new Date(iso).toLocaleString(locale(), {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -99,27 +112,28 @@ export function Triage({
   if (!report) {
     return (
       <p className="muted small">
-        {all ? 'Gathering everything past its time…' : 'Looking at what has stopped moving…'}
+        {all ? t('Gathering everything past its time…') : t('Looking at what has stopped moving…')}
       </p>
     )
   }
 
   if (done) {
     const parts = [
-      done.done ? `${done.done} marked done` : null,
-      done.rescheduled ? `${done.rescheduled} given a new slot` : null,
-      done.someday ? `${done.someday} moved to no deadline` : null,
-      done.dropped ? `${done.dropped} let go` : null,
+      done.done ? t('{n} marked done', { n: done.done }) : null,
+      done.rescheduled ? t('{n} given a new slot', { n: done.rescheduled }) : null,
+      done.someday ? t('{n} moved to no deadline', { n: done.someday }) : null,
+      done.dropped ? t('{n} let go', { n: done.dropped }) : null,
     ].filter(Boolean)
     return (
       <div className="stack tight">
-        <strong>{parts.length ? parts.join(', ') : 'Nothing changed'}.</strong>
+        <strong>{parts.length ? parts.join(', ') : t('Nothing changed')}.</strong>
         <p className="muted small">
-          That is the backlog cleared. The ones you let go are still in your history — what you
-          decided not to do is worth being able to look back on.
+          {t(
+            'That is the backlog cleared. The ones you let go are still in your history — what you decided not to do is worth being able to look back on.',
+          )}
         </p>
         <button className="primary" onClick={onClose}>
-          Good
+          {t('Good')}
         </button>
       </div>
     )
@@ -128,26 +142,39 @@ export function Triage({
   if (report.items.length === 0) {
     return (
       <div className="stack tight">
-        <strong>{all ? 'Nothing is overdue.' : 'Nothing is stuck.'}</strong>
+        <strong>{all ? t('Nothing is overdue.') : t('Nothing is stuck.')}</strong>
         <p className="muted small">
           {report.merelyLate > 0
-            ? `${report.merelyLate} ${report.merelyLate === 1 ? 'thing is' : 'things are'} late, but still being chased. They have not been given up on yet.`
-            : 'Nothing overdue at all.'}
+            ? report.merelyLate === 1
+              ? t('1 thing is late, but still being chased. They have not been given up on yet.')
+              : t('{n} things are late, but still being chased. They have not been given up on yet.', {
+                  n: report.merelyLate,
+                })
+            : t('Nothing overdue at all.')}
         </p>
         <button className="primary" onClick={onClose}>
-          Close
+          {t('Close')}
         </button>
       </div>
     )
   }
 
+  const worstDay = report.worstWeekday
+    ? (WEEKDAYS.find((d) => d === report.worstWeekday) ?? report.worstWeekday)
+    : null
+
   return (
     <div className="stack tight">
       <p className="muted small">
         {all
-          ? `Everything past its time — ${report.items.length}. What the app would do is already picked for each; change any, then apply.`
-          : 'These stopped moving. The reminders ran out, so chasing them again will not work — and that is the app\u2019s failure as much as yours.'}
-        {report.worstWeekday && ` Most of them were due on a ${report.worstWeekday}.`}
+          ? t(
+              'Everything past its time — {n}. What the app would do is already picked for each; change any, then apply.',
+              { n: report.items.length },
+            )
+          : t(
+              'These stopped moving. The reminders ran out, so chasing them again will not work — and that is the app’s failure as much as yours.',
+            )}
+        {worstDay && ` ${t('Most of them were due on a {day}.', { day: t(worstDay) })}`}
       </p>
 
       {report.items.map((item) => (
@@ -155,7 +182,7 @@ export function Triage({
           <div className="triage-head">
             <strong>{item.title}</strong>
             <span className="muted small">
-              {when(item.dueAt)} · {item.daysOverdue} days ago
+              {when(item.dueAt)} · {t('{n} days ago', { n: item.daysOverdue })}
             </span>
           </div>
           <p className="muted small">{item.because}</p>
@@ -169,10 +196,10 @@ export function Triage({
                   key={action}
                   className={`chip${picked ? ' selected' : ''}`}
                   disabled={impossible}
-                  title={impossible ? 'No free slot in the next two weeks' : undefined}
+                  title={impossible ? t('No free slot in the next two weeks') : undefined}
                   onClick={() => setChoices((c) => ({ ...c, [item.id]: action }))}
                 >
-                  {LABEL[action]}
+                  {t(LABEL[action])}
                 </button>
               )
             })}
@@ -181,8 +208,8 @@ export function Triage({
           {(choices[item.id] ?? item.suggested) === 'reschedule' && (
             <p className="muted small">
               {item.suggestedAt
-                ? `Moves to ${when(item.suggestedAt)} — your next genuinely free slot.`
-                : 'Nothing free in the next two weeks. Pick another option, or move it by hand.'}
+                ? t('Moves to {time} — your next genuinely free slot.', { time: when(item.suggestedAt) })
+                : t('Nothing free in the next two weeks. Pick another option, or move it by hand.')}
             </p>
           )}
         </div>
@@ -190,10 +217,10 @@ export function Triage({
 
       <div className="row">
         <button className="primary" onClick={() => void apply()} disabled={busy}>
-          {busy ? 'Clearing…' : `Sort out all ${report.items.length}`}
+          {busy ? t('Clearing…') : t('Sort out all {n}', { n: report.items.length })}
         </button>
         <button className="ghost" onClick={onClose} disabled={busy}>
-          Not now
+          {t('Not now')}
         </button>
       </div>
     </div>

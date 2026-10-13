@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { VoiceNoteDTO } from '@cue/shared'
 import { api, apiFetchBlobUrl, apiUploadAudio } from '../lib/api.ts'
 import type { PendingClip } from '../lib/outbox.ts'
+import { t } from '../lib/i18n.tsx'
 import { newId } from '../lib/outbox.ts'
 import {
   formatDuration,
@@ -37,8 +38,8 @@ function Player({ note }: { note: VoiceNoteDTO }) {
     }
   }, [note.id])
 
-  if (error) return <p className="error small">Could not load this clip.</p>
-  if (!src) return <span className="muted small">Loading…</span>
+  if (error) return <p className="error small">{t('Could not load this clip.')}</p>
+  if (!src) return <span className="muted small">{t('Loading…')}</span>
   return <audio controls src={src} className="audio-player" />
 }
 
@@ -122,7 +123,7 @@ export function VoiceNotes({
         // No connection. Keep the audio in memory and let the outbox carry it,
         // rather than making the user re-record it later.
         if (!onPendingClipsChange) {
-          setError('Could not upload that clip — check your connection.')
+          setError(t('Could not upload that clip — check your connection.'))
           return
         }
         const next = [
@@ -161,8 +162,9 @@ export function VoiceNotes({
   if (!supported) {
     return (
       <p className="muted small">
-        This browser cannot record audio. On a phone you can still tap the microphone on your
-        keyboard to dictate into the notes field.
+        {t(
+          'This browser cannot record audio. On a phone you can still tap the microphone on your keyboard to dictate into the notes field.',
+        )}
       </p>
     )
   }
@@ -178,7 +180,7 @@ export function VoiceNotes({
                   {formatDuration(note.durationMs)} · {formatSize(note.sizeBytes)}
                 </span>
                 <button className="link danger-link" onClick={() => void remove(note.id)}>
-                  Delete
+                  {t('Delete')}
                 </button>
               </div>
               <Player note={note} />
@@ -190,25 +192,28 @@ export function VoiceNotes({
 
       {localClips.length > 0 && (
         <p className="muted small">
-          {localClips.length} clip{localClips.length === 1 ? '' : 's'} held on this device — they
-          upload with the visit once you are back online.
+          {localClips.length === 1
+            ? t('1 clip held on this device — they upload with the visit once you are back online.')
+            : t('{n} clips held on this device — they upload with the visit once you are back online.', {
+                n: localClips.length,
+              })}
         </p>
       )}
 
       {session ? (
         <div className="row recording-row">
           <span className="rec-dot" />
-          <span className="muted small">Recording {formatDuration(elapsedMs)}</span>
+          <span className="muted small">{t('Recording {time}', { time: formatDuration(elapsedMs) })}</span>
           <button className="primary small-btn" onClick={finish} disabled={busy}>
-            {busy ? 'Saving…' : 'Stop & save'}
+            {busy ? t('Saving…') : t('Stop & save')}
           </button>
           <button className="ghost small-btn" onClick={discard} disabled={busy}>
-            Discard
+            {t('Discard')}
           </button>
         </div>
       ) : (
         <button className="ghost" onClick={begin} disabled={busy}>
-          Record a voice note
+          {t('Record a voice note')}
         </button>
       )}
 

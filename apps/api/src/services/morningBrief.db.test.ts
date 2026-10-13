@@ -137,3 +137,18 @@ test('someone without a working life gets one list, as before', async () => {
   assert.ok(!/Work:|Personal:/.test(body), body)
   await h.sql`update users set uses = '{office}' where id = ${me.userId}`
 })
+
+test('someone who reads Hindi gets the brief in Hindi; what they wrote stays as written', async () => {
+  await h.sql`update users set language = 'hi' where id = ${me.userId}`
+  try {
+    await add('Sprint planning', at(8, 10), { kind: 'meeting', minutes: 60 })
+    await add('File the expenses', at(6, 17), { kind: 'task' }) // overdue
+    const brief = await svc.sendBriefTo(me.userId, TZ, NOW)
+    assert.equal(brief?.title, 'आज: 1 मीटिंग')
+    assert.match(brief!.body, /Sprint planning 10:00 am पर।/)
+    assert.match(brief!.body, /1 का समय निकल गया।/)
+    assert.ok(!/Today|overdue|first/.test(brief!.body), brief!.body)
+  } finally {
+    await h.sql`update users set language = 'en' where id = ${me.userId}`
+  }
+})

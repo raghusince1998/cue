@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { dueChoices } from './WrapUp.tsx'
+import { t } from '../lib/i18n.tsx'
 
 /**
  * "Waiting on someone", added directly — not only from a meeting wrap-up.
@@ -24,6 +25,7 @@ export function WaitingForm({ onDone, initialWho = '' }: { onDone: () => void; i
       await api('/commitments', {
         method: 'POST',
         body: {
+          // English whatever the language: the server reads "Waiting on …:" off the title.
           title: `Waiting on ${who.trim()}: ${what.trim()}`,
           kind: 'followup',
           dueAt: at.toISOString(),
@@ -43,29 +45,29 @@ export function WaitingForm({ onDone, initialWho = '' }: { onDone: () => void; i
   return (
     <div className="card waiting-form">
       <div className="row waiting-form-fields">
-        <input value={who} onChange={(e) => setWho(e.target.value)} placeholder="Who? e.g. Priya" aria-label="Who" autoFocus />
+        <input value={who} onChange={(e) => setWho(e.target.value)} placeholder={t('Who? e.g. Priya')} aria-label={t('Who')} autoFocus />
         <input
           value={what}
           onChange={(e) => setWhat(e.target.value)}
-          placeholder="What? e.g. budget numbers"
-          aria-label="What"
+          placeholder={t('What? e.g. budget numbers')}
+          aria-label={t('What')}
         />
       </div>
-      <div className="wrapup-due" role="group" aria-label="When to check in">
-        <span className="muted small">Check in</span>
+      <div className="wrapup-due" role="group" aria-label={t('When to check in')}>
+        <span className="muted small">{t('Check in')}</span>
         {choices.map((c) => (
           <button key={c.key} className={`chip${due === c.key ? ' selected' : ''}`} onClick={() => setDue(c.key)}>
-            {c.label}
+            {t(c.label)}
           </button>
         ))}
       </div>
       {error && <p className="error small">{error}</p>}
       <div className="row">
         <button className="primary small-btn" onClick={() => void save()} disabled={busy || !who.trim() || !what.trim()}>
-          {busy ? 'Adding…' : 'Add'}
+          {busy ? t('Adding…') : t('Add')}
         </button>
         <button className="ghost small-btn" onClick={onDone} disabled={busy}>
-          Cancel
+          {t('Cancel')}
         </button>
       </div>
     </div>

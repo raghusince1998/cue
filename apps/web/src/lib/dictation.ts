@@ -10,6 +10,8 @@
  * none, which is why every caller checks `dictationSupported()` first.
  */
 
+import { t } from './i18n.tsx'
+
 interface SpeechRecognitionAlternativeLike {
   transcript: string
 }
@@ -69,7 +71,7 @@ export function startDictation(options: {
   onEnd: () => void
 }): DictationHandle {
   const Ctor = getCtor()
-  if (!Ctor) throw new Error('This browser has no built-in dictation.')
+  if (!Ctor) throw new Error(t('This browser has no built-in dictation.'))
 
   const recognition = new Ctor()
   recognition.lang = options.lang ?? navigator.language ?? 'en-IN'
@@ -93,12 +95,12 @@ export function startDictation(options: {
 
   recognition.onerror = (event) => {
     const messages: Record<string, string> = {
-      'not-allowed': 'Microphone permission was denied.',
-      'no-speech': 'Did not catch anything — try again.',
-      network: 'Dictation needs a network connection.',
-      'service-not-allowed': 'This browser blocked the speech service.',
+      'not-allowed': t('Microphone permission was denied.'),
+      'no-speech': t('Did not catch anything — try again.'),
+      network: t('Dictation needs a network connection.'),
+      'service-not-allowed': t('This browser blocked the speech service.'),
     }
-    options.onError(messages[event.error] ?? `Dictation failed (${event.error}).`)
+    options.onError(messages[event.error] ?? t('Dictation failed ({error}).', { error: event.error }))
   }
 
   recognition.onend = () => {

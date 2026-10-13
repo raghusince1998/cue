@@ -416,3 +416,30 @@ test('ordinal handles the teens and the twenties', () => {
     '30th', '31st',
   ])
 })
+
+test('describeRecurrence says it in Hindi for someone who reads Hindi', () => {
+  const anchor = anchorAt(at(2026, 3, 3))
+  const cases: Array<[RecurrenceRule, string]> = [
+    [{ freq: 'daily', interval: 1 }, 'हर दिन'],
+    [{ freq: 'daily', interval: 2 }, 'हर दूसरे दिन'],
+    [{ freq: 'daily', interval: 3 }, 'हर 3 दिन'],
+    [{ freq: 'weekly', interval: 1, byWeekday: [2] }, 'हर मंगलवार'],
+    [{ freq: 'weekly', interval: 2, byWeekday: [5] }, 'हर दूसरे शुक्रवार'],
+    [{ freq: 'weekly', interval: 3, byWeekday: [5] }, 'हर 3 हफ़्ते, शुक्रवार को'],
+    [{ freq: 'weekly', interval: 1, byWeekday: [1, 3, 5] }, 'हर सोमवार, बुधवार और शुक्रवार'],
+    [{ freq: 'weekly', interval: 1, byWeekday: [1, 2, 3, 4, 5] }, 'हर कामकाजी दिन'],
+    [{ freq: 'monthly', interval: 1, byMonthDay: 1 }, 'हर महीने की 1 तारीख को'],
+    [{ freq: 'monthly', interval: 3, byMonthDay: 22 }, 'हर 3 महीने की 22 तारीख को'],
+    [{ freq: 'yearly', interval: 1, byMonthDay: 14 }, 'हर साल 14 मार्च को'],
+    [{ freq: 'monthly', interval: 1, byMonthDay: 31 }, 'हर महीने के आख़िरी दिन'],
+    [{ freq: 'monthly', interval: 1, byWeekday: [2], setPos: 2 }, 'हर महीने का दूसरा मंगलवार'],
+    [{ freq: 'monthly', interval: 1, byWeekday: [5], setPos: -1 }, 'हर महीने का आख़िरी शुक्रवार'],
+    [{ freq: 'weekly', interval: 1, byWeekday: [2], count: 6 }, 'हर मंगलवार, 6 बार'],
+    [{ freq: 'daily', interval: 1, until: '2026-03-14' }, 'हर दिन, 14 मार्च तक'],
+  ]
+  for (const [rule, expected] of cases) {
+    assert.equal(describeRecurrence(rule, anchor, 'hi'), expected, JSON.stringify(rule))
+  }
+  // English is what it always was, asked for or not.
+  assert.equal(describeRecurrence({ freq: 'weekly', interval: 2, byWeekday: [5] }, anchor, 'en'), 'Every other Friday')
+})

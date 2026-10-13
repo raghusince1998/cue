@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm'
-import { clockLabel, type CommitmentKind } from '@cue/shared'
+import { clockLabel, type CommitmentKind, type Lang } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { msg, t } from '../i18n.ts'
 import { findFreeSlots } from './freeSlots.ts'
 import { sameLabel } from './travel.ts'
 
@@ -46,7 +47,9 @@ const DAY_MONTH = (d: Date) => `${d.getDate()} ${d.toLocaleDateString('en-IN', {
 
 /**
  * Times that are free, as answers to tap. On a day already named, the free
- * times that day; with no day, the next free times over the coming days.
+ * times that day; with no day, the next free times over the coming days. The
+ * chips are in the person's language; the line a tap sets stays in words the
+ * date reader reads.
  */
 export async function timeChoices(
   userId: string,
@@ -54,6 +57,7 @@ export async function timeChoices(
   durationMinutes: number,
   now: Date,
   day: Date | null,
+  lang: Lang = 'en',
 ): Promise<Choice[]> {
   const from = day ? new Date(Math.max(now.getTime(), new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0).getTime())) : now
   // A day named: three times on it. No day: a spread over the next few.
@@ -65,9 +69,12 @@ export async function timeChoices(
     if (day) return { label: clock, line: `${line} at ${said(at)}` }
     const dayWord = offset === 0 ? 'today' : offset === 1 ? 'tomorrow' : null
     return dayWord
-      ? { label: `${dayWord[0]!.toUpperCase()}${dayWord.slice(1)} ${clock}`, line: `${line} ${dayWord} ${said(at)}` }
+      ? {
+          label: dayWord === 'today' ? t(lang, 'Today {time}', { time: clock }) : t(lang, 'Tomorrow {time}', { time: clock }),
+          line: `${line} ${dayWord} ${said(at)}`,
+        }
       : {
-          label: `${at.toLocaleDateString('en-IN', { weekday: 'short' })} ${clock}`,
+          label: `${at.toLocaleDateString(lang === 'hi' ? 'hi-IN' : 'en-IN', { weekday: 'short' })} ${clock}`,
           line: `${line} on ${DAY_MONTH(at)} ${said(at)}`,
         }
   })
@@ -121,15 +128,15 @@ export interface PlanShape {
   rule: { freq: string } | null
 }
 
-/** How much head start a deadline wants, by what it is. */
+/** How much head start a deadline wants, by what it is. Said with t(lang, why). */
 const LEADS: { pattern: RegExp; days: number; why: string }[] = [
-  { pattern: /\b(?:passport|visa)\b/i, days: 30, why: 'Passport and visa appointments can take weeks.' },
-  { pattern: /\b(?:licen[cs]e|aadhaar|pan card|registration|rc transfer)\b/i, days: 14, why: 'Paperwork like this can take a couple of weeks.' },
-  { pattern: /\b(?:itr|income tax|tax return|gst|tds|audit)\b/i, days: 7, why: 'Tax filing goes easier with the papers gathered a week ahead.' },
+  { pattern: /\b(?:passport|visa)\b/i, days: 30, why: msg('Passport and visa appointments can take weeks.') },
+  { pattern: /\b(?:licen[cs]e|aadhaar|pan card|registration|rc transfer)\b/i, days: 14, why: msg('Paperwork like this can take a couple of weeks.') },
+  { pattern: /\b(?:itr|income tax|tax return|gst|tds|audit)\b/i, days: 7, why: msg('Tax filing goes easier with the papers gathered a week ahead.') },
   {
     pattern: /\b(?:exam|thesis|assignment|dissertation|project|report|presentation|proposal|application|deck)\b/i,
     days: 7,
-    why: 'Work like this goes better started a week ahead.',
+    why: msg('Work like this goes better started a week ahead.'),
   },
 ]
 
@@ -142,11 +149,15 @@ const OCCASION = /\b(?:birthday|bday|b'day|anniversary)\b/i
 /** Said to be remote: a day away does not stop it. */
 const REMOTE = /\b(?:call|video|zoom|google meet|meet\.google|teams|online|virtual|phone|remote|whatsapp)\b/i
 
-const dayName = (d: Date) => d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+const dayName = (d: Date, lang: Lang = 'en') =>
+  d.toLocaleDateString(lang === 'hi' ? 'hi-IN' : 'en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
-/** Everything worth offering for this plan, most important first. */
-export async function suggestionsFor(userId: string, plan: PlanShape, line: string, now: Date): Promise<Suggestion[]> {
+/**
+ * Everything worth offering for this plan, most important first, said in the
+ * person's language. The plans they add keep English titles, like any other.
+ */
+export async function suggestionsFor(userId: string, plan: PlanShape, line: string, now: Date, lang: Lang = 'en'): Promise<Suggestion[]> {
   const out: Suggestion[] = []
 
   if (plan.kind === 'commitment' && plan.dueAt && !plan.booking) {
@@ -157,23 +168,23 @@ export async function suggestionsFor(userId: string, plan: PlanShape, line: stri
     const inPerson = plan.commitmentKind === 'meeting' || Boolean(plan.placeLabel) || APPOINTMENT_WORD.test(plan.title)
     if (!plan.trip && inPerson && !REMOTE.test(line)) {
       const day = ymd(due)
-      const t = schema.trips
+      const trips = schema.trips
       const [away] = await db
-        .select({ placeLabel: t.placeLabel, startsOn: t.startsOn, endsOn: t.endsOn })
-        .from(t)
-        .where(and(eq(t.userId, userId), lte(t.startsOn, day), gte(t.endsOn, day)))
+        .select({ placeLabel: trips.placeLabel, startsOn: trips.startsOn, endsOn: trips.endsOn })
+        .from(trips)
+        .where(and(eq(trips.userId, userId), lte(trips.startsOn, day), gte(trips.endsOn, day)))
         .limit(1)
       if (away && !sameLabel(away.placeLabel, plan.placeLabel)) {
         const [y, m, d] = away.endsOn.split('-').map(Number)
         const back = new Date(y!, m! - 1, d! + 1, due.getHours(), due.getMinutes())
         const start = new Date(`${away.startsOn}T00:00:00`)
         const end = new Date(`${away.endsOn}T00:00:00`)
-        const span = away.startsOn === away.endsOn ? dayName(start) : `${dayName(start)} – ${dayName(end)}`
+        const span = away.startsOn === away.endsOn ? dayName(start, lang) : `${dayName(start, lang)} – ${dayName(end, lang)}`
         out.push({
           id: 'move-after-trip',
           warning: true,
-          text: `You’re in ${away.placeLabel} ${span}, so you won’t be here for this. Move it, or make it a call.`,
-          action: `Move to ${dayName(back)}`,
+          text: t(lang, 'You’re in {place} {span}, so you won’t be here for this. Move it, or make it a call.', { place: away.placeLabel, span }),
+          action: t(lang, 'Move to {day}', { day: dayName(back, lang) }),
           moveTo: back.toISOString(),
         })
       }
@@ -187,8 +198,8 @@ export async function suggestionsFor(userId: string, plan: PlanShape, line: stri
       if (start.getTime() > now.getTime() + 86_400_000 && days < daysAway) {
         out.push({
           id: 'start-early',
-          text: lead?.why ?? 'A week’s head start, so it is not a rush at the end.',
-          action: `Remind me to start ${dayName(start)}`,
+          text: lead ? t(lang, lead.why) : t(lang, 'A week’s head start, so it is not a rush at the end.'),
+          action: t(lang, 'Remind me to start {day}', { day: dayName(start, lang) }),
           extra: { title: `Start: ${plan.title}`, dueAt: start.toISOString(), kind: 'task', durationMinutes: 30, flexible: true },
         })
       }
@@ -202,8 +213,8 @@ export async function suggestionsFor(userId: string, plan: PlanShape, line: stri
       if (at) {
         out.push({
           id: 'prepare',
-          text: 'An hour to get ready makes these go better.',
-          action: `Block ${dayName(at)}, ${clockLabel(at.getHours(), at.getMinutes())}`,
+          text: t(lang, 'An hour to get ready makes these go better.'),
+          action: t(lang, 'Block {day}, {time}', { day: dayName(at, lang), time: clockLabel(at.getHours(), at.getMinutes()) }),
           extra: { title: `Prepare: ${plan.title}`, dueAt: at.toISOString(), kind: 'focus', durationMinutes: 60, flexible: false },
         })
       }
@@ -222,8 +233,11 @@ export async function suggestionsFor(userId: string, plan: PlanShape, line: stri
       const leaving = clockLabel(leave.getHours(), leave.getMinutes())
       out.push({
         id: 'book-cab',
-        text: `You need to leave by ${leaving}. Book a cab to ${to} the evening before?`,
-        action: `Remind me ${dayName(bookAt)}, 8 pm`,
+        text:
+          plan.booking.type === 'flight'
+            ? t(lang, 'You need to leave by {time}. Book a cab to the airport the evening before?', { time: leaving })
+            : t(lang, 'You need to leave by {time}. Book a cab to the station the evening before?', { time: leaving }),
+        action: t(lang, 'Remind me {day}, 8 pm', { day: dayName(bookAt, lang) }),
         extra: { title: `Book a cab to ${to} for ${leaving}`, dueAt: bookAt.toISOString(), kind: 'task', durationMinutes: 10, flexible: false },
       })
     }
@@ -235,8 +249,8 @@ export async function suggestionsFor(userId: string, plan: PlanShape, line: stri
     const eve = new Date(y!, m! - 1, d! - 1)
     out.push({
       id: 'gift',
-      text: 'A reminder the evening before leaves time for a gift or a call.',
-      action: 'Remind me the evening before',
+      text: t(lang, 'A reminder the evening before leaves time for a gift or a call.'),
+      action: t(lang, 'Remind me the evening before'),
       yearly: { title: `Gift or wishes: ${plan.title}`, hour: 19, minute: 0, byMonth: eve.getMonth(), byMonthDay: eve.getDate() },
     })
   }

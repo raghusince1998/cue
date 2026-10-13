@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
+import { locale, msg, t } from '../lib/i18n.tsx'
 
 /**
  * Somewhere this could actually go.
@@ -21,6 +22,14 @@ interface Slots {
   outsideWindow: boolean
 }
 
+/** The window a plan asked for, as a word in a sentence. Shown with t(). */
+const WINDOW_WORDS: Record<string, string> = {
+  morning: msg('morning'),
+  afternoon: msg('afternoon'),
+  evening: msg('evening'),
+  night: msg('night'),
+}
+
 function label(iso: string): string {
   const d = new Date(iso)
   const today = new Date()
@@ -29,10 +38,10 @@ function label(iso: string): string {
       new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) /
       86_400_000,
   )
-  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-  if (days === 0) return `Today ${time}`
-  if (days === 1) return `Tomorrow ${time}`
-  return `${d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${time}`
+  const time = d.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })
+  if (days === 0) return t('Today {time}', { time })
+  if (days === 1) return t('Tomorrow {time}', { time })
+  return `${d.toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })} ${time}`
 }
 
 export function MoveIt({
@@ -70,20 +79,24 @@ export function MoveIt({
   }
 
   if (error) return <p className="error small">{error}</p>
-  if (!data) return <p className="muted small">Finding a gap…</p>
+  if (!data) return <p className="muted small">{t('Finding a gap…')}</p>
+
+  const asked = data.preferredWindow ? WINDOW_WORDS[data.preferredWindow] : undefined
 
   return (
     <div className="moveit">
       {data.slots.length === 0 ? (
         <p className="muted small">
-          Nothing free for the next fortnight. Pick a time yourself, or shorten it.
+          {t('Nothing free for the next fortnight. Pick a time yourself, or shorten it.')}
         </p>
       ) : (
         <>
           <span className="muted small">
             {data.outsideWindow
-              ? `No ${data.preferredWindow} gap free — these are the next openings`
-              : `Next ${data.durationMinutes} minutes you are free`}
+              ? t('No {window} gap free — these are the next openings', {
+                  window: asked ? t(asked) : String(data.preferredWindow),
+                })
+              : t('Next {n} minutes you are free', { n: data.durationMinutes })}
           </span>
           <div className="chips">
             {data.slots.map((iso) => (
@@ -97,10 +110,10 @@ export function MoveIt({
 
       <div className="row">
         <button className="ghost small-btn" onClick={onEdit} disabled={busy}>
-          Pick another time
+          {t('Pick another time')}
         </button>
         <button className="ghost small-btn" onClick={onCancel} disabled={busy}>
-          Cancel
+          {t('Cancel')}
         </button>
       </div>
     </div>

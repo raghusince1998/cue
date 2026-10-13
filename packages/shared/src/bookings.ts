@@ -5,6 +5,7 @@
  * bookings, but every one of them sends this message, and it says enough.
  */
 import { parseWhen } from './parseWhen.ts'
+import type { Lang } from './examHindi.ts'
 
 export type BookingType = 'train' | 'flight' | 'bus' | 'hotel' | 'show' | 'appointment' | 'service' | 'other'
 
@@ -883,7 +884,11 @@ export function parseBooking(input: string, now = new Date()): ParsedBooking | n
 }
 
 /** "3 hours", "90 minutes", "the morning of" — how long before the reminder goes. */
-export function leadLabel(minutes: number): string {
+export function leadLabel(minutes: number, lang: Lang = 'en'): string {
+  if (lang === 'hi') {
+    if (minutes >= 300) return 'उसी सुबह'
+    return minutes % 60 === 0 ? `${minutes / 60} घंटे पहले` : `${minutes} मिनट पहले`
+  }
   if (minutes >= 300) return 'that morning'
   if (minutes % 60 === 0) return `${minutes / 60} hour${minutes === 60 ? '' : 's'} before`
   return `${minutes} minutes before`

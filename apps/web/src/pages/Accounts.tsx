@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ACCOUNT_STAGES, ACCOUNT_STAGE_LABELS, type AccountStage } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { useOnChange } from '../lib/changes.ts'
+import { rich, t } from '../lib/i18n.tsx'
 import { initials, relativeDay } from '../lib/time.ts'
 
 interface AccountRow {
@@ -91,24 +92,26 @@ export function AccountsView({
         <span className="blank-mark" aria-hidden>
           &#127970;
         </span>
-        <h3>{showStages ? 'No accounts yet' : 'No companies yet'}</h3>
+        <h3>{showStages ? t('No accounts yet') : t('No companies yet')}</h3>
         <p>
-          Every company or organisation you put in someone&rsquo;s <strong>Works at</strong> gets a
-          page here, with everyone you know there and everything open with them.
-          {showStages ? ' Or add one you are only starting to approach.' : ''}
+          {rich(
+            'Every company or organisation you put in someone’s <b>Works at</b> gets a page here, with everyone you know there and everything open with them.',
+            { b: (s) => <strong>{s}</strong> },
+          )}
+          {showStages ? ` ${t('Or add one you are only starting to approach.')}` : ''}
         </p>
         <div className="row inline-field-row">
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="e.g. Tata Motors"
-            aria-label="New account"
+            placeholder={t('e.g. {examples}', { examples: 'Tata Motors' })}
+            aria-label={t('New account')}
           />
           <button className="primary small-btn" onClick={() => void create()} disabled={busy || !newName.trim()}>
-            Add account
+            {t('Add account')}
           </button>
           <button className="ghost small-btn" onClick={onAddPerson}>
-            Add a person
+            {t('Add a person')}
           </button>
         </div>
       </div>
@@ -122,7 +125,7 @@ export function AccountsView({
           className="grow"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search companies, or the people there"
+          placeholder={t('Search companies, or the people there')}
         />
       </div>
 
@@ -130,7 +133,7 @@ export function AccountsView({
       {showStages && (
       <div className="chips">
         <button className={`chip${filter === 'all' ? ' selected' : ''}`} onClick={() => setFilter('all')}>
-          All · {rows.length}
+          {t('All')} · {rows.length}
         </button>
         {ACCOUNT_STAGES.map((s) => (
           <button
@@ -145,7 +148,9 @@ export function AccountsView({
       )}
 
       {shown.length === 0 ? (
-        <p className="muted small">Nothing here{query.trim() ? ` matches “${query.trim()}”` : ' at this stage'}.</p>
+        <p className="muted small">
+          {query.trim() ? t('Nothing here matches “{query}”.', { query: query.trim() }) : t('Nothing here at this stage.')}
+        </p>
       ) : (
         <div className="tiles two-up">
           {shown.map((a) => (
@@ -157,7 +162,7 @@ export function AccountsView({
                 <p className="tile-title">{a.name}</p>
                 <p className="tile-sub">
                   {a.people === 0
-                    ? 'Nobody saved yet'
+                    ? t('Nobody saved yet')
                     : `${a.peopleNames.join(', ')}${a.people > a.peopleNames.length ? ` +${a.people - a.peopleNames.length}` : ''}`}
                 </p>
                 <div className="tile-tags">
@@ -166,19 +171,31 @@ export function AccountsView({
                       {ACCOUNT_STAGE_LABELS[a.stage]}
                     </span>
                   )}
-                  {a.quiet && <span className="tag is-warn">Gone quiet</span>}
+                  {a.quiet && <span className="tag is-warn">{t('Gone quiet')}</span>}
                   {a.waiting > 0 && (
-                    <span className={`tag${a.waitingDue ? ' is-warn' : ''}`}>Waiting · {a.waiting}</span>
+                    <span className={`tag${a.waitingDue ? ' is-warn' : ''}`}>
+                      {t('Waiting')} · {a.waiting}
+                    </span>
                   )}
-                  {a.owe > 0 && <span className="tag">You owe · {a.owe}</span>}
-                  {a.hasNext && <span className="tag is-live">Meeting booked</span>}
-                  {a.reachOut > 0 && <span className="tag is-warn">Reach out · {a.reachOut}</span>}
-                  {a.lastContact && <span className="tag">Last contact {relativeDay(a.lastContact)}</span>}
+                  {a.owe > 0 && (
+                    <span className="tag">
+                      {t('You owe')} · {a.owe}
+                    </span>
+                  )}
+                  {a.hasNext && <span className="tag is-live">{t('Meeting booked')}</span>}
+                  {a.reachOut > 0 && (
+                    <span className="tag is-warn">
+                      {t('Reach out')} · {a.reachOut}
+                    </span>
+                  )}
+                  {a.lastContact && (
+                    <span className="tag">{t('Last contact {when}', { when: relativeDay(a.lastContact) })}</span>
+                  )}
                 </div>
               </div>
               <div className="tile-actions">
                 <button className="ghost small-btn" onClick={() => onOpen(a.name)}>
-                  Open
+                  {t('Open')}
                 </button>
               </div>
             </article>
@@ -190,11 +207,15 @@ export function AccountsView({
         <input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder={showStages ? 'Add an account you are approaching, e.g. Tata Motors' : 'Add a company, e.g. Tata Motors'}
-          aria-label="New account"
+          placeholder={
+            showStages
+              ? t('Add an account you are approaching, e.g. {example}', { example: 'Tata Motors' })
+              : t('Add a company, e.g. {example}', { example: 'Tata Motors' })
+          }
+          aria-label={t('New account')}
         />
         <button className="ghost small-btn" onClick={() => void create()} disabled={busy || !newName.trim()}>
-          Add account
+          {t('Add account')}
         </button>
       </div>
     </div>

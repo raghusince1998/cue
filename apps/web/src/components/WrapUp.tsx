@@ -3,6 +3,7 @@ import type { CommitmentDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { formatSpan, toLocalInputValue } from '../lib/time.ts'
+import { msg, t } from '../lib/i18n.tsx'
 
 interface Due {
   key: string
@@ -10,7 +11,7 @@ interface Due {
   at: Date
 }
 
-/** When a follow-up is due, in the four answers people actually give. */
+/** When a follow-up is due, in the four answers people actually give. Show the label with t(). */
 export function dueChoices(now = new Date()): Due[] {
   const at = (days: number, hour: number) =>
     new Date(now.getFullYear(), now.getMonth(), now.getDate() + days, hour, 0)
@@ -19,10 +20,10 @@ export function dueChoices(now = new Date()): Due[] {
   const toFriday = (5 - now.getDay() + 7) % 7 || 7
   const toMonday = (1 - now.getDay() + 7) % 7 || 7
   return [
-    { key: 'today', label: 'Today', at: today },
-    { key: 'tomorrow', label: 'Tomorrow', at: at(1, 10) },
-    { key: 'friday', label: now.getDay() === 5 ? 'Next Friday' : 'Friday', at: at(toFriday, 10) },
-    { key: 'monday', label: 'Next Monday', at: at(toMonday, 10) },
+    { key: 'today', label: msg('Today'), at: today },
+    { key: 'tomorrow', label: msg('Tomorrow'), at: at(1, 10) },
+    { key: 'friday', label: now.getDay() === 5 ? msg('Next Friday') : msg('Friday'), at: at(toFriday, 10) },
+    { key: 'monday', label: msg('Next Monday'), at: at(toMonday, 10) },
   ]
 }
 
@@ -110,7 +111,7 @@ export function WrapUp({
         </span>
       </div>
 
-      <span className="label-text">What came out of it?</span>
+      <span className="label-text">{t('What came out of it?')}</span>
       <ol className="wrapup-lines">
         {lines.map((line, i) => (
           <li className="wrapup-line" key={line.key}>
@@ -118,43 +119,43 @@ export function WrapUp({
               value={line.title}
               onChange={(e) => update(line.key, { title: e.target.value })}
               placeholder={
-                i === 0 ? 'Send the revised proposal' : i === 1 ? 'Signed contract' : 'Another follow-up'
+                i === 0 ? 'Send the revised proposal' : i === 1 ? 'Signed contract' : t('Another follow-up')
               }
-              aria-label={`Follow-up ${i + 1}`}
+              aria-label={t('Follow-up {n}', { n: i + 1 })}
               autoFocus={i === 0}
             />
-            <div className="wrapup-who" role="group" aria-label="Whose is it">
+            <div className="wrapup-who" role="group" aria-label={t('Whose is it')}>
               <button
                 className={`chip${line.who === 'me' ? ' selected' : ''}`}
                 onClick={() => update(line.key, { who: 'me' })}
               >
-                I&rsquo;ll do it
+                {t('I’ll do it')}
               </button>
               <button
                 className={`chip${line.who === 'them' ? ' selected' : ''}`}
                 onClick={() => update(line.key, { who: 'them' })}
               >
-                Waiting on someone
+                {t('Waiting on someone')}
               </button>
               {line.who === 'them' && (
                 <input
                   className="wrapup-name"
                   value={line.name}
                   onChange={(e) => update(line.key, { name: e.target.value })}
-                  placeholder="Who? e.g. Ravi"
-                  aria-label={`Follow-up ${i + 1}: who`}
+                  placeholder={t('Who? e.g. Ravi')}
+                  aria-label={t('Follow-up {n}: who', { n: i + 1 })}
                 />
               )}
             </div>
-            <div className="wrapup-due" role="group" aria-label="By when">
-              <span className="muted small">{line.who === 'them' ? 'Check in' : 'Due'}</span>
+            <div className="wrapup-due" role="group" aria-label={t('By when')}>
+              <span className="muted small">{line.who === 'them' ? t('Check in') : t('Due')}</span>
               {choices.map((c) => (
                 <button
                   key={c.key}
                   className={`chip${line.due === c.key ? ' selected' : ''}`}
                   onClick={() => update(line.key, { due: c.key })}
                 >
-                  {c.label}
+                  {t(c.label)}
                 </button>
               ))}
               <button
@@ -166,14 +167,14 @@ export function WrapUp({
                   })
                 }
               >
-                Pick…
+                {t('Pick…')}
               </button>
               {line.due === 'custom' && (
                 <input
                   type="datetime-local"
                   value={line.custom}
                   onChange={(e) => update(line.key, { custom: e.target.value })}
-                  aria-label={`Follow-up ${i + 1}: when`}
+                  aria-label={t('Follow-up {n}: when', { n: i + 1 })}
                 />
               )}
             </div>
@@ -185,13 +186,14 @@ export function WrapUp({
         onClick={() => setLines((list) => [...list, blankLine()])}
         disabled={lines.length >= 20}
       >
-        + Another
+        {t('+ Another')}
       </button>
 
       {missing.length > 0 && (
         <p className="muted small">
-          {missing.length === 1 ? 'One follow-up needs' : `${missing.length} follow-ups need`} a name
-          for who you are waiting on, or a time.
+          {missing.length === 1
+            ? t('One follow-up needs a name for who you are waiting on, or a time.')
+            : t('{n} follow-ups need a name for who you are waiting on, or a time.', { n: missing.length })}
         </p>
       )}
       {error && <p className="error small">{error}</p>}
@@ -203,13 +205,15 @@ export function WrapUp({
           disabled={saving || filled.length === 0 || missing.length > 0}
         >
           {saving
-            ? 'Saving…'
+            ? t('Saving…')
             : filled.length > 0
-              ? `Save ${filled.length} follow-up${filled.length === 1 ? '' : 's'}`
-              : 'Save follow-ups'}
+              ? filled.length === 1
+                ? t('Save 1 follow-up')
+                : t('Save {n} follow-ups', { n: filled.length })
+              : t('Save follow-ups')}
         </button>
         <button className="ghost" onClick={() => void submit([])} disabled={saving}>
-          Nothing to add
+          {t('Nothing to add')}
         </button>
       </div>
     </div>

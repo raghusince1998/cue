@@ -2,7 +2,6 @@ import { useState } from 'react'
 import {
   SCHEDULE_TEMPLATES,
   SCHEDULE_UNITS,
-  offsetLabel,
   stepDate,
   type ScheduleDTO,
   type ScheduleTemplate,
@@ -10,6 +9,7 @@ import {
 } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
+import { msg, t } from '../lib/i18n.tsx'
 import { dayLabel, relativeDay, toDateInputValue } from '../lib/time.ts'
 
 interface StepDraft {
@@ -20,6 +20,24 @@ interface StepDraft {
   unit: ScheduleUnit
   date: string
 }
+
+/** The units in the step's picker, by their value. Shown with t(). */
+const UNIT_LABELS: Record<ScheduleUnit, string> = {
+  days: msg('days'),
+  weeks: msg('weeks'),
+  months: msg('months'),
+  years: msg('years'),
+}
+
+/** "6 weeks", "1 month": a step's gap, as offsetLabel says it, in the person's language. */
+const SPANS: Record<ScheduleUnit, [string, string]> = {
+  days: [msg('1 day'), msg('{n} days')],
+  weeks: [msg('1 week'), msg('{n} weeks')],
+  months: [msg('1 month'), msg('{n} months')],
+  years: [msg('1 year'), msg('{n} years')],
+}
+const spanOf = (o: { amount: number; unit: ScheduleUnit }) =>
+  o.amount === 1 ? t(SPANS[o.unit][0]) : t(SPANS[o.unit][1], { n: o.amount })
 
 let nextKey = 0
 function blankStep(unit: ScheduleUnit = 'weeks'): StepDraft {
@@ -75,15 +93,15 @@ export function ScheduleForm({
 
   /** Fills the steps from a template. Every step stays editable before booking. */
   function applyTemplate(id: string) {
-    const t = SCHEDULE_TEMPLATES.find((x) => x.id === id)
-    if (!t) return
+    const tpl = SCHEDULE_TEMPLATES.find((x) => x.id === id)
+    if (!tpl) return
     const typed = steps.some((s) => s.title.trim() || s.amount.trim() || s.date)
-    if (typed && !window.confirm(`Replace the steps you have typed with "${t.label}"?`)) return
-    setTemplate(t)
-    if (!title.trim()) setTitle(t.title)
-    setTime(`${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}`)
+    if (typed && !window.confirm(t('Replace the steps you have typed with "{name}"?', { name: t(tpl.label) }))) return
+    setTemplate(tpl)
+    if (!title.trim()) setTitle(t(tpl.title))
+    setTime(`${String(tpl.hour).padStart(2, '0')}:${String(tpl.minute).padStart(2, '0')}`)
     setSteps(
-      t.steps.map((step) => {
+      tpl.steps.map((step) => {
         nextKey += 1
         return {
           key: nextKey,
@@ -148,20 +166,30 @@ export function ScheduleForm({
     return (
       <div className="stack tight">
         <strong>
-          {saved.booked} step{saved.booked === 1 ? '' : 's'} of {saved.schedule.title} booked.
+          {saved.booked === 1
+            ? t('1 step of {title} booked.', { title: saved.schedule.title })
+            : t('{n} steps of {title} booked.', { n: saved.booked, title: saved.schedule.title })}
         </strong>
         <p className="muted small">
           {next
-            ? `Next: ${next.title.replace(`${saved.schedule.title} — `, '')}, ${dayLabel(next.dueAt)} (${relativeDay(next.dueAt)}). `
+            ? `${t('Next: {title}, {day} ({when}).', {
+                title: next.title.replace(`${saved.schedule.title} — `, ''),
+                day: dayLabel(next.dueAt),
+                when: relativeDay(next.dueAt),
+              })} `
             : ''}
           {saved.skippedPast > 0
-            ? `${saved.skippedPast} already past ${saved.skippedPast === 1 ? 'was' : 'were'} left out. `
+            ? `${
+                saved.skippedPast === 1
+                  ? t('1 already past was left out.')
+                  : t('{n} already past were left out.', { n: saved.skippedPast })
+              } `
             : ''}
-          Each one reminds you on its day, and the whole schedule is on the Repeating page.
+          {t('Each one reminds you on its day, and the whole schedule is on the Repeating page.')}
         </p>
         <div className="form-actions">
           <button className="primary" onClick={onDone}>
-            Done
+            {t('Done')}
           </button>
         </div>
       </div>
@@ -171,57 +199,56 @@ export function ScheduleForm({
   return (
     <div className="stack tight schedule-form">
       <button className="quick-more" onClick={onBack}>
-        Back to a single plan
+        {t('Back to a single plan')}
       </button>
 
       {SCHEDULE_TEMPLATES.length > 0 && (
         <section className="card schedule-template">
           <label>
-            Start from a template (optional)
+            {t('Start from a template (optional)')}
             <select
               value={template?.id ?? ''}
               onChange={(e) => (e.target.value ? applyTemplate(e.target.value) : setTemplate(null))}
             >
-              <option value="">— my own steps —</option>
-              {SCHEDULE_TEMPLATES.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
+              <option value="">{t('— my own steps —')}</option>
+              {SCHEDULE_TEMPLATES.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>
+                  {t(tpl.label)}
                 </option>
               ))}
             </select>
           </label>
-          {template && <p className="schedule-caution">{template.caution}</p>}
+          {template && <p className="schedule-caution">{t(template.caution)}</p>}
         </section>
       )}
 
       <section className="card">
         <label>
-          What is the schedule?
+          {t('What is the schedule?')}
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Aarav's vaccinations"
+            placeholder={t('Aarav\'s vaccinations')}
             autoFocus={!template}
           />
         </label>
         <div className="row schedule-start">
           <label className="grow">
-            {template ? template.startLabel : 'Counting from'}
+            {template ? t(template.startLabel) : t('Counting from')}
             <input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />
           </label>
           <label className="grow">
-            At
+            {t('At')}
             <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
           </label>
         </div>
         <p className="muted small">
-          The date the steps are counted from — a date of birth, the first dose, the start of a
-          course.
+          {t('The date the steps are counted from — a date of birth, the first dose, the start of a course.')}
         </p>
       </section>
 
       <section className="card">
-        <span className="label-text">Steps</span>
+        <span className="label-text">{t('Steps')}</span>
         <ol className="schedule-steps">
           {rows.map(({ s, read, ymd, past }, i) => (
             <li key={s.key} className="schedule-step">
@@ -229,17 +256,17 @@ export function ScheduleForm({
                 <input
                   value={s.title}
                   onChange={(e) => update(s.key, { title: e.target.value })}
-                  placeholder={i === 0 ? 'What happens, e.g. BCG, OPV-0' : 'What happens (optional)'}
-                  aria-label={`Step ${i + 1}: what happens`}
+                  placeholder={i === 0 ? t('What happens, e.g. BCG, OPV-0') : t('What happens (optional)')}
+                  aria-label={t('Step {n}: what happens', { n: i + 1 })}
                 />
                 <div className="schedule-when">
                   <select
                     value={s.mode}
                     onChange={(e) => update(s.key, { mode: e.target.value as StepDraft['mode'] })}
-                    aria-label={`Step ${i + 1}: how its date is set`}
+                    aria-label={t('Step {n}: how its date is set', { n: i + 1 })}
                   >
-                    <option value="after">after</option>
-                    <option value="on">on</option>
+                    <option value="after">{t('after')}</option>
+                    <option value="on">{t('on')}</option>
                   </select>
                   {s.mode === 'after' ? (
                     <>
@@ -250,16 +277,16 @@ export function ScheduleForm({
                         value={s.amount}
                         onChange={(e) => update(s.key, { amount: e.target.value })}
                         placeholder="6"
-                        aria-label={`Step ${i + 1}: how many`}
+                        aria-label={t('Step {n}: how many', { n: i + 1 })}
                       />
                       <select
                         value={s.unit}
                         onChange={(e) => update(s.key, { unit: e.target.value as ScheduleUnit })}
-                        aria-label={`Step ${i + 1}: unit`}
+                        aria-label={t('Step {n}: unit', { n: i + 1 })}
                       >
                         {SCHEDULE_UNITS.map((u) => (
                           <option key={u} value={u}>
-                            {u}
+                            {t(UNIT_LABELS[u])}
                           </option>
                         ))}
                       </select>
@@ -269,13 +296,13 @@ export function ScheduleForm({
                       type="date"
                       value={s.date}
                       onChange={(e) => update(s.key, { date: e.target.value })}
-                      aria-label={`Step ${i + 1}: date`}
+                      aria-label={t('Step {n}: date', { n: i + 1 })}
                     />
                   )}
                   <button
                     className="link schedule-remove"
                     onClick={() => setSteps((list) => list.filter((x) => x.key !== s.key))}
-                    aria-label={`Remove step ${i + 1}`}
+                    aria-label={t('Remove step {n}', { n: i + 1 })}
                     disabled={steps.length === 1}
                   >
                     ×
@@ -285,17 +312,17 @@ export function ScheduleForm({
               <p className={`schedule-date${past ? ' is-past' : ''}`}>
                 {ymd
                   ? past
-                    ? `${dayLabel(ymd)} — already past, will be left out`
+                    ? t('{day} — already past, will be left out', { day: dayLabel(ymd) })
                     : `${dayLabel(ymd)} · ${relativeDay(ymd)}${
                         read.offset
                           ? read.offset.amount === 0
-                            ? ' · at the start'
-                            : ` · ${offsetLabel(read.offset).toLowerCase()} after the start`
+                            ? ` · ${t('at the start')}`
+                            : ` · ${t('{span} after the start', { span: spanOf(read.offset) })}`
                           : ''
                       }`
                   : read.empty
                     ? ' '
-                    : 'Needs a when'}
+                    : t('Needs a when')}
               </p>
             </li>
           ))}
@@ -304,7 +331,7 @@ export function ScheduleForm({
           className="ghost small-btn fit-btn"
           onClick={() => setSteps((list) => [...list, blankStep(list.at(-1)?.unit)])}
         >
-          + Add a step
+          {t('+ Add a step')}
         </button>
       </section>
 
@@ -313,16 +340,19 @@ export function ScheduleForm({
       <div className="form-actions">
         <button className="primary" onClick={() => void save()} disabled={!canSave || saving}>
           {saving
-            ? 'Booking…'
+            ? t('Booking…')
             : toBook > 0
-              ? `Book ${toBook} step${toBook === 1 ? '' : 's'}`
-              : 'Book the steps'}
+              ? toBook === 1
+                ? t('Book 1 step')
+                : t('Book {n} steps', { n: toBook })
+              : t('Book the steps')}
         </button>
       </div>
       {incomplete.length > 0 && (
         <p className="muted small">
-          {incomplete.length} step{incomplete.length === 1 ? ' needs' : 's need'} a when — a gap
-          after the start or a date.
+          {incomplete.length === 1
+            ? t('1 step needs a when — a gap after the start or a date.')
+            : t('{n} steps need a when — a gap after the start or a date.', { n: incomplete.length })}
         </p>
       )}
     </div>

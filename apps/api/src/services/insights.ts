@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, isNull, lt, lte, ne, or, sql, isNotNull } from 'drizzle-orm'
-import { BOARDS, daysToDue, dueLabel, formatRupees } from '@cue/shared'
-import { listBills } from './bills.ts'
+import { BOARDS, daysToDue, formatRupees, type Board, type Lang } from '@cue/shared'
+import { dueSaid, listBills } from './bills.ts'
+import { langOf, msg, t } from '../i18n.ts'
 import { owedPeople } from './owed.ts'
 import { quietItems } from './trackers.ts'
 import { occasionLabel, upcomingOccasions } from './occasions.ts'
@@ -54,14 +55,44 @@ function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
-function hours(minutes: number): string {
-  if (minutes < 60) return `${Math.round(minutes)} min`
+function hours(minutes: number, lang: Lang): string {
+  if (minutes < 60) return t(lang, '{n} min', { n: Math.round(minutes) })
   const h = minutes / 60
-  return `${h % 1 === 0 ? h : h.toFixed(1)} hours`
+  return t(lang, '{n} hours', { n: h % 1 === 0 ? h : h.toFixed(1) })
 }
 
-function clock(d: Date): string {
-  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+function clock(d: Date, lang: Lang): string {
+  return d.toLocaleTimeString(lang === 'hi' ? 'hi-IN' : [], { hour: 'numeric', minute: '2-digit' })
+}
+
+/** A weekday's name, 0 for Sunday: 4 October 2026 was one. */
+function weekdayName(day: number, lang: Lang): string {
+  return lang === 'en' ? WEEKDAYS[day]! : new Date(2026, 9, 4 + day).toLocaleDateString('hi-IN', { weekday: 'long' })
+}
+
+/** Several of a board's items gone quiet, by board. */
+const QUIET_MANY: Record<Board['key'], string> = {
+  jobs: msg('{n} applications have gone quiet'),
+  hiring: msg('{n} candidates have gone quiet'),
+  deals: msg('{n} deals have gone quiet'),
+}
+
+/** The board's own line about one that has gone quiet, in the person's language. */
+function quietSaid(board: Board, title: string, stage: string, days: number, lang: Lang): string {
+  if (lang === 'en') return board.quietLine(title, stage, days)
+  const v = { title, n: days }
+  if (board.key === 'jobs') {
+    if (stage === 'saved') return t(lang, '{title}: saved {n} days ago and not applied yet', v)
+    if (stage === 'applied') return t(lang, 'Applied to {title} {n} days ago with no reply', v)
+    if (stage === 'offer') return t(lang, "{title}'s offer has waited {n} days for an answer", v)
+    return t(lang, 'Nothing heard from {title} in {n} days', v)
+  }
+  if (board.key === 'hiring') {
+    if (stage === 'new') return t(lang, '{title} applied {n} days ago and has not been looked at', v)
+    if (stage === 'offer') return t(lang, '{title} has not answered the offer in {n} days', v)
+    return t(lang, '{title} has waited {n} days without a next step', v)
+  }
+  return t(lang, '{title}: nothing has moved in {n} days', v)
 }
 
 interface Busy {
@@ -153,7 +184,7 @@ function shapeOfDay(items: Busy[], day: Date, now: Date) {
 }
 
 /** Two places, too close together in time to get between. */
-async function travelRisks(items: Busy[]): Promise<Insight[]> {
+async function travelRisks(items: Busy[], lang: Lang): Promise<Insight[]> {
   const out: Insight[] = []
   const placed = items.filter((i) => !i.allDay && (i.placeLabel || i.placeName))
 
@@ -177,18 +208,32 @@ async function travelRisks(items: Busy[]): Promise<Insight[]> {
     out.push({
       id: `travel-${a.id}-${b.id}`,
       tone: 'urgent',
-      headline: `You cannot get from ${labelA} to ${labelB} in time`,
-      detail: `${a.title} ends at ${clock(endOf(a))} and ${b.title} starts at ${clock(b.dueAt)} — ${Math.round(gapMinutes)} minutes apart. That journey is about ${travel.distanceKm} km, roughly ${hours(travel.minutes)}.`,
+      headline: t(lang, 'You cannot get from {from} to {to} in time', { from: labelA, to: labelB }),
+      detail: t(
+        lang,
+        '{first} ends at {ends} and {second} starts at {starts} — {gap} minutes apart. That journey is about {km} km, roughly {time}.',
+        {
+          first: a.title,
+          ends: clock(endOf(a), lang),
+          second: b.title,
+          starts: clock(b.dueAt, lang),
+          gap: Math.round(gapMinutes),
+          km: travel.distanceKm,
+          time: hours(travel.minutes, lang),
+        },
+      ),
       // The week that day is in, with the day picked out. '/' was the page
       // the button sat on, so it did nothing.
-      action: { label: 'Open the day', href: `/?view=week&date=${dayKey(a.dueAt)}` },
+      action: { label: t(lang, 'Open the day'), href: `/?view=week&date=${dayKey(a.dueAt)}` },
       weight: 100,
     })
   }
   return out
 }
 
-export async function buildInsights(userId: string, now = new Date()): Promise<Insight[]> {
+/** What stands out, said in the person's language (looked up when not given). */
+export async function buildInsights(userId: string, now = new Date(), language?: Lang): Promise<Insight[]> {
+  const lang = language ?? (await langOf(userId))
   const today = startOfDay(now)
   const insights: Insight[] = []
 
@@ -224,14 +269,19 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
     insights.push({
       id: 'overdue',
       tone: 'urgent',
-      headline: `${overdue.length} thing${overdue.length === 1 ? '' : 's'} you said you would do ${overdue.length === 1 ? 'is' : 'are'} still open`,
+      headline:
+        overdue.length === 1
+          ? t(lang, '1 thing you said you would do is still open')
+          : t(lang, '{n} things you said you would do are still open', { n: overdue.length }),
       detail:
-        days >= 1
-          ? `The oldest is "${oldest.title}", ${days} day${days === 1 ? '' : 's'} past its time.`
-          : `"${oldest.title}" was due at ${clock(oldest.dueAt)}.`,
+        days === 1
+          ? t(lang, 'The oldest is "{title}", 1 day past its time.', { title: oldest.title })
+          : days > 1
+            ? t(lang, 'The oldest is "{title}", {n} days past its time.', { title: oldest.title, n: days })
+            : t(lang, '"{title}" was due at {time}.', { title: oldest.title, time: clock(oldest.dueAt, lang) }),
       // The triage panel is where each one gets decided. '/' was the page
       // the button sat on, so pressing it did nothing at all.
-      action: { label: 'Clear them', href: '/?triage=all' },
+      action: { label: t(lang, 'Clear them'), href: '/?triage=all' },
       weight: 95,
     })
   }
@@ -253,9 +303,16 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
     insights.push({
       id: 'stuck',
       tone: 'warning',
-      headline: `${stuck.length} ${stuck.length === 1 ? 'thing has' : 'things have'} stopped moving`,
-      detail: `"${oldestStuck.title}" is ${days} days past and the reminders have run out. Chasing them again will not work — decide what happens to them.`,
-      action: { label: 'Sort them out', href: '/?triage=1' },
+      headline:
+        stuck.length === 1
+          ? t(lang, '1 thing has stopped moving')
+          : t(lang, '{n} things have stopped moving', { n: stuck.length }),
+      detail: t(
+        lang,
+        '"{title}" is {n} days past and the reminders have run out. Chasing them again will not work — decide what happens to them.',
+        { title: oldestStuck.title, n: days },
+      ),
+      action: { label: t(lang, 'Sort them out'), href: '/?triage=1' },
       weight: 90,
     })
   }
@@ -283,8 +340,12 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
       insights.push({
         id: 'drop-pattern',
         tone: 'warning',
-        headline: `${WEEKDAYS[worst]}s are where things slip`,
-        detail: `${byDay[worst]} of the ${dropped.length} things you have let go in the last two months were due on a ${WEEKDAYS[worst]}. Worth putting less there.`,
+        headline: t(lang, '{day}s are where things slip', { day: weekdayName(worst, lang) }),
+        detail: t(
+          lang,
+          '{n} of the {total} things you have let go in the last two months were due on a {day}. Worth putting less there.',
+          { n: byDay[worst], total: dropped.length, day: weekdayName(worst, lang) },
+        ),
         weight: 60,
       })
     }
@@ -296,25 +357,41 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
     insights.push({
       id: 'today-shape',
       tone: shape.percentBooked > 75 ? 'warning' : 'neutral',
-      headline: `Today is ${shape.percentBooked}% booked — ${hours(shape.freeMinutes)} still free`,
+      headline: t(lang, 'Today is {percent}% booked — {free} still free', {
+        percent: shape.percentBooked,
+        free: hours(shape.freeMinutes, lang),
+      }),
       detail: shape.longestGap
-        ? `${shape.count} fixed thing${shape.count === 1 ? '' : 's'}, and your longest clear run is ${clock(shape.longestGap.from)} to ${clock(shape.longestGap.to)}.`
-        : `${shape.count} fixed things, with nothing longer than half an hour between them.`,
+        ? shape.count === 1
+          ? t(lang, '1 fixed thing, and your longest clear run is {from} to {to}.', {
+              from: clock(shape.longestGap.from, lang),
+              to: clock(shape.longestGap.to, lang),
+            })
+          : t(lang, '{n} fixed things, and your longest clear run is {from} to {to}.', {
+              n: shape.count,
+              from: clock(shape.longestGap.from, lang),
+              to: clock(shape.longestGap.to, lang),
+            })
+        : t(lang, '{n} fixed things, with nothing longer than half an hour between them.', { n: shape.count }),
       weight: 70,
     })
   } else if (tomorrowItems.length > 0) {
-    const t = shapeOfDay(tomorrowItems, tomorrow, tomorrow)
+    const next = shapeOfDay(tomorrowItems, tomorrow, tomorrow)
+    const starting = clock(tomorrowItems[0]!.dueAt, lang)
     insights.push({
       id: 'tomorrow-shape',
       tone: 'neutral',
-      headline: `Nothing fixed today. Tomorrow is ${t.percentBooked}% booked`,
-      detail: `${t.count} thing${t.count === 1 ? '' : 's'} tomorrow, starting at ${clock(tomorrowItems[0]!.dueAt)}.`,
+      headline: t(lang, 'Nothing fixed today. Tomorrow is {percent}% booked', { percent: next.percentBooked }),
+      detail:
+        next.count === 1
+          ? t(lang, '1 thing tomorrow, starting at {time}.', { time: starting })
+          : t(lang, '{n} things tomorrow, starting at {time}.', { n: next.count, time: starting }),
       weight: 40,
     })
   }
 
   // --------------------------------------------------------- travel risks
-  insights.push(...(await travelRisks(weekAhead)))
+  insights.push(...(await travelRisks(weekAhead, lang)))
 
   // ----------------------------------------- trips, and what is waiting
   const trips = await db
@@ -345,15 +422,25 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
     const daysAway = Math.round(
       (new Date(`${trip.startsOn}T00:00:00`).getTime() - today.getTime()) / DAY_MS,
     )
+    const titles = waiting
+      .slice(0, 3)
+      .map((w) => w.title)
+      .join(', ')
+    const list = waiting.length > 3 ? t(lang, '{list}, and {n} more', { list: titles, n: waiting.length - 3 }) : titles
     insights.push({
       id: `trip-${trip.id}`,
       tone: 'opportunity',
-      headline: `${waiting.length} thing${waiting.length === 1 ? '' : 's'} waiting for ${trip.placeLabel}`,
-      detail: `You are there ${daysAway <= 0 ? 'now' : `in ${daysAway} day${daysAway === 1 ? '' : 's'}`}: ${waiting
-        .slice(0, 3)
-        .map((w) => w.title)
-        .join(', ')}${waiting.length > 3 ? `, and ${waiting.length - 3} more` : ''}.`,
-      action: { label: 'See the trip', href: '/trips' },
+      headline:
+        waiting.length === 1
+          ? t(lang, '1 thing waiting for {place}', { place: trip.placeLabel })
+          : t(lang, '{n} things waiting for {place}', { n: waiting.length, place: trip.placeLabel }),
+      detail:
+        daysAway <= 0
+          ? t(lang, 'You are there now: {list}.', { list })
+          : daysAway === 1
+            ? t(lang, 'You are there in 1 day: {list}.', { list })
+            : t(lang, 'You are there in {n} days: {list}.', { n: daysAway, list }),
+      action: { label: t(lang, 'See the trip'), href: '/trips' },
       weight: 85,
     })
   }
@@ -368,9 +455,12 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
     insights.push({
       id: 'waiting-places',
       tone: 'neutral',
-      headline: `Things saved for ${orphaned!.n} place${orphaned!.n === 1 ? '' : 's'} you have not planned a trip to`,
-      detail: 'They stay out of your way until you do, then surface on their own.',
-      action: { label: 'Plan a trip', href: '/trips' },
+      headline:
+        orphaned!.n === 1
+          ? t(lang, 'Things saved for 1 place you have not planned a trip to')
+          : t(lang, 'Things saved for {n} places you have not planned a trip to', { n: orphaned!.n }),
+      detail: t(lang, 'They stay out of your way until you do, then surface on their own.'),
+      action: { label: t(lang, 'Plan a trip'), href: '/trips' },
       weight: 30,
     })
   }
@@ -382,11 +472,14 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
     insights.push({
       id: `occasion-${o.contactId}-${o.kind}-${o.date}`,
       tone: 'opportunity',
-      headline: `${occasionLabel(o)} ${o.daysAway === 0 ? 'today' : 'tomorrow'}`,
+      headline:
+        o.daysAway === 0
+          ? t(lang, '{occasion} today', { occasion: occasionLabel(o, lang) })
+          : t(lang, '{occasion} tomorrow', { occasion: occasionLabel(o, lang) }),
       detail: o.organization
-        ? `${o.organization}. A message on the day is remembered.`
-        : 'A message on the day is remembered.',
-      action: { label: 'Send wishes', href: `/people?wish=${o.contactId}&for=${o.kind}` },
+        ? t(lang, '{organization}. A message on the day is remembered.', { organization: o.organization })
+        : t(lang, 'A message on the day is remembered.'),
+      action: { label: t(lang, 'Send wishes'), href: `/people?wish=${o.contactId}&for=${o.kind}` },
       weight: o.daysAway === 0 ? 88 : 60,
     })
   }
@@ -415,9 +508,12 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
     insights.push({
       id: `expenses-unclaimed-${monthStart}`,
       tone: 'warning',
-      headline: `${formatRupees(owed!.paise)} from before this month not claimed yet`,
-      detail: `${owed!.n} expense${owed!.n === 1 ? '' : 's'}. Easier to claim while the receipts are still to hand.`,
-      action: { label: 'Make a claim', href: '/expenses?claim=1' },
+      headline: t(lang, '{amount} from before this month not claimed yet', { amount: formatRupees(owed!.paise) }),
+      detail:
+        owed!.n === 1
+          ? t(lang, '1 expense. Easier to claim while the receipts are still to hand.')
+          : t(lang, '{n} expenses. Easier to claim while the receipts are still to hand.', { n: owed!.n }),
+      action: { label: t(lang, 'Make a claim'), href: '/expenses?claim=1' },
       weight: 52,
     })
   }
@@ -437,9 +533,9 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
     insights.push({
       id: 'expenses-unpaid',
       tone: 'neutral',
-      headline: `${formatRupees(unpaid!.paise)} claimed over a month ago, not paid back`,
-      detail: 'Mark it once it arrives, or chase it.',
-      action: { label: 'See claims', href: '/expenses?paid=1' },
+      headline: t(lang, '{amount} claimed over a month ago, not paid back', { amount: formatRupees(unpaid!.paise) }),
+      detail: t(lang, 'Mark it once it arrives, or chase it.'),
+      action: { label: t(lang, 'See claims'), href: '/expenses?paid=1' },
       weight: 34,
     })
   }
@@ -456,9 +552,9 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
     insights.push({
       id: `owed-${p.key}`,
       tone: 'warning',
-      headline: `${p.name} has owed you ${formatRupees(p.totalPaise)} for ${weeks} weeks`,
-      detail: p.lastAskedAt ? 'Last reminded over a week ago.' : 'A friendly reminder usually does it.',
-      action: { label: 'Remind them', href: '/expenses?owed=1' },
+      headline: t(lang, '{name} has owed you {amount} for {n} weeks', { name: p.name, amount: formatRupees(p.totalPaise), n: weeks }),
+      detail: p.lastAskedAt ? t(lang, 'Last reminded over a week ago.') : t(lang, 'A friendly reminder usually does it.'),
+      action: { label: t(lang, 'Remind them'), href: '/expenses?owed=1' },
       weight: 46,
     })
   } else if (overdueDebts.length > 1) {
@@ -466,9 +562,15 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
     insights.push({
       id: 'owed-several',
       tone: 'warning',
-      headline: `${formatRupees(total)} owed to you by ${overdueDebts.length} people for over two weeks`,
-      detail: overdueDebts.map((p) => p.name).slice(0, 3).join(', ') + (overdueDebts.length > 3 ? ' and others.' : '.'),
-      action: { label: 'Remind them', href: '/expenses?owed=1' },
+      headline: t(lang, '{amount} owed to you by {n} people for over two weeks', {
+        amount: formatRupees(total),
+        n: overdueDebts.length,
+      }),
+      detail:
+        overdueDebts.length > 3
+          ? t(lang, '{list} and others.', { list: overdueDebts.map((p) => p.name).slice(0, 3).join(', ') })
+          : t(lang, '{list}.', { list: overdueDebts.map((p) => p.name).join(', ') }),
+      action: { label: t(lang, 'Remind them'), href: '/expenses?owed=1' },
       weight: 46,
     })
   }
@@ -489,13 +591,13 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
       tone: 'urgent',
       headline:
         overdueBills.length === 1
-          ? `${one.name}${amount(one.amountPaise)} is ${dueLabel(one.dueOn, 'bill', now)}`
-          : `${overdueBills.length} bills overdue`,
+          ? t(lang, '{bill} is {due}', { bill: `${one.name}${amount(one.amountPaise)}`, due: dueSaid(one.dueOn, 'bill', now, lang) })
+          : t(lang, '{n} bills overdue', { n: overdueBills.length }),
       detail:
         overdueBills.length === 1
-          ? 'Pay it, or mark it paid if it already went.'
-          : overdueBills.map((x) => x.name).join(', ') + '.',
-      action: { label: 'Bills', href: '/bills' },
+          ? t(lang, 'Pay it, or mark it paid if it already went.')
+          : t(lang, '{list}.', { list: overdueBills.map((x) => x.name).join(', ') }),
+      action: { label: t(lang, 'Bills'), href: '/bills' },
       weight: 86,
     })
   }
@@ -507,15 +609,15 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
       tone: 'warning',
       headline:
         soonBills.length === 1
-          ? `${one.name}${amount(one.amountPaise)} ${dueLabel(one.dueOn, 'bill', now)}`
-          : `${soonBills.length} bills due soon${total ? ` · ${formatRupees(total)}` : ''}`,
+          ? `${one.name}${amount(one.amountPaise)} ${dueSaid(one.dueOn, 'bill', now, lang)}`
+          : `${t(lang, '{n} bills due soon', { n: soonBills.length })}${total ? ` · ${formatRupees(total)}` : ''}`,
       detail:
         soonBills.length === 1
           ? one.autopay
-            ? 'It pays itself; keep the balance in.'
-            : 'Mark it paid once it is done.'
-          : soonBills.map((x) => `${x.name} ${dueLabel(x.dueOn, 'bill', now)}`).join(' · '),
-      action: { label: 'Bills', href: '/bills' },
+            ? t(lang, 'It pays itself; keep the balance in.')
+            : t(lang, 'Mark it paid once it is done.')
+          : soonBills.map((x) => `${x.name} ${dueSaid(x.dueOn, 'bill', now, lang)}`).join(' · '),
+      action: { label: t(lang, 'Bills'), href: '/bills' },
       weight: 62,
     })
   }
@@ -523,9 +625,9 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
     insights.push({
       id: `renewal-${x.id}-${x.dueOn}`,
       tone: daysToDue(x.dueOn, now) < 0 ? 'urgent' : 'warning',
-      headline: `${x.name} ${dueLabel(x.dueOn, 'renewal', now)}`,
-      detail: 'Renewals can take weeks. Start now, and mark it renewed with the new date.',
-      action: { label: 'Renewals', href: '/bills' },
+      headline: `${x.name} ${dueSaid(x.dueOn, 'renewal', now, lang)}`,
+      detail: t(lang, 'Renewals can take weeks. Start now, and mark it renewed with the new date.'),
+      action: { label: t(lang, 'Renewals'), href: '/bills' },
       weight: 55,
     })
   }
@@ -542,19 +644,20 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
       tone: 'warning',
       headline:
         mine.length === 1
-          ? board.quietLine(first.title, first.stage, first.quietDays!)
-          : `${mine.length} ${board.noun}s have gone quiet`,
+          ? quietSaid(board, first.title, first.stage, first.quietDays!, lang)
+          : lang === 'en'
+            ? `${mine.length} ${board.noun}s have gone quiet`
+            : t(lang, QUIET_MANY[board.key], { n: mine.length }),
       detail:
         mine.length === 1
           ? board.key === 'jobs'
-            ? 'A short follow-up often gets a reply. Or book the next step.'
-            : 'Book the next step, or close it.'
-          : mine
-              .slice(0, 3)
-              .map((q) => q.title)
-              .join(', ') + (mine.length > 3 ? ' and more.' : '.'),
+            ? t(lang, 'A short follow-up often gets a reply. Or book the next step.')
+            : t(lang, 'Book the next step, or close it.')
+          : mine.length > 3
+            ? t(lang, '{list} and more.', { list: mine.slice(0, 3).map((q) => q.title).join(', ') })
+            : t(lang, '{list}.', { list: mine.map((q) => q.title).join(', ') }),
       action: {
-        label: mine.length === 1 ? 'Open it' : 'See them',
+        label: mine.length === 1 ? t(lang, 'Open it') : t(lang, 'See them'),
         href: mine.length === 1 ? `/${board.key}?item=${first.id}` : `/${board.key}`,
       },
       weight: 48,
@@ -577,11 +680,11 @@ export async function buildInsights(userId: string, now = new Date()): Promise<I
     insights.push({
       id: 'closed-week',
       tone: 'positive',
-      headline: `${closed[0]!.n} closed out in the last week`,
+      headline: t(lang, '{n} closed out in the last week', { n: closed[0]!.n }),
       detail:
         overdue.length === 0
-          ? 'Nothing outstanding behind you. That is the whole idea.'
-          : `${overdue.length} still open, but the rest got done.`,
+          ? t(lang, 'Nothing outstanding behind you. That is the whole idea.')
+          : t(lang, '{n} still open, but the rest got done.', { n: overdue.length }),
       weight: 20,
     })
   }

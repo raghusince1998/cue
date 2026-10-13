@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, or, isNotNull, sql } from 'drizzle-orm'
-import { daysUntil, nextMonthDay, type OccasionKind } from '@cue/shared'
+import { daysUntil, nextMonthDay, type Lang, type OccasionKind } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { t } from '../i18n.ts'
 
 /**
  * Occasions: whose birthday or anniversary is coming, and festival greetings
@@ -62,8 +63,8 @@ export async function upcomingOccasions(orgId: string, days = 30, now = new Date
 }
 
 /** "Dr. Mehta's birthday", "Ravi Kumar's anniversary". */
-export function occasionLabel(o: Pick<Occasion, 'name' | 'kind'>): string {
-  return `${o.name}'s ${o.kind}`
+export function occasionLabel(o: Pick<Occasion, 'name' | 'kind'>, lang: Lang = 'en'): string {
+  return o.kind === 'birthday' ? t(lang, "{name}'s birthday", { name: o.name }) : t(lang, "{name}'s anniversary", { name: o.name })
 }
 
 // ------------------------------------------------------------- greetings

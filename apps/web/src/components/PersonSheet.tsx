@@ -13,6 +13,7 @@ import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
 import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
+import { locale, t } from '../lib/i18n.tsx'
 import { Modal } from './Modal.tsx'
 import { CallLog } from './CallLog.tsx'
 import { QuickMessage } from './QuickMessage.tsx'
@@ -64,7 +65,7 @@ export function personLine(c: {
   placeName?: string | null
 }): string {
   const org = c.organization?.trim()
-  const head = c.role && org ? `${c.role} at ${org}` : (c.role ?? org ?? '')
+  const head = c.role && org ? t('{role} at {org}', { role: c.role, org }) : (c.role ?? org ?? '')
   const place = c.placeName && c.placeName.toLowerCase() !== org?.toLowerCase() ? c.placeName : null
   return [head || null, place].filter(Boolean).join(' · ')
 }
@@ -207,7 +208,7 @@ export function PersonSheet({
   }
 
   if (error) return <p className="error small">{error}</p>
-  if (!contact || !o) return <p className="muted small">Gathering everything with them…</p>
+  if (!contact || !o) return <p className="muted small">{t('Gathering everything with them…')}</p>
 
   // "Dr. Mehta", not "Dr.": how they are addressed, in "Waiting on …".
   const first = shortName(contact.name)
@@ -221,14 +222,14 @@ export function PersonSheet({
           {personLine(contact) && <p className="muted small">{personLine(contact)}</p>}
           {contact.organization && onOpenAccount && (
             <button className="link small fit-btn" onClick={() => onOpenAccount(contact.organization!)}>
-              Open {contact.organization} &rarr;
+              {t('Open {org} →', { org: contact.organization })}
             </button>
           )}
         </div>
         <div className="row person-reach">
           {contact.phone && (
             <a className="ghost small-btn" href={`tel:${contact.phone}`} data-contact-id={contact.id} data-name={contact.name}>
-              Call
+              {t('Call')}
             </a>
           )}
           {contact.phone && (
@@ -238,11 +239,11 @@ export function PersonSheet({
           )}
           {contact.email && (
             <a className="ghost small-btn" href={`mailto:${contact.email}`}>
-              Email
+              {t('Email')}
             </a>
           )}
           <button className="ghost small-btn" onClick={() => setMessaging(true)}>
-            Message
+            {t('Message')}
           </button>
           <button
             className="link small"
@@ -257,24 +258,26 @@ export function PersonSheet({
               })
             }
           >
-            Log a call
+            {t('Log a call')}
           </button>
           <button className="link small" onClick={onEdit}>
-            Edit details
+            {t('Edit details')}
           </button>
         </div>
       </div>
 
       {partial && (
         <p className="muted small">
-          Could not load what is open with {first} just now. Their details are here; try again
-          in a moment for the rest.
+          {t(
+            'Could not load what is open with {name} just now. Their details are here; try again in a moment for the rest.',
+            { name: first },
+          )}
         </p>
       )}
 
       {o.nextMeetings.length > 0 && (
         <section className="person-part">
-          <span className="label-text">Next meeting</span>
+          <span className="label-text">{t('Next meeting')}</span>
           {o.nextMeetings.map((m) => (
             <p key={m.id} className="person-line">
               <strong>{m.title}</strong>
@@ -291,9 +294,9 @@ export function PersonSheet({
       {!partial && (
         <>
       <section className="person-part">
-        <span className="label-text">Waiting on {first}</span>
+        <span className="label-text">{t('Waiting on {name}', { name: first })}</span>
         {o.waitingOnThem.length === 0 ? (
-          <p className="muted small">Nothing.</p>
+          <p className="muted small">{t('Nothing.')}</p>
         ) : (
           o.waitingOnThem.map((c) => {
             const isDue = new Date(c.dueAt).getTime() <= Date.now()
@@ -303,15 +306,15 @@ export function PersonSheet({
                   {waitingWhat(c)}
                   <span className={`small ${isDue ? 'due-now' : 'muted'}`}>
                     {' '}
-                    · {isDue ? 'check in now' : `check in ${dayLabel(c.dueAt)}`}
+                    · {isDue ? t('check in now') : t('check in {day}', { day: dayLabel(c.dueAt) })}
                   </span>
                 </span>
                 <span className="row">
                   <button className="ghost tiny-btn" onClick={() => setNudging(c)}>
-                    Nudge
+                    {t('Nudge')}
                   </button>
                   <button className="ghost tiny-btn" onClick={() => void close(c.id)} disabled={busy}>
-                    Got it
+                    {t('Got it')}
                   </button>
                 </span>
               </div>
@@ -321,18 +324,18 @@ export function PersonSheet({
       </section>
 
       <section className="person-part">
-        <span className="label-text">You owe {first}</span>
+        <span className="label-text">{t('You owe {name}', { name: first })}</span>
         {o.youOwe.length === 0 ? (
-          <p className="muted small">Nothing.</p>
+          <p className="muted small">{t('Nothing.')}</p>
         ) : (
           o.youOwe.map((c) => (
             <div className="your-day-line" key={c.id}>
               <span>
                 {c.title}
-                <span className="muted small"> · due {dayLabel(c.dueAt)}</span>
+                <span className="muted small"> · {t('due {day}', { day: dayLabel(c.dueAt) })}</span>
               </span>
               <button className="ghost tiny-btn" onClick={() => void close(c.id)} disabled={busy}>
-                Done
+                {t('Done')}
               </button>
             </div>
           ))
@@ -344,10 +347,10 @@ export function PersonSheet({
       {o.lastMeeting && (
         <section className="person-part">
           <span className="label-text">
-            Last met · {o.lastMeeting.title} · {dayLabel(o.lastMeeting.dueAt)}
+            {t('Last met · {title} · {day}', { title: o.lastMeeting.title, day: dayLabel(o.lastMeeting.dueAt) })}
           </span>
           {o.lastMeetingFollowUps.length === 0 ? (
-            <p className="muted small">No follow-ups were noted from it.</p>
+            <p className="muted small">{t('No follow-ups were noted from it.')}</p>
           ) : (
             <ul className="plain person-followups">
               {o.lastMeetingFollowUps.map((f) => (
@@ -362,14 +365,14 @@ export function PersonSheet({
       )}
 
       <section className="person-part">
-        <span className="label-text">Keep in touch</span>
+        <span className="label-text">{t('Keep in touch')}</span>
         <div className="chips">
           <button
             className={`chip${contact.keepInTouchDays === null ? ' selected' : ''}`}
             onClick={() => void setCadence(null)}
             disabled={busy}
           >
-            Off
+            {t('Off')}
           </button>
           {KEEP_IN_TOUCH_CHOICES.map((k) => (
             <button
@@ -378,7 +381,7 @@ export function PersonSheet({
               onClick={() => void setCadence(k.days)}
               disabled={busy}
             >
-              {k.label}
+              {t(k.label)}
             </button>
           ))}
         </div>
@@ -386,25 +389,25 @@ export function PersonSheet({
           <div className="your-day-line">
             <span className="small">
               {o.keepInTouch.lastTouch
-                ? `Last contact ${relativeDay(o.keepInTouch.lastTouch)}`
-                : 'No contact on record yet'}
+                ? t('Last contact {when}', { when: relativeDay(o.keepInTouch.lastTouch) })
+                : t('No contact on record yet')}
               <span className={`small ${o.keepInTouch.due ? 'due-now' : 'muted'}`}>
                 {' '}
                 ·{' '}
                 {o.keepInTouch.due
-                  ? 'time to reach out'
+                  ? t('time to reach out')
                   : o.keepInTouch.snoozedUntil
-                    ? `reminding you ${dayLabel(o.keepInTouch.snoozedUntil)}`
-                    : `next due ${dayLabel(o.keepInTouch.dueAt)}`}
+                    ? t('reminding you {day}', { day: dayLabel(o.keepInTouch.snoozedUntil) })
+                    : t('next due {day}', { day: dayLabel(o.keepInTouch.dueAt) })}
               </span>
             </span>
             <span className="row">
               <button className="ghost tiny-btn" onClick={() => void touch('touched')} disabled={busy}>
-                Talked today
+                {t('Talked today')}
               </button>
               {o.keepInTouch.due && (
                 <button className="ghost tiny-btn" onClick={() => void touch('touch-later')} disabled={busy}>
-                  Next week
+                  {t('Next week')}
                 </button>
               )}
             </span>
@@ -422,15 +425,15 @@ export function PersonSheet({
               return (
                 <div className="your-day-line" key={k}>
                   <span className="small">
-                    {k === 'birthday' ? 'Birthday' : 'Anniversary'} · {monthDayLabel(contact[k]!)}
+                    {k === 'birthday' ? t('Birthday') : t('Anniversary')} · {monthDayLabel(contact[k]!, locale())}
                     <span className={`small ${away === 0 ? 'due-now' : 'muted'}`}>
                       {' '}
-                      · {away === 0 ? 'today' : away === 1 ? 'tomorrow' : `in ${away} days`}
+                      · {away === 0 ? t('today') : away === 1 ? t('tomorrow') : t('in {n} days', { n: String(away) })}
                     </span>
                   </span>
                   {away !== null && away <= 1 && (
                     <button className="ghost tiny-btn" onClick={() => setWishing(k)}>
-                      Send wishes
+                      {t('Send wishes')}
                     </button>
                   )}
                 </div>
@@ -441,18 +444,19 @@ export function PersonSheet({
 
       {o.owesYou && (
         <section className="person-part">
-          <span className="label-text">Money {first} owes you</span>
+          <span className="label-text">{t('Money {name} owes you', { name: first })}</span>
           <OwedRow person={o.owesYou} upiId={upiId} onChanged={() => void load()} compact />
         </section>
       )}
 
       {o.calls.length > 0 && (
         <section className="person-part">
-          <span className="label-text">Recent calls</span>
+          <span className="label-text">{t('Recent calls')}</span>
           <ul className="plain person-followups">
             {o.calls.map((c) => (
               <li key={c.at} className={c.connected ? '' : 'muted'}>
-                {relativeDay(c.at).replace(/^./, (ch) => ch.toUpperCase())} · {c.outcome ?? 'Call'}
+                {/* The outcome is saved as its English label: shown in the reader's language. */}
+                {relativeDay(c.at).replace(/^./, (ch) => ch.toUpperCase())} · {c.outcome ? t(c.outcome) : t('Called')}
                 {c.notes ? <span className="muted"> — {c.notes}</span> : null}
               </li>
             ))}
@@ -462,7 +466,7 @@ export function PersonSheet({
 
       {o.colleagues.length > 0 && contact.organization && (
         <section className="person-part">
-          <span className="label-text">Also at {contact.organization}</span>
+          <span className="label-text">{t('Also at {org}', { org: contact.organization })}</span>
           <div className="chips">
             {o.colleagues.map((p) => (
               <button key={p.id} className="chip" onClick={() => onOpenPerson?.(p.id)}>
@@ -476,13 +480,22 @@ export function PersonSheet({
 
       {o.meetingCount > 0 && (
         <p className="muted small">
-          {o.meetingCount} meeting{o.meetingCount === 1 ? '' : 's'} in the last year
-          {o.firstMet ? `, the first on ${dayLabel(o.firstMet)}` : ''}
-          {contact.visitCount ? ` · ${contact.visitCount} visit${contact.visitCount === 1 ? '' : 's'} logged` : ''}.
+          {t('{text}.', {
+            text:
+              (o.meetingCount === 1
+                ? t('1 meeting in the last year')
+                : t('{n} meetings in the last year', { n: o.meetingCount })) +
+              (o.firstMet ? `, ${t('the first on {day}', { day: dayLabel(o.firstMet) })}` : '') +
+              (contact.visitCount
+                ? ` · ${contact.visitCount === 1 ? t('1 visit logged') : t('{n} visits logged', { n: contact.visitCount })}`
+                : ''),
+          })}
         </p>
       )}
       {nothingOpen && !o.lastMeeting && !partial && (
-        <p className="muted small">Nothing open with {first} yet. Add something below, or offer a time to meet.</p>
+        <p className="muted small">
+          {t('Nothing open with {name} yet. Add something below, or offer a time to meet.', { name: first })}
+        </p>
       )}
 
       {adding === 'waiting' && (
@@ -497,21 +510,26 @@ export function PersonSheet({
       )}
       {adding === 'owe' && (
         <div className="card waiting-form">
-          <input value={what} onChange={(e) => setWhat(e.target.value)} placeholder={`What do you owe ${first}?`} autoFocus />
+          <input
+            value={what}
+            onChange={(e) => setWhat(e.target.value)}
+            placeholder={t('What do you owe {name}?', { name: first })}
+            autoFocus
+          />
           <div className="wrapup-due">
-            <span className="muted small">Due</span>
+            <span className="muted small">{t('Due')}</span>
             {choices.map((c) => (
               <button key={c.key} className={`chip${due === c.key ? ' selected' : ''}`} onClick={() => setDue(c.key)}>
-                {c.label}
+                {t(c.label)}
               </button>
             ))}
           </div>
           <div className="row">
             <button className="primary small-btn" onClick={() => void addOwe()} disabled={busy || !what.trim()}>
-              Add
+              {t('Add')}
             </button>
             <button className="ghost small-btn" onClick={() => setAdding(null)}>
-              Cancel
+              {t('Cancel')}
             </button>
           </div>
         </div>
@@ -519,23 +537,23 @@ export function PersonSheet({
 
       <div className="row person-actions">
         <button className="ghost small-btn" onClick={() => setAdding('waiting')}>
-          + Waiting on {first}
+          {t('+ Waiting on {name}', { name: first })}
         </button>
         <button className="ghost small-btn" onClick={() => setAdding('owe')}>
-          + To do for {first}
+          {t('+ To do for {name}', { name: first })}
         </button>
         <button className="primary small-btn" onClick={() => openAdd({ share: true, shareWith: contact.name })}>
-          Share when I&rsquo;m free
+          {t('Share when I’m free')}
         </button>
       </div>
 
       {wishing && (
-        <Modal title={`Wish ${first}`} onClose={() => setWishing(null)}>
+        <Modal title={t('Wish {name}', { name: first })} onClose={() => setWishing(null)}>
           <QuickMessage
             to={{ name: contact.name, company: contact.organization, phone: contact.phone, email: contact.email }}
             preset={{
-              title: wishing === 'birthday' ? 'Birthday wishes' : 'Anniversary wishes',
-              body: OCCASION_MESSAGES[wishing],
+              title: wishing === 'birthday' ? t('Birthday wishes') : t('Anniversary wishes'),
+              body: t(OCCASION_MESSAGES[wishing]),
             }}
             onDone={() => setWishing(null)}
           />
@@ -543,7 +561,7 @@ export function PersonSheet({
       )}
 
       {messaging && (
-        <Modal title={`Message ${first}`} onClose={() => setMessaging(false)}>
+        <Modal title={t('Message {name}', { name: first })} onClose={() => setMessaging(false)}>
           <QuickMessage
             to={{ name: contact.name, company: contact.organization, phone: contact.phone, email: contact.email }}
             onDone={() => setMessaging(false)}
@@ -552,7 +570,7 @@ export function PersonSheet({
       )}
 
       {loggingCall && (
-        <Modal title="Log a call" onClose={() => setLoggingCall(null)}>
+        <Modal title={t('Log a call')} onClose={() => setLoggingCall(null)}>
           <CallLog
             call={loggingCall}
             onDone={(saved) => {
@@ -567,7 +585,7 @@ export function PersonSheet({
       )}
 
       {nudging && (
-        <Modal title="Nudge" onClose={() => setNudging(null)}>
+        <Modal title={t('Nudge')} onClose={() => setNudging(null)}>
           <Nudge
             item={nudging}
             onDone={() => {

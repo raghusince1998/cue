@@ -1,5 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
+import type { Lang } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { langOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
 import { planTomorrow, type TomorrowPlan } from './planTomorrow.ts'
 
@@ -88,19 +90,23 @@ async function statsFor(userId: string, timezone: string): Promise<DayStats> {
  * had least appetite for it. An assistant's evening message should be about
  * tomorrow, and should arrive with the thinking already done.
  */
-function compose(stats: DayStats, plan: TomorrowPlan): { title: string; body: string; url: string } {
-  const tail = stats.overdue > 0 ? ` ${stats.overdue} still overdue.` : ''
+function compose(stats: DayStats, plan: TomorrowPlan, lang: Lang): { title: string; body: string; url: string } {
+  const tail = stats.overdue > 0 ? ` ${t(lang, '{n} still overdue.', { n: stats.overdue })}` : ''
+  const booked = t(lang, 'Tomorrow is {percent}% booked', { percent: plan.percentBooked })
 
   // The most useful thing it can offer: loose items and somewhere to put them.
   if (plan.proposals.length > 0) {
     const first = plan.proposals[0]!
-    const time = new Date(first.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    const time = new Date(first.at).toLocaleTimeString(lang === 'hi' ? 'hi-IN' : [], { hour: 'numeric', minute: '2-digit' })
     return {
-      title: `Tomorrow is ${plan.percentBooked}% booked`,
+      title: booked,
       body:
         plan.proposals.length === 1
-          ? `"${first.title}" has no time on it. It fits at ${time} — want me to put it there?`
-          : `${plan.proposals.length} things have no time on them. I found slots for all of them, starting ${time}.`,
+          ? t(lang, '"{title}" has no time on it. It fits at {time} — want me to put it there?', { title: first.title, time })
+          : t(lang, '{n} things have no time on them. I found slots for all of them, starting {time}.', {
+              n: plan.proposals.length,
+              time,
+            }),
       url: '/?plan=tomorrow',
     }
   }
@@ -108,34 +114,38 @@ function compose(stats: DayStats, plan: TomorrowPlan): { title: string; body: st
   // Loose items, but genuinely nowhere to put them. Saying so is the help.
   if (plan.unplaceable.length > 0) {
     return {
-      title: `Tomorrow is ${plan.percentBooked}% booked`,
-      body: `${plan.unplaceable.length} thing${plan.unplaceable.length === 1 ? ' has' : 's have'} no time and no gap big enough.${tail}`,
+      title: booked,
+      body: `${
+        plan.unplaceable.length === 1
+          ? t(lang, '1 thing has no time and no gap big enough.')
+          : t(lang, '{n} things have no time and no gap big enough.', { n: plan.unplaceable.length })
+      }${tail}`,
       url: '/?plan=tomorrow',
     }
   }
 
   if (plan.fixedCount > 0) {
     return {
-      title: `${plan.fixedCount} thing${plan.fixedCount === 1 ? '' : 's'} tomorrow`,
-      body: `${plan.percentBooked}% of the day is spoken for.${tail || ' Nothing outstanding.'}`,
+      title: plan.fixedCount === 1 ? t(lang, '1 thing tomorrow') : t(lang, '{n} things tomorrow', { n: plan.fixedCount }),
+      body: `${t(lang, '{percent}% of the day is spoken for.', { percent: plan.percentBooked })}${tail || ` ${t(lang, 'Nothing outstanding.')}`}`,
       url: '/',
     }
   }
 
   if (stats.overdue > 0) {
     return {
-      title: `${stats.overdue} thing${stats.overdue === 1 ? '' : 's'} still open`,
-      body: 'Nothing booked tomorrow, so there is room to clear them.',
+      title: stats.overdue === 1 ? t(lang, '1 thing still open') : t(lang, '{n} things still open', { n: stats.overdue }),
+      body: t(lang, 'Nothing booked tomorrow, so there is room to clear them.'),
       url: '/',
     }
   }
 
   return {
-    title: 'Tomorrow is clear',
+    title: t(lang, 'Tomorrow is clear'),
     body:
       stats.logged_today > 0
-        ? `${stats.logged_today} logged today, nothing outstanding.`
-        : 'Nothing booked and nothing overdue.',
+        ? t(lang, '{n} logged today, nothing outstanding.', { n: stats.logged_today })
+        : t(lang, 'Nothing booked and nothing overdue.'),
     url: '/',
   }
 }
@@ -145,10 +155,11 @@ export async function sendNudgeTo(
   userId: string,
   timezone: string,
 ): Promise<{ delivered: number; title: string; body: string }> {
+  const lang = await langOf(userId)
   const stats = await statsFor(userId, timezone)
-  const plan = await planTomorrow(userId)
-  const { title, body, url } = compose(stats, plan)
-  const delivered = await sendToUser(userId, { title, body, tag: 'daily-nudge', url })
+  const plan = await planTomorrow(userId, new Date(), lang)
+  const { title, body, url } = compose(stats, plan, lang)
+  const delivered = await sendToUser(userId, { title, body, tag: 'daily-nudge', url, lang })
   return { delivered, title, body }
 }
 
