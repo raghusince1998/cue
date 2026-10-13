@@ -43,7 +43,7 @@ const AVAILABLE = Object.keys(SECTION_LINKS) as Section[]
 
 /**
  * The rest of the sections, a tap away: what this person uses Cue for decides
- * what is on the bar, and nothing is ever out of reach.
+ * what is on the bar, and whether Jobs, Hiring and Deals are here at all.
  */
 function MoreMenu({ sections, onChangeUses }: { sections: Section[]; onChangeUses: () => void }) {
   const [open, setOpen] = useState(false)
@@ -105,7 +105,7 @@ function Nav({
 }) {
   const { logout, me } = useAuth()
   const [choosingUses, setChoosingUses] = useState(false)
-  const { main, more } = tabsFor(me?.uses ?? [], AVAILABLE)
+  const { main, more } = tabsFor(me?.uses ?? [], AVAILABLE, me?.boards ?? [])
 
   return (
     <>

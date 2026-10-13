@@ -2,7 +2,9 @@
  * What someone uses Cue for. One app for very different days — a job hunt,
  * a recruiter's interviews, a household's bills, a salesperson's calls — so
  * the screens lead with what this person needs and keep the rest a tap away.
- * Nothing is switched off: a choice changes what is in front, not what exists.
+ * What only one kind of day needs — job applications, candidates, deals —
+ * is not there at all until someone says it is theirs: to everyone else it
+ * is clutter.
  */
 
 export const USES = [
@@ -76,6 +78,29 @@ const LEADS: Record<Use, Section[]> = {
   student: ['repeating', 'history', 'people', 'trips'],
 }
 
+/**
+ * Sections only some uses need, and which. Hidden from everyone else — and
+ * from anyone who has not said yet — unless something is already in them.
+ */
+const ONLY_FOR: Partial<Record<Section, readonly Use[]>> = {
+  jobs: ['job_search'],
+  hiring: ['hiring'],
+  deals: ['sales', 'freelance'],
+}
+
+/**
+ * The sections this person has, out of those that exist: everything anyone
+ * can use, and the ones only some need when they picked one of those uses
+ * or already have something in them ("applied to Infosys" typed without
+ * picking a job hunt still has somewhere to go).
+ */
+export function sectionsFor(uses: readonly string[], available: readonly Section[], filled: readonly string[] = []): Section[] {
+  return available.filter((s) => {
+    const only = ONLY_FOR[s]
+    return !only || only.some((u) => uses.includes(u)) || filled.includes(s)
+  })
+}
+
 /** Before anyone has said: the sections everybody can use. */
 const UNSAID: Section[] = ['people', 'trips', 'repeating', 'history']
 
@@ -84,10 +109,16 @@ export const MAIN_TABS = 4
 
 /**
  * The tabs to show and the rest, for these uses, out of the sections that
- * exist. Several uses take turns, so each gets its first choice in before any
- * gets its second: a job seeker who also runs a home sees Jobs and Bills.
+ * exist (see sectionsFor; `filled` is the boards with something in them).
+ * Several uses take turns, so each gets its first choice in before any gets
+ * its second: a job seeker who also runs a home sees Jobs and Bills.
  */
-export function tabsFor(uses: readonly string[], available: readonly Section[]): { main: Section[]; more: Section[] } {
+export function tabsFor(
+  uses: readonly string[],
+  all: readonly Section[],
+  filled: readonly string[] = [],
+): { main: Section[]; more: Section[] } {
+  const available = sectionsFor(uses, all, filled)
   const known = uses.filter((u): u is Use => u in LEADS)
   const lists = known.length ? known.map((u) => LEADS[u]) : [UNSAID]
   const main: Section[] = []
@@ -113,7 +144,10 @@ export function hasWork(uses: readonly string[]): boolean {
   return uses.length === 0 || uses.some((u) => u === 'sales' || u === 'office' || u === 'hiring' || u === 'freelance')
 }
 
-/** Whether companies and clients — with a stage each — are part of this person's work. */
+/**
+ * Whether companies and clients — with a stage each — and weekly targets of
+ * calls and visits are part of this person's work. Only when they said so.
+ */
 export function hasClients(uses: readonly string[]): boolean {
-  return uses.length === 0 || uses.some((u) => u === 'sales' || u === 'freelance')
+  return uses.some((u) => u === 'sales' || u === 'freelance')
 }

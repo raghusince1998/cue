@@ -10,6 +10,8 @@ export interface Me {
   orgName: string
   /** What they use Cue for; empty until they say. */
   uses: string[]
+  /** Trackers with something on them ('jobs', 'hiring', 'deals'): their tabs show whatever was picked. */
+  boards?: string[]
   /** A one-tap demo from the website, with sample data, gone after a day. */
   isDemo?: boolean
 }
@@ -26,6 +28,8 @@ interface AuthValue {
   logout: () => void
   /** What they use Cue for, saved and reflected everywhere at once. */
   saveUses: (uses: string[]) => Promise<void>
+  /** Something was just put on this tracker: its tab shows from now on. */
+  noteBoard: (board: string) => void
   /** Into a fresh demo account, filled with a sample week. */
   enterDemo: () => Promise<void>
   /** Deletes the account and everything in it, then signs out. */
@@ -92,6 +96,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMe((m) => (m ? { ...m, uses: saved.uses } : m))
   }, [])
 
+  const noteBoard = useCallback((board: string) => {
+    setMe((m) => (m && !(m.boards ?? []).includes(board) ? { ...m, boards: [...(m.boards ?? []), board] } : m))
+  }, [])
+
   const enterDemo = useCallback(async () => {
     const res = await api<{ token: string }>('/auth/demo', { method: 'POST', body: {} })
     setToken(res.token)
@@ -105,8 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ me, loading, login, register, logout, saveUses, enterDemo, deleteAccount }),
-    [me, loading, login, register, logout, saveUses, enterDemo, deleteAccount],
+    () => ({ me, loading, login, register, logout, saveUses, noteBoard, enterDemo, deleteAccount }),
+    [me, loading, login, register, logout, saveUses, noteBoard, enterDemo, deleteAccount],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

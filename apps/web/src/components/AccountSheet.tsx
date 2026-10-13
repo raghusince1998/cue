@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ACCOUNT_STAGES, ACCOUNT_STAGE_LABELS, type AccountStage, type CommitmentDTO } from '@cue/shared'
+import { ACCOUNT_STAGES, ACCOUNT_STAGE_LABELS, hasClients, type AccountStage, type CommitmentDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
+import { useAuth } from '../lib/auth.tsx'
 import { announceChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
 import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
@@ -39,6 +40,9 @@ export function AccountSheet({
   onChanged: () => void
 }) {
   const [o, setO] = useState<Overview | null>(null)
+  const { me } = useAuth()
+  /** Prospect to customer: for sales and clients, not a job hunt or a team. */
+  const clients = hasClients(me?.uses ?? [])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [notes, setNotes] = useState('')
@@ -132,36 +136,39 @@ export function AccountSheet({
         <p className="muted small">Renames it on everyone who works here too. An existing name merges the two.</p>
       )}
 
-      <section className="person-part">
-        <span className="label-text">Stage</span>
-        <div className="chips">
-          <button className={`chip${o.stage === null ? ' selected' : ''}`} onClick={() => void setStage(null)} disabled={busy}>
-            None
-          </button>
-          {ACCOUNT_STAGES.map((s) => (
-            <button
-              key={s}
-              className={`chip${o.stage === s ? ' selected' : ''}`}
-              onClick={() => void setStage(s)}
-              disabled={busy}
-            >
-              {ACCOUNT_STAGE_LABELS[s]}
+      {/* Already given a stage, it stays in view. */}
+      {(clients || o.stage) && (
+        <section className="person-part">
+          <span className="label-text">Stage</span>
+          <div className="chips">
+            <button className={`chip${o.stage === null ? ' selected' : ''}`} onClick={() => void setStage(null)} disabled={busy}>
+              None
             </button>
-          ))}
-        </div>
-        {o.stage && o.stageChangedAt && (
-          <p className="muted small">
-            {ACCOUNT_STAGE_LABELS[o.stage]} since {dayLabel(o.stageChangedAt)}.
-          </p>
-        )}
-        {o.quiet && (
-          <p className="small due-now">
-            {quietFor ? `No contact for ${quietFor}` : 'No contact on record'},{' '}
-            {o.stage === 'proposal' ? 'with a proposal out' : 'while in talks'}. Worth a call before
-            it goes cold.
-          </p>
-        )}
-      </section>
+            {ACCOUNT_STAGES.map((s) => (
+              <button
+                key={s}
+                className={`chip${o.stage === s ? ' selected' : ''}`}
+                onClick={() => void setStage(s)}
+                disabled={busy}
+              >
+                {ACCOUNT_STAGE_LABELS[s]}
+              </button>
+            ))}
+          </div>
+          {o.stage && o.stageChangedAt && (
+            <p className="muted small">
+              {ACCOUNT_STAGE_LABELS[o.stage]} since {dayLabel(o.stageChangedAt)}.
+            </p>
+          )}
+          {o.quiet && (
+            <p className="small due-now">
+              {quietFor ? `No contact for ${quietFor}` : 'No contact on record'},{' '}
+              {o.stage === 'proposal' ? 'with a proposal out' : 'while in talks'}. Worth a call before
+              it goes cold.
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="person-part">
         <span className="label-text">People there</span>

@@ -93,6 +93,7 @@ export {
   examplesFor,
   hasClients,
   hasWork,
+  sectionsFor,
   tabsFor,
   type Section,
   type Use,

@@ -3,7 +3,7 @@ import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
 import { TargetBar, type WeekTargets } from './Targets.tsx'
-import { hasWork } from '@cue/shared'
+import { hasClients, hasWork } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
 
 /**
@@ -72,8 +72,10 @@ export function DayBrief({
   preview?: number
 }) {
   const { me } = useAuth()
-  /** Reports and targets are for a job; a household has no standup. */
+  /** Reports are for a job; a household has no standup. */
   const work = hasWork(me?.uses ?? [])
+  /** Targets of calls and visits are for sales and clients, not every job. */
+  const clients = hasClients(me?.uses ?? [])
   const [data, setData] = useState<{
     insights: Insight[]
     summary: Summary
@@ -197,7 +199,7 @@ export function DayBrief({
         <button className="brief-day-link" onClick={() => openAdd({ share: true })}>
           Share when you&rsquo;re free →
         </button>
-        {work && targets && !targets.tracking && (
+        {clients && targets && !targets.tracking && (
           <button className="brief-day-link" onClick={() => onNavigate('/?targets=1')}>
             Set weekly targets →
           </button>

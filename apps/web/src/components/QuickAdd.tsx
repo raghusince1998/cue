@@ -70,6 +70,8 @@ interface Plan {
   owed?: { amountPaise: number; name: string; note: string | null } | null
   /** A booking confirmation: a train, a flight, a hotel, a show. */
   booking?: { type: string; ref: string | null } | null
+  /** Something to track through stages: a job application, a candidate, a deal. */
+  tracker?: { board: string } | null
   /** The rules were unsure and the AI is on: a careful reading, once typing pauses. */
   canReadCarefully?: boolean
   readBy?: 'rules' | 'ai'
@@ -156,7 +158,7 @@ export function QuickAdd({
   /** On Today rather than in the Add sheet: examples only once it is in use. */
   inline?: boolean
 }) {
-  const { me } = useAuth()
+  const { me, noteBoard } = useAuth()
   const examples = examplesFor(me?.uses ?? [])
   const [text, setText] = useState(initialText)
   const [focused, setFocused] = useState(false)
@@ -260,6 +262,8 @@ export function QuickAdd({
         if (offered.length) body.accept = offered.map((s) => s.id)
         if (sphere && sphere !== plan?.sphere) body.sphere = sphere
         const result = await api<Saved>('/quick', { method: 'POST', body })
+        // "Applied to Infosys" from someone who never picked a job hunt: Jobs appears.
+        if (result.tracker?.board) noteBoard(result.tracker.board)
         setSaved({ ...result, typed: text, acceptedActions: offered.map((s) => s.action) })
         setText('')
         setPlan(null)
@@ -287,7 +291,7 @@ export function QuickAdd({
         setBusy(false)
       }
     },
-    [text, onSaved, plan, choices, accepted, sphere],
+    [text, onSaved, plan, choices, accepted, sphere, noteBoard],
   )
 
   async function undo() {

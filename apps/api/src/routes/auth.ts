@@ -148,8 +148,14 @@ export async function authRoutes(app: FastifyInstance) {
       .innerJoin(schema.orgs, eq(schema.orgs.id, schema.users.orgId))
       .where(eq(schema.users.id, sub))
       .limit(1)
+    const user = takeFirst(rows, 'user')
 
-    return takeFirst(rows, 'user')
+    // Boards with something on them: their tabs stay, whatever was picked.
+    const boards = await db
+      .selectDistinct({ board: schema.trackerItems.board })
+      .from(schema.trackerItems)
+      .where(eq(schema.trackerItems.userId, sub))
+    return { ...user, boards: boards.map((b) => b.board) }
   })
 
   /**

@@ -4,8 +4,8 @@ import { useAuth } from '../lib/auth.tsx'
 
 /**
  * "What will you use Cue for?" — any number of answers. It decides what the
- * tabs, examples and reminders lead with; nothing is switched off, so a wrong
- * guess costs a tap on More, not a missing feature.
+ * tabs, examples and reminders lead with, and whether Jobs, Hiring and Deals
+ * are there at all: they are only for those who pick them.
  */
 export function UsesPicker({ onDone, compact = false }: { onDone?: () => void; compact?: boolean }) {
   const { me, saveUses } = useAuth()
@@ -36,7 +36,10 @@ export function UsesPicker({ onDone, compact = false }: { onDone?: () => void; c
   return (
     <div className="stack tight uses-picker">
       {!compact && (
-        <p className="muted small">Pick as many as fit. It changes what Cue shows first; everything stays a tap away.</p>
+        <p className="muted small">
+          Pick as many as fit. Cue shows what each one needs: Jobs, Hiring and Deals appear only if you pick
+          them. You can change this any time under More.
+        </p>
       )}
       <div className="uses-grid" role="group" aria-label="What you use Cue for">
         {USES.map((u) => (
@@ -62,7 +65,7 @@ export function UsesPicker({ onDone, compact = false }: { onDone?: () => void; c
           </button>
         )}
       </div>
-      {saved && !onDone && <p className="muted small">Saved. The tabs now lead with these.</p>}
+      {saved && !onDone && <p className="muted small">Saved. The tabs now show what these need.</p>}
       {error && <p className="error small">{error}</p>}
     </div>
   )
