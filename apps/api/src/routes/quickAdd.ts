@@ -31,6 +31,11 @@ import {
   parseExpense,
   parseOwed,
   parseTrackerLine,
+  parseExamLine,
+  examLabel,
+  examStage,
+  EXAM_STEPS,
+  type ParsedExamLine,
   parseBill,
   parseInsurance,
   parseVehicleNotice,
@@ -75,6 +80,7 @@ import { planWishes } from '../services/wishes.ts'
 import { createExpense, tripOn } from '../services/expenses.ts'
 import { addOwed } from '../services/owed.ts'
 import { createItem, itemMentionedIn, updateItem } from '../services/trackers.ts'
+import { deleteExam, localAt, saveExamLine, trackedExam } from '../services/exams.ts'
 import { createBill } from '../services/bills.ts'
 import { recordDelivery } from '../services/deliveries.ts'
 import { bookingReminderTimes, webCheckInAt } from '../services/bookings.ts'
@@ -154,6 +160,8 @@ export type QuickKind =
   | 'owed'
   /** Something to track: "applied to Infosys for data analyst". */
   | 'tracker'
+  /** An exam applied for, or one of its dates: "applied for RRB NTPC, reg no …". */
+  | 'exam'
   /** A bill or a renewal: "rent ₹15,000 on the 1st every month". */
   | 'bill'
   /** A shop's or courier's message about a parcel. */
@@ -251,6 +259,17 @@ export async function quickAddRoutes(app: FastifyInstance) {
     if (plan.kind === 'bill' && plan.bill) {
       const saved = await createBill(orgId, userId, plan.bill)
       return reply.code(201).send({ ...plan, id: saved.id })
+    }
+
+    if (plan.kind === 'exam' && plan.exam) {
+      const saved = await saveExamLine(orgId, userId, plan.exam)
+      return reply.code(201).send({
+        ...plan,
+        id: saved.examId,
+        // Added to an exam already tracked: undo takes back the new dates, not the exam.
+        ...(saved.created ? {} : { ids: [] }),
+        extras: saved.planIds.map((id) => ({ kind: 'commitment', id })),
+      })
     }
 
     if (plan.kind === 'tracker' && plan.tracker) {
@@ -566,10 +585,13 @@ export async function quickAddRoutes(app: FastifyInstance) {
     const { sub: userId } = scope(req)
     const { kind, id } = z
       .object({
-        kind: z.enum(['commitment', 'intention', 'trip', 'recurrence', 'expense', 'owed', 'tracker', 'bill', 'delivery']),
+        kind: z.enum(['commitment', 'intention', 'trip', 'recurrence', 'expense', 'owed', 'tracker', 'bill', 'delivery', 'exam']),
         id: z.string().uuid(),
       })
       .parse(req.params)
+
+    // An exam goes with its dates still to come.
+    if (kind === 'exam') return (await deleteExam(userId, id)) ? { ok: true } : reply.code(404).send({ error: 'not_found' })
 
     const table =
       kind === 'commitment'
@@ -673,6 +695,8 @@ export interface QuickPlan {
   } | null
   /** A new job application, candidate or deal, read from the line. */
   tracker: { board: BoardKey; stage: string; title: string; detail: string | null } | null
+  /** An exam, or one of its dates, read from the line; trackedId when it adds to one already tracked. */
+  exam: (ParsedExamLine & { trackedId: string | null }) | null
   /** The tracked item a plan is the next step of, and the stage it moves it to. */
   trackerItem: { id: string; board: BoardKey; title: string; stage: string; moveTo: string | null } | null
   /** Plain-words account of every assumption made, shown before and after saving. */
@@ -1167,6 +1191,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     owed: null,
     tracker: null,
     trackerItem: null,
+    exam: null,
     bill: null,
     delivery: null,
     booking: null,
@@ -1212,6 +1237,43 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
         .filter(Boolean)
         .join(' · '),
       assumptions: when ? ['A reminder on the morning it arrives.'] : [],
+    }
+  }
+
+  // An exam applied for, or one of its dates: "applied for RRB NTPC 2026,
+  // RRB Ajmer, reg no …", "SSC CGL tier 1 exam on 14 sep". From the line as
+  // it came, before the list readers split it at its commas.
+  const examSaid = parseExamLine(raw, now)
+  if (examSaid) {
+    const tracked = await trackedExam(userId, examSaid.examKey, examSaid.cycle)
+    const label = examLabel({ name: examSaid.name, cycle: examSaid.cycle ?? tracked?.cycle ?? null })
+    const day = (on: string) => localAt(on, null).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+    const dates = examSaid.dates.map((d) => {
+      const what = d.step === 'exam' && d.round ? examStage(examSaid.examKey, d.round)?.label : EXAM_STEPS.find((s) => s.key === d.step)?.label
+      return `${what} ${day(d.on)}${d.at ? ` ${d.at}` : ''}`
+    })
+    return {
+      ...base,
+      kind: 'exam',
+      title: label,
+      checklist: [],
+      exam: { ...examSaid, trackedId: tracked?.id ?? null },
+      summary: [
+        `Exams: ${label}`,
+        examSaid.region,
+        examSaid.stage ? examStage(examSaid.examKey, examSaid.stage)?.label : null,
+        examSaid.registrationNo ? `reg no ${examSaid.registrationNo}` : null,
+        ...dates,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      assumptions: [
+        tracked ? `Added to the ${label} you are tracking.` : null,
+        examSaid.dates.some((d) => d.step === 'apply_by' || d.step === 'fee_by')
+          ? 'Reminders 3 days before the last date, the evening before, and on the day.'
+          : null,
+        examSaid.dates.some((d) => d.step === 'exam') ? 'Reminders a week before the exam, the evening before, and that morning.' : null,
+      ].filter((a): a is string => a !== null),
     }
   }
 

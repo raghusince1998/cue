@@ -1,4 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm'
+import { splitExamStep } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { env } from '../env.ts'
 import { sendToUser } from '../push.ts'
@@ -55,6 +56,36 @@ function bookingLine(
         : `${verb} ${day} at ${time}`
   const from = booking.from && booking.type !== 'hotel' ? ` from ${booking.from}` : ''
   return `${when}${from}${notes ? ` · ${notes}` : ''}`
+}
+
+/**
+ * An exam's date, said as what to do about it: "Last date tomorrow: fill the
+ * form and keep the confirmation page", "Exam tomorrow at 7:30 am · Kendriya
+ * Vidyalaya No. 3 · admit card, photo ID and photos".
+ */
+function examLine(dueAt: Date, step: string, place: string | null): string {
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const days = Math.round((startOf(dueAt) - startOf(new Date())) / 86_400_000)
+  const day = days <= 0 ? 'today' : days === 1 ? 'tomorrow' : `on ${dueAt.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}`
+  const time = dueAt.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+  switch (splitExamStep(step)?.step) {
+    case 'apply_by':
+      return `${days <= 0 ? 'Today is the last date' : `Last date ${day}`}: fill the form and keep the confirmation page.`
+    case 'fee_by':
+      return `${days <= 0 ? 'Today is the last date for the fee' : `Fee due ${day}`}: pay, and keep the receipt.`
+    case 'correction':
+      return `Correction window ${day}: check every detail in the form.`
+    case 'admit_card':
+      return `Admit card ${days <= 0 ? 'out today' : `due ${day}`}: download it and print it.`
+    case 'exam':
+      return `Exam ${day} at ${time}${place ? ` · ${place}` : ''} · admit card, photo ID and photos.`
+    case 'answer_key':
+      return `Answer key ${day}: check your answers while objections are open.`
+    case 'result':
+      return `Result ${days <= 0 ? 'today' : `expected ${day}`}.`
+    default:
+      return days <= 0 ? 'Today.' : `${day[0]!.toUpperCase()}${day.slice(1)}.`
+  }
 }
 
 function describe(dueAt: Date, escalation: number): string {
@@ -116,11 +147,17 @@ async function processOne(claim: ClaimedReminder) {
   const waiting = commitment.waitingOn !== null
   // A booking: ahead of time, with the reference to hand, and never chased.
   const booked = commitment.booking !== null
+  // An exam's date: said as what to do. Only the last day to apply or pay is
+  // chased, and only once that day has come; days ahead, it is said once.
+  const exam = commitment.examStep !== null
+  const examStep = splitExamStep(commitment.examStep)?.step
+  const chaseExam =
+    exam && (examStep === 'apply_by' || examStep === 'fee_by') && Date.now() >= commitment.dueAt.getTime() - 60 * 60_000
 
   // Work and personal kept apart. Only what nags waits — a chase after the
   // first reminder, or a plan with no set time. A time someone chose is kept.
   const nags = claim.attempt > 0 || commitment.flexibility === 'flexible'
-  if (nags && !mirrored && !focusing && !waiting && !booked && commitment.priority !== 'critical') {
+  if (nags && !mirrored && !focusing && !waiting && !booked && !exam && commitment.priority !== 'critical') {
     const until = holdUntil(await workLifeOf(commitment.userId), planSphere(commitment), new Date())
     if (until) {
       await db
@@ -141,6 +178,8 @@ async function processOne(claim: ClaimedReminder) {
       ? 'Time to check in. Tap to send a nudge.'
       : booked
       ? bookingLine(commitment.dueAt, commitment.booking!, commitment.notes)
+      : exam
+      ? examLine(commitment.dueAt, commitment.examStep!, commitment.placeLabel ?? row.placeName)
       : `${mirrored ? 'Starting now' : describe(commitment.dueAt, claim.attempt)}${suffix}`,
     tag: `commitment-${commitment.id}`,
     // Lets the notification offer a Call button instead of only a nag.
@@ -166,7 +205,7 @@ async function processOne(claim: ClaimedReminder) {
 
   // Keep chasing. Once the chain is exhausted the item simply stays in the
   // Overdue list until the user closes it — it is never silently dropped.
-  if (!mirrored && !waiting && !focusing && !booked && nextAttempt < env.maxEscalations) {
+  if (!mirrored && !waiting && !focusing && !booked && (!exam || chaseExam) && nextAttempt < env.maxEscalations) {
     await db.insert(schema.reminders).values({
       orgId: claim.org_id,
       commitmentId: commitment.id,

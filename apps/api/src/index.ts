@@ -21,6 +21,7 @@ import { occasionRoutes } from './routes/occasions.ts'
 import { expenseRoutes } from './routes/expenses.ts'
 import { owedRoutes } from './routes/owed.ts'
 import { trackerRoutes } from './routes/trackers.ts'
+import { examRoutes } from './routes/exams.ts'
 import { billRoutes } from './routes/bills.ts'
 import { deliveryRoutes } from './routes/deliveries.ts'
 import { mailRoutes } from './routes/mail.ts'
@@ -94,6 +95,7 @@ await app.register(occasionRoutes, { prefix: '/api' })
 await app.register(expenseRoutes, { prefix: '/api' })
 await app.register(owedRoutes, { prefix: '/api' })
 await app.register(trackerRoutes, { prefix: '/api' })
+await app.register(examRoutes, { prefix: '/api' })
 await app.register(billRoutes, { prefix: '/api' })
 await app.register(deliveryRoutes, { prefix: '/api' })
 await app.register(mailRoutes, { prefix: '/api' })

@@ -29,13 +29,23 @@ function labelsItself(cells: string[]): boolean {
 
 const label = (s: string) => s.replace(/[:*\s]+$/, '')
 
+/** A key beside its value: "Date of Exam | 18/11/2026". */
+function isKeyValue(cells: string[] | undefined): boolean {
+  return cells?.length === 2 && isLabelRow([cells[0]!, 'x']) && !isLabelRow([cells[1]!, 'x'])
+}
+
 export function rowsToText(rows: string[][]): string {
   const out: string[] = []
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!.filter((c) => c !== '')
     if (row.length === 0) continue
     const next = rows[i + 1]?.filter((c) => c !== '')
-    if (next && isLabelRow(row) && next.length === row.length && !isLabelRow(next) && !labelsItself(next)) {
+    const before = rows[i - 1]?.filter((c) => c !== '')
+    // In a form of keys and values, a value with no digits in it — a name,
+    // "Candidate Name | ASHA MEENA" — is still a value, not a row of labels
+    // over the rows below.
+    const inForm = row.length === 2 && (isKeyValue(next) || isKeyValue(before))
+    if (next && !inForm && isLabelRow(row) && next.length === row.length && !isLabelRow(next) && !labelsItself(next)) {
       // Every value row under the same labels: a passenger list has several.
       let j = i + 1
       for (; ; j++) {
@@ -47,7 +57,7 @@ export function rowsToText(rows: string[][]): string {
       continue
     }
     // A key and its value side by side: "Credit Card ending | 1234".
-    if (row.length === 2 && isLabelRow([row[0]!, 'x']) && !isLabelRow([row[1]!, 'x'])) {
+    if (row.length === 2 && isLabelRow([row[0]!, 'x']) && (inForm || !isLabelRow([row[1]!, 'x']))) {
       out.push(`${label(row[0]!)}: ${row[1]}`)
       continue
     }

@@ -102,6 +102,23 @@ export async function api<T>(
   return data as T
 }
 
+/** Sends a file as the raw body — an admit card's PDF — and reads the answer as api() does. */
+export async function apiSendFile<T>(path: string, file: Blob): Promise<T> {
+  const token = getToken()
+  const res = await fetch(apiUrl(path), {
+    method: 'POST',
+    headers: { 'content-type': file.type || 'application/octet-stream', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    body: file,
+  })
+  const text = await res.text()
+  const data = text ? JSON.parse(text) : null
+  if (!res.ok) {
+    if (res.status === 401) setToken(null)
+    throw new ApiError(res.status, data?.error ?? 'upload_failed', data, data?.problem ?? data?.error)
+  }
+  return data as T
+}
+
 /** Uploads a recorded clip as a raw body — one blob, no other fields. */
 export async function apiUploadAudio(
   path: string,

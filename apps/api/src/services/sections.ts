@@ -11,6 +11,7 @@ export async function filledSections(userId: string): Promise<string[]> {
     select 'trips' as section where exists (select 1 from trips where user_id = ${userId})
     union all select 'expenses' where exists (select 1 from expenses where user_id = ${userId})
     union all select 'bills' where exists (select 1 from bills where user_id = ${userId})
+    union all select 'exams' where exists (select 1 from exams where user_id = ${userId})
     union all select distinct board from tracker_items where user_id = ${userId}
   `)
   return (rows as unknown as { section: string }[]).map((r) => r.section)

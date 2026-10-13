@@ -71,6 +71,13 @@ export const USES = [
     hint: 'Classes, assignments, exams',
     example: 'maths assignment due monday 9am',
   },
+  {
+    key: 'exams',
+    group: 'career',
+    label: 'Competitive exams',
+    hint: 'Forms, admit cards, exam days, results',
+    example: 'applied for RRB NTPC, RRB Ajmer, reg no 241051234567',
+  },
 ] as const satisfies readonly { key: string; group: UseGroup; label: string; hint: string; example: string }[]
 
 export type Use = (typeof USES)[number]['key']
@@ -87,16 +94,17 @@ export type Section =
   | 'hiring'
   | 'deals'
   | 'bills'
+  | 'exams'
 
 /** Sections that hold things of their own, so can be kept for having something in them. */
-export const FILLABLE: readonly Section[] = ['trips', 'expenses', 'bills', 'jobs', 'hiring', 'deals']
+export const FILLABLE: readonly Section[] = ['trips', 'expenses', 'bills', 'jobs', 'hiring', 'deals', 'exams']
 
 /** How the menu groups sections, in this order. */
 export const SECTION_GROUPS: readonly { label: string; sections: readonly Section[] }[] = [
   { label: 'Everyday', sections: ['people', 'trips', 'repeating', 'history'] },
   { label: 'Money', sections: ['bills', 'expenses'] },
   { label: 'Work', sections: ['deals', 'hiring'] },
-  { label: 'Career & studies', sections: ['jobs'] },
+  { label: 'Career & studies', sections: ['exams', 'jobs'] },
 ]
 
 /** What everybody has, whatever they picked: the people in their life, what repeats, what is done. */
@@ -110,7 +118,8 @@ const LEADS: Record<Use, readonly Section[]> = {
   hiring: ['hiring', 'people', 'repeating', 'history'],
   freelance: ['deals', 'bills', 'expenses', 'people'],
   job_search: ['jobs', 'people', 'history', 'repeating'],
-  student: ['repeating', 'history', 'people', 'trips'],
+  student: ['repeating', 'exams', 'history', 'people', 'trips'],
+  exams: ['exams', 'trips', 'repeating', 'people'],
 }
 
 /** Before anyone has said: what everybody has, and trips, which email fills on its own. */

@@ -387,6 +387,41 @@ export const trackerItems = pgTable(
   (t) => [index('tracker_items_user_board_idx').on(t.userId, t.board)],
 )
 
+/**
+ * An exam someone has applied for, or means to. Its dates are plans linked by
+ * commitments.examId; see shared/exams.ts for the stages and the catalog.
+ */
+export const exams = pgTable(
+  'exams',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => orgs.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** One from the catalog; null for an exam of the person's own. */
+    examKey: text('exam_key'),
+    name: text('name').notNull(),
+    /** "2026", "CEN 05/2024". */
+    cycle: text('cycle'),
+    /** "RRB Ajmer". */
+    region: text('region'),
+    registrationNo: text('registration_no'),
+    rollNo: text('roll_no'),
+    stage: text('stage').notNull().default('applied'),
+    stageChangedAt: timestamp('stage_changed_at', { withTimezone: true }).notNull().defaultNow(),
+    centreName: text('centre_name'),
+    centreAddress: text('centre_address'),
+    centreCity: text('centre_city'),
+    notes: text('notes'),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('exams_user_idx').on(t.userId)],
+)
+
 /** Each move between stages, so an item can show how it got where it is. */
 export const trackerEvents = pgTable(
   'tracker_events',
@@ -571,6 +606,10 @@ export const commitments = pgTable(
     }>(),
     /** The tracked item this is the next step of: an interview, a follow-up. */
     trackerItemId: uuid('tracker_item_id').references((): AnyPgColumn => trackerItems.id, { onDelete: 'set null' }),
+    /** The exam this is a date of: its last day to apply, its exam day. */
+    examId: uuid('exam_id').references((): AnyPgColumn => exams.id, { onDelete: 'set null' }),
+    /** Which date: 'apply_by', 'exam:cbt1'… (see splitExamStep). */
+    examStep: text('exam_step'),
     /** 'fixed' occupies a slot and can clash; 'flexible' only wants a window. */
     flexibility: text('flexibility').notNull().default('fixed'),
     /** morning | afternoon | evening | night — when no exact time was given. */

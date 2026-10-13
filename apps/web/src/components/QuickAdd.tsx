@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ApiError, api } from '../lib/api.ts'
 import { DictateButton } from './DictateButton.tsx'
 import { announceChange } from '../lib/changes.ts'
@@ -46,6 +47,7 @@ interface Plan {
     | 'expense'
     | 'owed'
     | 'tracker'
+    | 'exam'
     | 'bill'
     | 'delivery'
     | 'needsTime'
@@ -123,6 +125,7 @@ const KIND_WORD: Record<Plan['kind'], string> = {
   expense: 'Expense',
   owed: 'Owed to you',
   tracker: 'Tracking',
+  exam: 'Tracking',
   bill: 'Bill',
   delivery: 'Parcel',
   needsTime: 'Understood',
@@ -157,6 +160,7 @@ export function QuickAdd({
   inline?: boolean
 }) {
   const { me } = useAuth()
+  const navigate = useNavigate()
   const examples = examplesFor(me?.uses ?? [])
   const [text, setText] = useState(initialText)
   const [focused, setFocused] = useState(false)
@@ -576,6 +580,21 @@ export function QuickAdd({
                 {saved.savedTrip.created
                   ? `Trip to ${saved.savedTrip.placeLabel} added for ${range(saved.savedTrip.startsOn, saved.savedTrip.endsOn)}.`
                   : `Part of your ${saved.savedTrip.placeLabel} trip, ${range(saved.savedTrip.startsOn, saved.savedTrip.endsOn)}.`}
+              </p>
+            )}
+            {saved.kind === 'exam' && (
+              <p className="muted small">
+                On the Exams page, its dates as reminders.{' '}
+                <button
+                  className="link small"
+                  onClick={() => {
+                    setSaved(null)
+                    onDone()
+                    navigate('/exams')
+                  }}
+                >
+                  Open Exams
+                </button>
               </p>
             )}
             {saved.scheduledOnTrip && (

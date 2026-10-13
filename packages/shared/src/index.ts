@@ -1246,3 +1246,123 @@ export interface VisitDTO {
 }
 export { sphereOf, isWorkTime, nextWorkBoundary, describeWorkHours, DEFAULT_WORK_HOURS, SPHERES, type Sphere, type SphereHints, type WorkHours } from './sphere.ts'
 export { packingList, packingItems, type PackingInput, type PackingSection, type TripPurpose, type TravelMode } from './packing.ts'
+export {
+  EXAMS,
+  EXAM_STEPS,
+  RRB_REGIONS,
+  dateIn,
+  examByKey,
+  examDayCarry,
+  examLabel,
+  examStage,
+  examStages,
+  examStepTitle,
+  findExam,
+  isLaterExamStage,
+  isOpenExamStage,
+  parseExamLine,
+  readAdmitCard,
+  roundIn,
+  splitExamStep,
+  timesIn,
+  type AdmitCard,
+  type CatalogExam,
+  type ExamDateSaid,
+  type ExamRound,
+  type ExamStage,
+  type ExamStep,
+  type ParsedExamLine,
+} from './exams.ts'
+import { EXAM_STEP_KEYS } from './exams.ts'
+
+const ymdField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const hhmmField = z.string().regex(/^\d{2}:\d{2}$/)
+const shortText = (max: number) => z.string().trim().max(max)
+
+/** One date of an exam's, to become a plan with its reminders. */
+export const examDateInput = z.object({
+  step: z.enum(EXAM_STEP_KEYS),
+  on: ymdField,
+  at: hhmmField.nullable().optional(),
+  round: shortText(40).nullable().optional(),
+  /** What it is, for "something else". */
+  note: shortText(120).nullable().optional(),
+})
+export type ExamDateInput = z.infer<typeof examDateInput>
+
+const examFields = {
+  name: shortText(120).min(1),
+  cycle: shortText(40).nullable().optional(),
+  region: shortText(80).nullable().optional(),
+  registrationNo: shortText(40).nullable().optional(),
+  rollNo: shortText(40).nullable().optional(),
+  notes: shortText(2000).nullable().optional(),
+}
+
+/** An exam to track: one from the list (examKey), or one of the person's own (name only). */
+export const createExamInput = z.object({
+  ...examFields,
+  examKey: shortText(60).nullable().optional(),
+  stage: shortText(40).optional(),
+  dates: z.array(examDateInput).max(8).optional(),
+})
+export const updateExamInput = z
+  .object({
+    ...examFields,
+    stage: shortText(40),
+    centreName: shortText(200).nullable(),
+    centreAddress: shortText(400).nullable(),
+    centreCity: shortText(80).nullable(),
+  })
+  .partial()
+
+/** The day itself, from an admit card as read and checked by the person. */
+export const examDayInput = z.object({
+  /** The exam it is for; or, read from a card for an exam not yet tracked, which one. */
+  examId: z.string().uuid().nullable().optional(),
+  examKey: shortText(60).nullable().optional(),
+  examName: shortText(120).nullable().optional(),
+  round: shortText(40).nullable().optional(),
+  date: ymdField,
+  reportingAt: hhmmField.nullable().optional(),
+  gateClosesAt: hhmmField.nullable().optional(),
+  startsAt: hhmmField.nullable().optional(),
+  endsAt: hhmmField.nullable().optional(),
+  rollNo: shortText(40).nullable().optional(),
+  registrationNo: shortText(40).nullable().optional(),
+  centreName: shortText(200).nullable().optional(),
+  centreAddress: shortText(400).nullable().optional(),
+  centreCity: shortText(80).nullable().optional(),
+})
+export type ExamDayInput = z.infer<typeof examDayInput>
+
+/** One of an exam's dates, as its plan. */
+export interface ExamDateDTO {
+  id: string
+  step: string
+  round: string | null
+  title: string
+  dueAt: string
+  allDay: boolean
+  status: string
+}
+
+export interface ExamDTO {
+  id: string
+  examKey: string | null
+  name: string
+  cycle: string | null
+  region: string | null
+  registrationNo: string | null
+  rollNo: string | null
+  stage: string
+  stageChangedAt: string
+  centreName: string | null
+  centreAddress: string | null
+  centreCity: string | null
+  notes: string | null
+  closedAt: string | null
+  createdAt: string
+  /** Its dates' plans, soonest first. */
+  dates: ExamDateDTO[]
+}

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { examplesFor, groupSections, hasClients, hasCompanies, hasWork, sectionsFor, tabsFor, type Section } from './uses.ts'
 
-const ALL: Section[] = ['people', 'history', 'trips', 'repeating', 'expenses', 'jobs', 'hiring', 'deals', 'bills']
+const ALL: Section[] = ['people', 'history', 'trips', 'repeating', 'expenses', 'jobs', 'hiring', 'deals', 'bills', 'exams']
 const TODAY: Section[] = ['people', 'history', 'trips', 'repeating', 'expenses']
 
 test('tabs lead with what each use needs, taking turns between uses', () => {
@@ -21,7 +21,8 @@ test('each use brings its own sections and no one else’s', () => {
   assert.deepEqual(all(['job_search']), ['history', 'jobs', 'people', 'repeating'], 'a job hunt: no bills, deals or candidates')
   assert.deepEqual(all(['hiring']), ['hiring', 'history', 'people', 'repeating'])
   assert.deepEqual(all(['freelance']), ['bills', 'deals', 'expenses', 'history', 'people', 'repeating'])
-  assert.deepEqual(all(['student']), ['history', 'people', 'repeating', 'trips'])
+  assert.deepEqual(all(['student']), ['exams', 'history', 'people', 'repeating', 'trips'])
+  assert.deepEqual(all(['exams']), ['exams', 'history', 'people', 'repeating', 'trips'], 'an aspirant: exams, and getting to them')
   assert.deepEqual(all([]), ['history', 'people', 'repeating', 'trips'], 'not said yet: only what everybody has')
   assert.deepEqual(all(['nonsense']), all([]), 'unknown uses are as good as none')
 })
@@ -39,11 +40,11 @@ test('only sections that exist, and everything else under More', () => {
 })
 
 test('the menu, grouped', () => {
-  assert.deepEqual(groupSections(['history', 'bills', 'jobs', 'expenses', 'hiring']), [
+  assert.deepEqual(groupSections(['history', 'bills', 'jobs', 'expenses', 'hiring', 'exams']), [
     { label: 'Everyday', sections: ['history'] },
     { label: 'Money', sections: ['bills', 'expenses'] },
     { label: 'Work', sections: ['hiring'] },
-    { label: 'Career & studies', sections: ['jobs'] },
+    { label: 'Career & studies', sections: ['exams', 'jobs'] },
   ])
   assert.deepEqual(groupSections([]), [])
 })
@@ -62,4 +63,5 @@ test('examples, and what counts as work and clients', () => {
   assert.equal(hasClients([]), false)
   assert.equal(hasCompanies(['job_search']), true)
   assert.equal(hasCompanies(['personal', 'student']), false)
+  assert.equal(hasWork(['exams']), false, 'an aspirant has no standup')
 })

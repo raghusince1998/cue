@@ -75,7 +75,8 @@ export function PrivacyPage() {
       <h2>What Cue keeps</h2>
       <ul>
         <li><strong>Your account:</strong> your name, email address and a one-way hash of your password (never the password itself), and a profile photo if you add one.</li>
-        <li><strong>What you add:</strong> plans, reminders, notes, people and their details, places, trips, bills, expenses (and receipt photos), money owed, job applications and other trackers, and voice notes if you record them.</li>
+        <li><strong>What you add:</strong> plans, reminders, notes, people and their details, places, trips, bills, expenses (and receipt photos), money owed, job applications and other trackers, exams you are tracking, and voice notes if you record them.</li>
+        <li><strong>Exams:</strong> the exams you add, where each stands, their dates, and the registration and roll numbers and exam centre you enter or confirm. An admit card you choose to read is read in memory and not kept; only the details you confirm are saved. Cue never asks for an exam portal&rsquo;s or Rajasthan SSO&rsquo;s password, an OTP or your date of birth, and never signs in to any portal for you.</li>
         <li><strong>Location, only when you ask:</strong> when you log a visit or look for things nearby, your device’s position at that moment. Cue does not track your location in the background.</li>
         <li><strong>To send reminders:</strong> your device’s push subscription and your time zone.</li>
       </ul>
