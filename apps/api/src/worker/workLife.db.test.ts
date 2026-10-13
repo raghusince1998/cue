@@ -36,6 +36,8 @@ before(async () => {
   process.env.MAX_ESCALATIONS = '3'
   worker = await import('./reminders.ts')
   me = await seedUser(h.sql, 'work-life@test.local')
+  // Kept apart only for someone who said they work.
+  await h.sql`update users set uses = '{office}' where id = ${me.userId}`
 })
 
 after(async () => {
@@ -124,4 +126,8 @@ test('only for someone with a working life', async () => {
   await worker.runOnce()
   assert.equal((await first(id)).status, 'sent')
   await h.sql`update users set uses = '{}' where id = ${me.userId}`
+  const unsaid = await plan('call mom', { attempt: 1 })
+  await worker.runOnce()
+  assert.equal((await first(unsaid)).status, 'sent', 'not said yet: no working day to keep it out of')
+  await h.sql`update users set uses = '{office}' where id = ${me.userId}`
 })

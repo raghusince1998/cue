@@ -14,6 +14,8 @@ before(async () => {
   process.env.DATABASE_URL = h.url
   svc = await import('./morningBrief.ts')
   me = await seedUser(h.sql, 'brief@test.local')
+  // Work and personal, each with its first thing: for someone who said they work.
+  await h.sql`update users set uses = '{office}' where id = ${me.userId}`
 })
 
 after(async () => {
@@ -133,5 +135,5 @@ test('someone without a working life gets one list, as before', async () => {
   assert.equal(stats.split, false)
   const body = svc.composeBrief(stats, TZ)!.body
   assert.ok(!/Work:|Personal:/.test(body), body)
-  await h.sql`update users set uses = '{}' where id = ${me.userId}`
+  await h.sql`update users set uses = '{office}' where id = ${me.userId}`
 })

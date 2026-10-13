@@ -5320,6 +5320,20 @@ a.link-btn:hover {
 
 /* ---- What Cue is used for, and the tabs that follow ------------------ */
 
+.uses-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.uses-group-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .uses-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
@@ -5410,6 +5424,26 @@ a.link-btn:hover {
   border-radius: 8px;
   text-align: left;
   font-size: 14px;
+}
+
+.tabs-menu-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.tabs-menu-group + .tabs-menu-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.tabs-menu-heading {
+  padding: 6px 12px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .tabs-menu-uses {

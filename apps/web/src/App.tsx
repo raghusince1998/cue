@@ -24,7 +24,7 @@ import Tracker from './pages/Tracker.tsx'
 import Home from './pages/Home.tsx'
 import { PrivacyPage, TermsPage } from './pages/Legal.tsx'
 import Bills from './pages/Bills.tsx'
-import { tabsFor, type Section } from '@cue/shared'
+import { groupSections, tabsFor, type Section } from '@cue/shared'
 import { UsesPicker } from './components/UsesPicker.tsx'
 
 /** Every section that has a page, and where it lives. */
@@ -73,10 +73,16 @@ function MoreMenu({ sections, onChangeUses }: { sections: Section[]; onChangeUse
       </button>
       {open && (
         <div className="tabs-menu" role="menu">
-          {sections.map((s) => (
-            <NavLink key={s} to={SECTION_LINKS[s]!.to} role="menuitem">
-              {SECTION_LINKS[s]!.label}
-            </NavLink>
+          {/* Under headings once there is more than one kind of thing in it. */}
+          {groupSections(sections).map((g, _, groups) => (
+            <div key={g.label} className="tabs-menu-group" role="group" aria-label={g.label}>
+              {groups.length > 1 && <span className="tabs-menu-heading">{g.label}</span>}
+              {g.sections.map((s) => (
+                <NavLink key={s} to={SECTION_LINKS[s]!.to} role="menuitem">
+                  {SECTION_LINKS[s]!.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
           <button
             className="tabs-menu-uses"
@@ -105,7 +111,7 @@ function Nav({
 }) {
   const { logout, me } = useAuth()
   const [choosingUses, setChoosingUses] = useState(false)
-  const { main, more } = tabsFor(me?.uses ?? [], AVAILABLE, me?.boards ?? [])
+  const { main, more } = tabsFor(me?.uses ?? [], AVAILABLE, me?.filled ?? [])
 
   return (
     <>

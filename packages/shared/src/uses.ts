@@ -1,56 +1,77 @@
 /**
  * What someone uses Cue for. One app for very different days — a job hunt,
  * a recruiter's interviews, a household's bills, a salesperson's calls — so
- * the screens lead with what this person needs and keep the rest a tap away.
- * What only one kind of day needs — job applications, candidates, deals —
- * is not there at all until someone says it is theirs: to everyone else it
- * is clutter.
+ * every part of it belongs to the kinds of day that need it, and is in front
+ * of only those who said that day is theirs. To everyone else it is clutter.
+ *
+ * Three rules, and nothing shown outside them:
+ * - Sections (tabs): the few everybody needs, and each use's own. One that
+ *   already has something in it stays, whatever was picked.
+ * - Work features — work and personal kept apart, work hours, the standup
+ *   and the daily report — for those who picked a kind of work (hasWork).
+ * - Client features — a stage on each company, weekly targets of calls and
+ *   visits — for sales and freelance only (hasClients).
  */
+
+/** How the choices are grouped when asked, and how the menu is laid out. */
+export const USE_GROUPS = [
+  { key: 'life', label: 'Life' },
+  { key: 'work', label: 'Work' },
+  { key: 'career', label: 'Career & studies' },
+] as const
+export type UseGroup = (typeof USE_GROUPS)[number]['key']
 
 export const USES = [
   {
     key: 'personal',
+    group: 'life',
     label: 'Home & personal life',
     hint: 'Bills, birthdays, errands, money lent',
     example: 'pay the electricity bill on the 5th',
   },
   {
-    key: 'job_search',
-    label: 'Looking for a job',
-    hint: 'Applications, interviews, follow-ups',
-    example: 'interview at Infosys friday 11am',
-  },
-  {
-    key: 'hiring',
-    label: 'Hiring & HR',
-    hint: 'Candidates, interviews, your people',
-    example: 'interview Priya for the designer role tomorrow 3pm',
-  },
-  {
-    key: 'sales',
-    label: 'Sales & clients',
-    hint: 'Clients, calls, visits, targets',
-    example: 'call Ravi tomorrow 4pm about the order',
-  },
-  {
     key: 'office',
+    group: 'work',
     label: 'Office work',
     hint: 'Meetings, follow-ups, reports',
     example: 'send the report to Anita by friday',
   },
   {
+    key: 'sales',
+    group: 'work',
+    label: 'Sales & clients',
+    hint: 'Clients, calls, visits, targets, deals',
+    example: 'call Ravi tomorrow 4pm about the order',
+  },
+  {
+    key: 'hiring',
+    group: 'work',
+    label: 'Hiring & HR',
+    hint: 'Candidates, interviews, your people',
+    example: 'interview Priya for the designer role tomorrow 3pm',
+  },
+  {
     key: 'freelance',
+    group: 'work',
     label: 'Freelance or own business',
-    hint: 'Clients, payments due, expenses',
+    hint: 'Clients, deals, payments due, expenses',
     example: 'invoice Sharma & Co on the 1st',
   },
   {
+    key: 'job_search',
+    group: 'career',
+    label: 'Looking for a job',
+    hint: 'Applications, interviews, follow-ups',
+    example: 'interview at Infosys friday 11am',
+  },
+  {
     key: 'student',
+    group: 'career',
     label: 'Studies',
     hint: 'Classes, assignments, exams',
     example: 'maths assignment due monday 9am',
   },
-] as const
+] as const satisfies readonly { key: string; group: UseGroup; label: string; hint: string; example: string }[]
 
 export type Use = (typeof USES)[number]['key']
 export const USE_KEYS = USES.map((u) => u.key) as [Use, ...Use[]]
@@ -67,49 +88,54 @@ export type Section =
   | 'deals'
   | 'bills'
 
-/** What each use leads with, most useful first. */
-const LEADS: Record<Use, Section[]> = {
+/** Sections that hold things of their own, so can be kept for having something in them. */
+export const FILLABLE: readonly Section[] = ['trips', 'expenses', 'bills', 'jobs', 'hiring', 'deals']
+
+/** How the menu groups sections, in this order. */
+export const SECTION_GROUPS: readonly { label: string; sections: readonly Section[] }[] = [
+  { label: 'Everyday', sections: ['people', 'trips', 'repeating', 'history'] },
+  { label: 'Money', sections: ['bills', 'expenses'] },
+  { label: 'Work', sections: ['deals', 'hiring'] },
+  { label: 'Career & studies', sections: ['jobs'] },
+]
+
+/** What everybody has, whatever they picked: the people in their life, what repeats, what is done. */
+const EVERYONE: readonly Section[] = ['people', 'repeating', 'history']
+
+/** Each use's sections, most useful first: what it adds, and what its tabs lead with. */
+const LEADS: Record<Use, readonly Section[]> = {
   personal: ['bills', 'people', 'trips', 'repeating', 'expenses'],
-  job_search: ['jobs', 'people', 'history', 'repeating'],
-  hiring: ['hiring', 'people', 'repeating', 'history'],
+  office: ['people', 'repeating', 'history', 'expenses', 'trips'],
   sales: ['people', 'deals', 'expenses', 'trips', 'history'],
-  office: ['people', 'repeating', 'history', 'expenses'],
+  hiring: ['hiring', 'people', 'repeating', 'history'],
   freelance: ['deals', 'bills', 'expenses', 'people'],
+  job_search: ['jobs', 'people', 'history', 'repeating'],
   student: ['repeating', 'history', 'people', 'trips'],
 }
 
-/**
- * Sections only some uses need, and which. Hidden from everyone else — and
- * from anyone who has not said yet — unless something is already in them.
- */
-const ONLY_FOR: Partial<Record<Section, readonly Use[]>> = {
-  jobs: ['job_search'],
-  hiring: ['hiring'],
-  deals: ['sales', 'freelance'],
-}
-
-/**
- * The sections this person has, out of those that exist: everything anyone
- * can use, and the ones only some need when they picked one of those uses
- * or already have something in them ("applied to Infosys" typed without
- * picking a job hunt still has somewhere to go).
- */
-export function sectionsFor(uses: readonly string[], available: readonly Section[], filled: readonly string[] = []): Section[] {
-  return available.filter((s) => {
-    const only = ONLY_FOR[s]
-    return !only || only.some((u) => uses.includes(u)) || filled.includes(s)
-  })
-}
-
-/** Before anyone has said: the sections everybody can use. */
-const UNSAID: Section[] = ['people', 'trips', 'repeating', 'history']
+/** Before anyone has said: what everybody has, and trips, which email fills on its own. */
+const UNSAID: readonly Section[] = ['people', 'trips', 'repeating', 'history']
 
 /** Tabs a phone can fit beside Today and More. */
 export const MAIN_TABS = 4
 
+const picked = (uses: readonly string[]): Use[] => uses.filter((u): u is Use => u in LEADS)
+
+/**
+ * The sections this person has, out of those that exist: everybody's, their
+ * uses' own, and any that already has something in it (`filled`) — "applied
+ * to Infosys" typed without picking a job hunt still has somewhere to go, and
+ * a bill found in email shows Bills to someone who never asked for it.
+ */
+export function sectionsFor(uses: readonly string[], available: readonly Section[], filled: readonly string[] = []): Section[] {
+  const known = picked(uses)
+  const theirs = new Set<Section>(known.length ? [...EVERYONE, ...known.flatMap((u) => LEADS[u])] : UNSAID)
+  return available.filter((s) => theirs.has(s) || filled.includes(s))
+}
+
 /**
  * The tabs to show and the rest, for these uses, out of the sections that
- * exist (see sectionsFor; `filled` is the boards with something in them).
+ * exist (see sectionsFor; `filled` is the sections with something in them).
  * Several uses take turns, so each gets its first choice in before any gets
  * its second: a job seeker who also runs a home sees Jobs and Bills.
  */
@@ -119,7 +145,7 @@ export function tabsFor(
   filled: readonly string[] = [],
 ): { main: Section[]; more: Section[] } {
   const available = sectionsFor(uses, all, filled)
-  const known = uses.filter((u): u is Use => u in LEADS)
+  const known = picked(uses)
   const lists = known.length ? known.map((u) => LEADS[u]) : [UNSAID]
   const main: Section[] = []
   for (let i = 0; main.length < MAIN_TABS && lists.some((l) => i < l.length); i++) {
@@ -131,6 +157,13 @@ export function tabsFor(
   return { main, more: available.filter((s) => !main.includes(s)) }
 }
 
+/** The menu's sections under their headings, in the menu's order; empty groups left out. */
+export function groupSections(sections: readonly Section[]): { label: string; sections: Section[] }[] {
+  return SECTION_GROUPS.map((g) => ({ label: g.label, sections: g.sections.filter((s) => sections.includes(s)) })).filter(
+    (g) => g.sections.length > 0,
+  )
+}
+
 /** Lines to show as examples of what can be typed, for these uses. */
 export function examplesFor(uses: readonly string[]): string[] {
   // In the order they were picked: the first is what they came for.
@@ -139,9 +172,12 @@ export function examplesFor(uses: readonly string[]): string[] {
   return list.slice(0, 3)
 }
 
-/** Whether these uses are about a job, so reports to a manager and targets make sense. */
+/**
+ * Whether these uses are a kind of work: work and personal kept apart, work
+ * hours, the standup and the daily report. Only when they said so.
+ */
 export function hasWork(uses: readonly string[]): boolean {
-  return uses.length === 0 || uses.some((u) => u === 'sales' || u === 'office' || u === 'hiring' || u === 'freelance')
+  return uses.some((u) => USES.some((x) => x.key === u && x.group === 'work'))
 }
 
 /**
@@ -150,4 +186,9 @@ export function hasWork(uses: readonly string[]): boolean {
  */
 export function hasClients(uses: readonly string[]): boolean {
   return uses.some((u) => u === 'sales' || u === 'freelance')
+}
+
+/** Whether the companies people work at matter: for work, and for a job hunt. */
+export function hasCompanies(uses: readonly string[]): boolean {
+  return hasWork(uses) || uses.includes('job_search')
 }

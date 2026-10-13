@@ -8,6 +8,7 @@ import { scope } from '../auth.ts'
 import { sendNudgeTo } from '../services/dailyNudge.ts'
 import { sendBriefTo } from '../services/morningBrief.ts'
 import { sendReportReminderTo } from '../services/dailyReport.ts'
+import { filledSections } from '../services/sections.ts'
 
 /** "" from a cleared input means none. */
 const optionalText = (max: number) =>
@@ -87,6 +88,9 @@ const selection = {
 
 export async function meRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate)
+
+  /** Sections with something in them, asked again after something is added. */
+  app.get('/me/filled', async (req) => ({ filled: await filledSections(scope(req).sub) }))
 
   app.get('/me/preferences', async (req) => {
     const { sub } = scope(req)

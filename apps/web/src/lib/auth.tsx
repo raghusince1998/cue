@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { FILLABLE, sectionsFor } from '@cue/shared'
 import { api, getToken, setToken } from './api.ts'
+import { useOnChange } from './changes.ts'
 
 export interface Me {
   id: string
@@ -10,8 +12,8 @@ export interface Me {
   orgName: string
   /** What they use Cue for; empty until they say. */
   uses: string[]
-  /** Trackers with something on them ('jobs', 'hiring', 'deals'): their tabs show whatever was picked. */
-  boards?: string[]
+  /** Sections with something in them ('bills', 'jobs'…): their tabs show whatever was picked. */
+  filled?: string[]
   /** A one-tap demo from the website, with sample data, gone after a day. */
   isDemo?: boolean
 }
@@ -28,8 +30,6 @@ interface AuthValue {
   logout: () => void
   /** What they use Cue for, saved and reflected everywhere at once. */
   saveUses: (uses: string[]) => Promise<void>
-  /** Something was just put on this tracker: its tab shows from now on. */
-  noteBoard: (board: string) => void
   /** Into a fresh demo account, filled with a sample week. */
   enterDemo: () => Promise<void>
   /** Deletes the account and everything in it, then signs out. */
@@ -96,9 +96,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMe((m) => (m ? { ...m, uses: saved.uses } : m))
   }, [])
 
-  const noteBoard = useCallback((board: string) => {
-    setMe((m) => (m && !(m.boards ?? []).includes(board) ? { ...m, boards: [...(m.boards ?? []), board] } : m))
-  }, [])
+  // Something added may be the first in a section this person does not have
+  // ("applied to Infosys" with no job hunt picked): ask, and show it. Only
+  // while some section is hidden, so most saves ask nothing.
+  useOnChange(() => {
+    if (!me) return
+    const shown = sectionsFor(me.uses, FILLABLE, me.filled ?? [])
+    if (FILLABLE.every((s) => shown.includes(s))) return
+    void api<{ filled: string[] }>('/me/filled')
+      .then(({ filled }) => {
+        setMe((m) => (m && filled.some((s) => !(m.filled ?? []).includes(s)) ? { ...m, filled } : m))
+      })
+      .catch(() => undefined)
+  })
 
   const enterDemo = useCallback(async () => {
     const res = await api<{ token: string }>('/auth/demo', { method: 'POST', body: {} })
@@ -113,8 +123,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ me, loading, login, register, logout, saveUses, noteBoard, enterDemo, deleteAccount }),
-    [me, loading, login, register, logout, saveUses, noteBoard, enterDemo, deleteAccount],
+    () => ({ me, loading, login, register, logout, saveUses, enterDemo, deleteAccount }),
+    [me, loading, login, register, logout, saveUses, enterDemo, deleteAccount],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

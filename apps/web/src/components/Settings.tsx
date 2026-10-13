@@ -446,7 +446,9 @@ export function Settings({ onClose }: { onClose: () => void }) {
 
       <hr className="rule" />
 
-      {/* Evening: the day written up for whoever you report to. */}
+      {/* Evening: the day written up for whoever you report to — for work only. */}
+      {(working || prefs.reportEnabled) && (
+      <>
       <div className="setting-row has-infotip">
         <label className="checkbox">
           <input
@@ -488,6 +490,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
       )}
 
       <hr className="rule" />
+      </>
+      )}
 
       {/* Friday: the week behind and the one ahead. */}
       <div className="setting-row has-infotip">

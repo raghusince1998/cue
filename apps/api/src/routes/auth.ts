@@ -15,6 +15,7 @@ import { db, schema } from '../db/index.ts'
 import { takeFirst } from '../db/util.ts'
 import { scope } from '../auth.ts'
 import { createDemo, demoAllowed } from '../services/demo.ts'
+import { filledSections } from '../services/sections.ts'
 import { revokeAccount } from '../services/oauthConnect.ts'
 import { env } from '../env.ts'
 import { mailConfigured, MailError, resetEmail, sendMail } from '../services/mail.ts'
@@ -149,13 +150,8 @@ export async function authRoutes(app: FastifyInstance) {
       .where(eq(schema.users.id, sub))
       .limit(1)
     const user = takeFirst(rows, 'user')
-
-    // Boards with something on them: their tabs stay, whatever was picked.
-    const boards = await db
-      .selectDistinct({ board: schema.trackerItems.board })
-      .from(schema.trackerItems)
-      .where(eq(schema.trackerItems.userId, sub))
-    return { ...user, boards: boards.map((b) => b.board) }
+    // Sections with something in them: their tabs stay, whatever was picked.
+    return { ...user, filled: await filledSections(sub) }
   })
 
   /**

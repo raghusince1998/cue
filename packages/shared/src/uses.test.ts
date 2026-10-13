@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { examplesFor, hasClients, hasWork, sectionsFor, tabsFor, type Section } from './uses.ts'
+import { examplesFor, groupSections, hasClients, hasCompanies, hasWork, sectionsFor, tabsFor, type Section } from './uses.ts'
 
 const ALL: Section[] = ['people', 'history', 'trips', 'repeating', 'expenses', 'jobs', 'hiring', 'deals', 'bills']
 const TODAY: Section[] = ['people', 'history', 'trips', 'repeating', 'expenses']
@@ -12,35 +12,54 @@ test('tabs lead with what each use needs, taking turns between uses', () => {
   assert.deepEqual(tabsFor(['sales'], ALL).main, ['people', 'deals', 'expenses', 'trips'])
 })
 
-test('jobs, hiring and deals only for those who said so, or have something in them', () => {
-  const homeOnly = tabsFor(['personal'], ALL)
-  assert.deepEqual([...homeOnly.main, ...homeOnly.more].filter((s) => s === 'jobs' || s === 'hiring' || s === 'deals'), [])
-  assert.deepEqual(sectionsFor([], ALL), ['people', 'history', 'trips', 'repeating', 'expenses', 'bills'], 'not said yet: none of them')
-  assert.ok(tabsFor(['job_search'], ALL).main.includes('jobs'))
-  assert.ok(!tabsFor(['job_search'], ALL).more.includes('deals'), 'a job seeker has no deals')
-  assert.ok(tabsFor(['hiring'], ALL).main.includes('hiring'))
-  assert.ok(tabsFor(['freelance'], ALL).main.includes('deals'))
+test('each use brings its own sections and no one else’s', () => {
+  const all = (uses: string[], filled: string[] = []) => {
+    const { main, more } = tabsFor(uses, ALL, filled)
+    return [...main, ...more].sort()
+  }
+  assert.deepEqual(all(['personal']), ['bills', 'expenses', 'history', 'people', 'repeating', 'trips'])
+  assert.deepEqual(all(['job_search']), ['history', 'jobs', 'people', 'repeating'], 'a job hunt: no bills, deals or candidates')
+  assert.deepEqual(all(['hiring']), ['hiring', 'history', 'people', 'repeating'])
+  assert.deepEqual(all(['freelance']), ['bills', 'deals', 'expenses', 'history', 'people', 'repeating'])
+  assert.deepEqual(all(['student']), ['history', 'people', 'repeating', 'trips'])
+  assert.deepEqual(all([]), ['history', 'people', 'repeating', 'trips'], 'not said yet: only what everybody has')
+  assert.deepEqual(all(['nonsense']), all([]), 'unknown uses are as good as none')
+})
+
+test('a section with something in it stays, whatever was picked', () => {
   assert.ok(tabsFor(['personal'], ALL, ['jobs']).more.includes('jobs'), 'an application typed in still has a home')
+  assert.ok(sectionsFor(['job_search'], ALL, ['bills']).includes('bills'), 'a bill found in email shows Bills')
+  assert.ok(!sectionsFor(['job_search'], ALL, ['hiring']).includes('deals'))
 })
 
 test('only sections that exist, and everything else under More', () => {
   const { main, more } = tabsFor(['personal'], TODAY)
   assert.deepEqual(main, ['people', 'trips', 'repeating', 'expenses'])
   assert.deepEqual(more, ['history'])
-  const unsaid = tabsFor([], TODAY)
-  assert.deepEqual(unsaid.main, ['people', 'trips', 'repeating', 'history'])
-  assert.deepEqual(unsaid.more, ['expenses'])
-  assert.deepEqual(tabsFor(['nonsense'], TODAY).main, unsaid.main, 'unknown uses are as good as none')
 })
 
-test('examples and what counts as work', () => {
+test('the menu, grouped', () => {
+  assert.deepEqual(groupSections(['history', 'bills', 'jobs', 'expenses', 'hiring']), [
+    { label: 'Everyday', sections: ['history'] },
+    { label: 'Money', sections: ['bills', 'expenses'] },
+    { label: 'Work', sections: ['hiring'] },
+    { label: 'Career & studies', sections: ['jobs'] },
+  ])
+  assert.deepEqual(groupSections([]), [])
+})
+
+test('examples, and what counts as work and clients', () => {
   assert.deepEqual(examplesFor(['job_search']), ['interview at Infosys friday 11am'])
   assert.equal(examplesFor(['job_search', 'personal'])[0], 'interview at Infosys friday 11am', 'first picked, first shown')
   assert.equal(examplesFor([]).length, 2)
   assert.equal(hasWork(['personal']), false)
   assert.equal(hasWork(['personal', 'office']), true)
-  assert.equal(hasWork([]), true, 'not asked yet: show everything')
+  assert.equal(hasWork(['job_search', 'student']), false, 'looking for work is not a working day of reports')
+  assert.equal(hasWork([]), false, 'not said yet: no standups for someone who may have no job')
   assert.equal(hasClients(['job_search']), false)
   assert.equal(hasClients(['freelance']), true)
-  assert.equal(hasClients([]), false, 'a pipeline of clients only for those with clients')
+  assert.equal(hasClients(['office']), false, 'targets of calls and visits are not an office job’s')
+  assert.equal(hasClients([]), false)
+  assert.equal(hasCompanies(['job_search']), true)
+  assert.equal(hasCompanies(['personal', 'student']), false)
 })

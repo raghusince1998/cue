@@ -87,16 +87,22 @@ export {
 } from './trackers.ts'
 import { BOARD_KEYS as TRACKER_BOARDS } from './trackers.ts'
 export {
+  FILLABLE,
   MAIN_TABS,
+  SECTION_GROUPS,
   USES,
+  USE_GROUPS,
   USE_KEYS,
   examplesFor,
+  groupSections,
   hasClients,
+  hasCompanies,
   hasWork,
   sectionsFor,
   tabsFor,
   type Section,
   type Use,
+  type UseGroup,
 } from './uses.ts'
 export {
   GREETING_OCCASIONS,

@@ -10,7 +10,7 @@ import { AccountSheet } from '../components/AccountSheet.tsx'
 import { AccountsView } from './Accounts.tsx'
 import { QuickMessage } from '../components/QuickMessage.tsx'
 import { Greetings } from '../components/Greetings.tsx'
-import { OCCASION_MESSAGES, hasClients, type OccasionKind } from '@cue/shared'
+import { OCCASION_MESSAGES, hasClients, hasCompanies, type OccasionKind } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
 import { useOnChange } from '../lib/changes.ts'
 import {
@@ -60,6 +60,8 @@ export default function People() {
   const { me } = useAuth()
   /** Prospects and customers: a pipeline for sales and clients only. */
   const clients = hasClients(me?.uses ?? [])
+  /** Where people work: for work and a job hunt, not a household's plumber. */
+  const companies = hasCompanies(me?.uses ?? []) || view === 'accounts'
 
   // ?wish=<id>&for=birthday: "Send wishes" on Today's card.
   useEffect(() => {
@@ -199,6 +201,7 @@ export default function People() {
         </span>
       </div>
 
+      {companies && (
       <div className="viewswitch">
         <button
           className={view === 'people' ? 'selected' : ''}
@@ -213,6 +216,7 @@ export default function People() {
           {clients ? 'Accounts' : 'Companies'}
         </button>
       </div>
+      )}
 
       {view === 'accounts' && (
         <AccountsView
