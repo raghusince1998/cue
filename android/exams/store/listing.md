@@ -64,6 +64,8 @@ PREPARING
 • Every Sunday evening, your week: study sessions done, mock scores against
   the week before, and the dates coming up.
 • EWS, OBC or MBC: a yearly 1 April reminder to get that year's certificate.
+• A list for each step, ready-made: what the form asks for, and what to carry
+  to document verification, the medical and the interview.
 • Your photo and signature resized to the form's pixels and KB, on your
   phone — never uploaded.
 
@@ -137,6 +139,8 @@ SBI, LIC, RPSC और RSSB की नई आधिकारिक सूचन�
 • हर रविवार शाम आपका हफ़्ता: पढ़ाई के पूरे सत्र, पिछले हफ़्ते के मुकाबले मॉक
   टेस्ट के अंक, और आगे की तारीखें।
 • EWS, OBC या MBC: हर 1 अप्रैल को उस साल का प्रमाण पत्र बनवाने का रिमाइंडर।
+• हर चरण की तैयार सूची: फॉर्म में क्या लगेगा, और दस्तावेज़ सत्यापन, मेडिकल व
+  इंटरव्यू में क्या ले जाना है।
 • फोटो और हस्ताक्षर फॉर्म के माप (px और KB) में — फोन पर ही, कहीं अपलोड नहीं।
 
 पूरी तरह हिन्दी में

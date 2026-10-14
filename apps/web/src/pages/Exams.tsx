@@ -29,6 +29,7 @@ import { ApiError, api, apiSendFile } from '../lib/api.ts'
 import { announceChange, useOnChange } from '../lib/changes.ts'
 import { takeSharedFile } from '../lib/sharedFile.ts'
 import { useExamWords, type ExamWords } from '../lib/examWords.ts'
+import { Checklist } from '../components/Checklist.tsx'
 import { Modal } from '../components/Modal.tsx'
 import { PhotoFitter } from '../components/PhotoFitter.tsx'
 
@@ -774,6 +775,8 @@ function ExamSheet({
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** The date whose list is open: what the form asks for, what to carry. */
+  const [listFor, setListFor] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -913,6 +916,27 @@ function ExamSheet({
           {upcoming.map((d) => (
             <li key={d.id}>
               {d.title} <span className="muted">· {w.when(d.dueAt)}</span>
+              {d.ready && (
+                <>
+                  {' '}
+                  <button
+                    className={`link small exam-ready${d.ready.done === d.ready.total ? ' is-done' : ''}`}
+                    aria-expanded={listFor === d.id}
+                    onClick={() => {
+                      // Closing it counts the ticks again.
+                      if (listFor === d.id) void load()
+                      setListFor(listFor === d.id ? null : d.id)
+                    }}
+                  >
+                    {listFor === d.id ? w.hideList : w.readyCount(d.ready.done, d.ready.total)}
+                  </button>
+                  {listFor === d.id && (
+                    <div className="exam-ready-list">
+                      <Checklist commitmentId={d.id} />
+                    </div>
+                  )}
+                </>
+              )}
             </li>
           ))}
         </ul>

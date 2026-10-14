@@ -124,6 +124,9 @@ const EN = {
   next: 'Next',
   centre: 'Centre',
   daysToGo: (n: number) => (n <= 0 ? 'Exam today' : n === 1 ? 'Exam tomorrow' : `${n} days to the exam`),
+  // Each step's list
+  readyCount: (done: number, total: number) => (done === total ? `All ${total} ready` : `${done} of ${total} ready`),
+  hideList: 'Hide the list',
   // On Today, for an aspirant
   allExams: 'All exams',
   inDays: (n: number) => (n <= 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n} days`),
@@ -327,6 +330,8 @@ const HI: Words = {
   next: 'अगला',
   centre: 'केंद्र',
   daysToGo: (n) => (n <= 0 ? 'आज परीक्षा है' : n === 1 ? 'कल परीक्षा है' : `परीक्षा में ${n} दिन`),
+  readyCount: (done, total) => (done === total ? `सभी ${total} तैयार` : `${total} में से ${done} तैयार`),
+  hideList: 'सूची छिपाएँ',
   allExams: 'सभी परीक्षाएँ',
   inDays: (n) => (n <= 0 ? 'आज' : n === 1 ? 'कल' : `${n} दिन में`),
   datesClash: (a, b, day) => `तारीखें टकरा रही हैं: ${a} और ${b}, ${day}`,

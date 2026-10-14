@@ -6819,6 +6819,15 @@ a.link-btn:hover {
   color: var(--warn);
 }
 
+/* A date's list on the exam page: "5 of 8 ready", opened in place. */
+.exam-ready.is-done {
+  color: var(--good);
+}
+
+.exam-ready-list {
+  margin: 6px 0 10px;
+}
+
 .exam-certificate {
   display: flex;
   flex-direction: column;

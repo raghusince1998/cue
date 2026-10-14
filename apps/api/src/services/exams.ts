@@ -14,6 +14,8 @@ import {
   examFit,
   nextFirstApril,
   noticeSummary,
+  readyFor,
+  readyList,
   sameCity,
   splitExamStep,
   examStage,
@@ -133,7 +135,19 @@ async function owned(userId: string, id: string, exec: Executor = db): Promise<E
 async function datesOf(examIds: string[]) {
   if (examIds.length === 0) return []
   return db
-    .select({ id: c.id, examId: c.examId, step: c.examStep, title: c.title, dueAt: c.dueAt, allDay: c.allDay, status: c.status })
+    .select({
+      id: c.id,
+      examId: c.examId,
+      step: c.examStep,
+      title: c.title,
+      dueAt: c.dueAt,
+      allDay: c.allDay,
+      status: c.status,
+      // Its list, and how much of it is ticked: "5 of 8 ready".
+      // Qualified by hand: inside a subquery a bare "id" would be the list item's.
+      listed: sql<number>`(select count(*)::int from checklist_items k where k.commitment_id = "commitments"."id")`,
+      ticked: sql<number>`(select count(*)::int from checklist_items k where k.commitment_id = "commitments"."id" and k.done)`,
+    })
     .from(c)
     .where(and(inArray(c.examId, examIds), ne(c.status, 'deleted')))
     .orderBy(asc(c.dueAt))
@@ -171,6 +185,7 @@ function toDTO(row: ExamRow, dates: Awaited<ReturnType<typeof datesOf>>): ExamDT
           dueAt: d.dueAt.toISOString(),
           allDay: d.allDay,
           status: d.status,
+          ready: d.listed > 0 ? { done: d.ticked, total: d.listed } : null,
         }
       }),
   }
@@ -265,6 +280,19 @@ async function addDate(
     .returning({ id: c.id })
   for (const at of examReminderTimes(step, dueAt, now)) {
     await scheduleFirstReminder({ orgId: exam.orgId, commitmentId: row!.id, fireAt: at }, tx)
+  }
+
+  // What the form asks for, or what to carry to verification, the medical or
+  // the interview: the date's own list, fitted to the person.
+  const kind = readyFor(step, date.round)
+  if (kind) {
+    const [who] = await tx
+      .select({ category: e.category, level: schema.users.examLevel, training: schema.users.examTraining })
+      .from(e)
+      .innerJoin(schema.users, eq(schema.users.id, e.userId))
+      .where(eq(e.id, exam.id))
+    const items = readyList(kind, exam.examKey, { category: who?.category ?? null, level: who?.level ?? null, training: who?.training ?? [] }, dueAt, lang)
+    await tx.insert(schema.checklistItems).values(items.map((text, position) => ({ orgId: exam.orgId, commitmentId: row!.id, text, position })))
   }
   return row!.id
 }

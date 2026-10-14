@@ -1356,6 +1356,8 @@ export interface ExamDateDTO {
   dueAt: string
   allDay: boolean
   status: string
+  /** Its list — what the form asks for, what to carry — and how much is ticked. */
+  ready: { done: number; total: number } | null
 }
 
 export interface ExamDTO {
@@ -1444,6 +1446,7 @@ export {
   type GlanceExam,
   type RenewedCategory,
 } from './examGlance.ts'
+export { readyFor, readyList, type ReadyKind, type ReadyPerson } from './examReady.ts'
 export {
   NOTICE_KINDS,
   datesInNotice,
