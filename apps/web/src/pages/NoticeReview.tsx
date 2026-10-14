@@ -232,6 +232,13 @@ function AddNotice({ onAdded }: { onAdded: () => void }) {
 
 const blankDate = (on = ''): NoticeDate => ({ step: 'exam', on, at: null, round: null, note: null })
 
+/**
+ * The round a title names, filled in when the reviewer picks its exam: RRB's
+ * updates give only "CEN 06/2026", and the CEN is how every later update for
+ * that exam is matched on its own.
+ */
+const roundOf = (title: string) => /\b(?:CEN|RPF)\s*\d{1,2}\/20\d\d\b/i.exec(title)?.[0].toUpperCase().replace(/\s+/g, ' ') ?? null
+
 function NoticeCard({ notice, onDone }: { notice: NoticeDTO; onDone: () => void }) {
   const reviewing = notice.status === 'pending' || notice.status === 'unmatched'
   const [proposals, setProposals] = useState<NoticeProposal[]>(notice.proposals)
@@ -328,7 +335,7 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDTO; onDone: () => void 
                 onClick={() =>
                   proposals[0]
                     ? change(0, { dates: [...proposals[0].dates, blankDate(h)] })
-                    : setProposals([{ examKey: '', cycle: null, kind: 'schedule', dates: [blankDate(h)] }])
+                    : setProposals([{ examKey: '', cycle: roundOf(notice.title), kind: 'schedule', dates: [blankDate(h)] }])
                 }
               >
                 {dayLabel(h)}
@@ -422,7 +429,7 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDTO; onDone: () => void 
           <div className="row">
             <button
               className="link small"
-              onClick={() => setProposals((list) => [...list, { examKey: '', cycle: null, kind: 'other', dates: [] }])}
+              onClick={() => setProposals((list) => [...list, { examKey: '', cycle: roundOf(notice.title), kind: 'other', dates: [] }])}
             >
               + {proposals.length ? 'Another exam' : 'Which exam is it about?'}
             </button>

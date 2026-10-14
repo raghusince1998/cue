@@ -7,6 +7,7 @@ import {
   addExamDate,
   addMock,
   createExam,
+  openForms,
   deleteExam,
   deleteMock,
   examById,
@@ -38,6 +39,8 @@ export async function examRoutes(app: FastifyInstance) {
     // How many dates came from official notices already out: shown, so nobody types them.
     return reply.code(201).send({ ...made.exam, officialDates: made.officialDates })
   })
+
+  app.get('/exams/open-forms', async (req) => openForms(scope(req).sub))
 
   app.get('/exams/:id', async (req, reply) => {
     const { id } = idParam.parse(req.params)

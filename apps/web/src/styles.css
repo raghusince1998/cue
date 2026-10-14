@@ -6121,6 +6121,23 @@ a.link-btn:hover {
   gap: 14px;
 }
 
+/* Forms open now: an exam, its last day, and Add, a line each. */
+.open-forms-list {
+  display: grid;
+  gap: 8px;
+}
+
+.open-form {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.open-form-what {
+  min-width: 0;
+}
+
 /* English / हिन्दी, on every width: the one control a visitor may need first. */
 .site .site-lang {
   border: 1px solid var(--border);

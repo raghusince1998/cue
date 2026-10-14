@@ -1,8 +1,9 @@
 import https from 'node:https'
 import { constants as cryptoConstants } from 'node:crypto'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import {
   cutOffsIn,
+  datesInNotice,
   datesMentioned,
   dateIn,
   examLabel,
@@ -479,7 +480,7 @@ export async function runNoticeWatch(
 ): Promise<WatchRun[]> {
   const cache = new Map<string, Rules | 'refused'>()
   const runs: WatchRun[] = []
-  let pdfBudget = 5
+  let pdfBudget = 10
   for (const source of NOTICE_SOURCES) {
     if (!(await mayRead(fetcher, source.url, cache))) {
       const message = 'Its robots.txt asks robots not to read this page, so it is not read.'
@@ -534,6 +535,8 @@ export async function runNoticeWatch(
         const text = file.body ? await pdfText(new Uint8Array(file.body), 3) : null
         if (text) {
           hints = datesMentioned(text, now)
+          // Each date by what the notice says it is, ready for the reviewer to check rather than type.
+          for (const p of proposals) if (p.dates.length === 0) p.dates = datesInNotice(text, p.examKey, p.kind, now)
           // A result's cut-offs, read for the reviewer to confirm.
           const cutoffs = cutOffsIn(text)
           if (cutoffs.length > 0) for (const p of proposals) if (p.kind === 'result') p.cutoffs = cutoffs
@@ -606,6 +609,7 @@ export async function sourceStatus() {
 /** A notice seen on a page no robot reads, added by the reviewer: proposed from its title, hinted from its text. */
 export async function addNotice(input: { url: string; title: string; board?: string | null; text?: string | null }, now = new Date()): Promise<NoticeDTO> {
   const proposals = await propose({ board: input.board ?? '' }, { key: input.url, url: input.url, title: input.title })
+  if (input.text) for (const p of proposals) if (p.dates.length === 0) p.dates = datesInNotice(input.text, p.examKey, p.kind, now)
   const [row] = await db
     .insert(schema.notices)
     .values({
@@ -867,6 +871,32 @@ export async function noticesForExam(examKey: string | null, cycle: string | nul
 }
 
 /** Twice a day, a little after start. Off with NOTICE_WATCH=off. */
+/**
+ * The reviewers, told when a watch found new notices: nothing reaches an
+ * aspirant until one is approved, so a queue nobody looks at is dates nobody
+ * gets. One push per run, to each admin, naming the boards.
+ */
+export async function tellReviewers(runs: WatchRun[], send: typeof sendToUser = sendToUser): Promise<number> {
+  const found = runs.filter((r) => r.added > 0)
+  const added = found.reduce((n, r) => n + r.added, 0)
+  if (added === 0 || env.adminEmails.length === 0) return 0
+  const reviewers = await db
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(inArray(sql`lower(${schema.users.email})`, env.adminEmails.map((e) => e.toLowerCase())))
+  const boards = [...new Set(found.map((r) => NOTICE_SOURCES.find((s) => s.id === r.source)?.board ?? r.source))].join(', ')
+  let sent = 0
+  for (const r of reviewers) {
+    sent += await send(r.id, {
+      title: added === 1 ? 'An exam notice to check' : `${added} exam notices to check`,
+      body: `New from ${boards}. Nobody tracking those exams hears of them until you approve.`,
+      url: '/admin/notices',
+      tag: 'notices-review',
+    })
+  }
+  return sent
+}
+
 export function startNoticeWatch(intervalMs = 12 * 60 * 60_000) {
   if (!env.noticeWatch) return () => undefined
   let running = false
@@ -877,6 +907,7 @@ export function startNoticeWatch(intervalMs = 12 * 60 * 60_000) {
       const runs = await runNoticeWatch()
       const added = runs.reduce((s, r) => s + r.added, 0)
       if (added > 0) console.log(`[notices] ${added} new notice(s) to review`)
+      await tellReviewers(runs)
     } catch (err) {
       console.error('[notices] run failed:', (err as Error).message)
     } finally {

@@ -1382,9 +1382,22 @@ export interface ExamDTO {
   /** Result lists their roll number was looked for in, and whether it was there. */
   checks?: { noticeId: string; title: string; url: string; found: boolean; page: number | null; means: string; round: string | null; checkedAt: string }[]
 }
+/** An exam whose form is open now, from an approved official notice: offered to add, its dates with it. */
+export interface OpenFormDTO {
+  examKey: string
+  name: string
+  cycle: string | null
+  /** YYYY-MM-DD, the last day to apply. */
+  applyBy: string
+  /** From a board's calendar, not yet its notification. */
+  tentative: boolean
+  url: string
+  title: string
+}
 export { isExamBody, parseExamEmail, type ExamMail, type ExamMailKind } from './examMail.ts'
 export {
   NOTICE_KINDS,
+  datesInNotice,
   datesMentioned,
   listIn,
   noticeKind,

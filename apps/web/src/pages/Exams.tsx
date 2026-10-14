@@ -15,6 +15,7 @@ import {
   type AdmitCard,
   type ExamDTO,
   type ExamStep,
+  type OpenFormDTO,
 } from '@cue/shared'
 import { ApiError, api, apiSendFile } from '../lib/api.ts'
 import { announceChange, useOnChange } from '../lib/changes.ts'
@@ -179,10 +180,18 @@ export default function Exams() {
           <span className="spinner" />
         </div>
       ) : exams.length === 0 ? (
-        <p className="muted small">
-          {w.noExamsHow} <strong>applied for RRB NTPC 2026, RRB Ajmer, reg no …</strong> ·{' '}
-          <strong>REET ka form bharna hai, last date 20 nov</strong>
-        </p>
+        <>
+          <OpenForms
+            onAdded={(official) => {
+              setAddedNote(w.officialAdded(official))
+              void load()
+            }}
+          />
+          <p className="muted small">
+            {w.noExamsHow} <strong>applied for RRB NTPC 2026, RRB Ajmer, reg no …</strong> ·{' '}
+            <strong>REET ka form bharna hai, last date 20 nov</strong>
+          </p>
+        </>
       ) : (
         <>
           <div className="exam-list">
@@ -190,6 +199,13 @@ export default function Exams() {
               <ExamCard key={x.id} exam={x} onOpen={() => show(x.id)} />
             ))}
           </div>
+          <OpenForms
+            key={exams.length}
+            onAdded={(official) => {
+              setAddedNote(w.officialAdded(official))
+              void load()
+            }}
+          />
           {closed.length > 0 && (
             <details className="tracker-closed">
               <summary>
@@ -316,6 +332,69 @@ function ExamsPicker({ onAdded, onOther }: { onAdded: (officialDates: number) =>
         </button>
       </div>
       {error && <p className="error small">{error}</p>}
+    </section>
+  )
+}
+
+/**
+ * Forms open now, from the boards' approved notices, for exams not already
+ * tracked: the last day to apply, and one tap to add the exam with every
+ * date the notices give.
+ */
+function OpenForms({ onAdded }: { onAdded: (officialDates: number) => void }) {
+  const w = useExamWords()
+  const [forms, setForms] = useState<OpenFormDTO[] | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  useEffect(() => {
+    api<OpenFormDTO[]>('/exams/open-forms')
+      .then(setForms)
+      .catch(() => setForms([]))
+  }, [])
+  if (!forms || forms.length === 0) return null
+
+  async function add(f: OpenFormDTO) {
+    const key = `${f.examKey}|${f.cycle ?? ''}`
+    setBusy(key)
+    try {
+      const made = await api<{ officialDates?: number }>('/exams', {
+        method: 'POST',
+        body: { examKey: f.examKey, name: f.name, cycle: f.cycle, stage: 'to_apply' },
+      })
+      setForms((list) => (list ?? []).filter((x) => `${x.examKey}|${x.cycle ?? ''}` !== key))
+      announceChange()
+      onAdded(made.officialDates ?? 0)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <section className="card stack tight open-forms" lang={w.lang}>
+      <h2 className="section-title">{w.openForms}</h2>
+      <p className="muted small">{w.openFormsHow}</p>
+      <ul className="plain open-forms-list">
+        {forms.map((f) => {
+          const key = `${f.examKey}|${f.cycle ?? ''}`
+          return (
+            <li key={key} className="open-form">
+              <span className="open-form-what">
+                <strong>{examLabel({ name: f.name, cycle: f.cycle })}</strong>
+                <span className="muted small">
+                  {' '}
+                  · {w.lastDateOn(w.day(f.applyBy))}
+                  {f.tentative ? ` (${w.tentative})` : ''} ·{' '}
+                  <a href={f.url} target="_blank" rel="noopener noreferrer">
+                    {w.theNoticeLink}
+                  </a>
+                </span>
+              </span>
+              <button className="primary small-btn" onClick={() => void add(f)} disabled={busy !== null}>
+                {w.addThis}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
     </section>
   )
 }

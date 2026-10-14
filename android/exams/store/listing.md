@@ -49,7 +49,8 @@ from the boards move your exams along on their own. Cue reads the official
 notices of SSC, RRB, NTA, CTET, SBI, LIC, RPSC and RSSB itself, and a person
 checks each one before anyone is told, always with the notice's own link.
 Share an admit card's PDF to Cue Exams from WhatsApp or Downloads, and it is
-read straight away.
+read straight away. Forms open now are listed with their last dates: add one
+in a tap, and its dates and reminders come with it.
 
 YOUR ROLL NUMBER IN THE RESULT LIST
 When a result or shortlist is published, Cue looks for your roll number in
@@ -119,7 +120,8 @@ REET जैसी परीक्षाएँ, और 50 से ज़्या�
 SBI, LIC, RPSC और RSSB की नई आधिकारिक सूचनाएँ Cue खुद पढ़ता है, और एक व्यक्ति
 हर सूचना जाँचता है, फिर बताई जाती है — हमेशा सूचना के लिंक के साथ। WhatsApp
 या Downloads से प्रवेश पत्र का PDF Cue Exams में शेयर करें, वह तुरंत पढ़ लिया
-जाता है।
+जाता है। अभी खुले फॉर्म उनकी अंतिम तिथि के साथ दिखते हैं: एक टैप में जोड़ें, उसकी
+तारीखें और रिमाइंडर साथ आ जाते हैं।
 
 परिणाम सूची में आपका रोल नंबर
 परिणाम या शॉर्टलिस्ट आते ही Cue उसमें आपका रोल नंबर ढूँढकर पृष्ठ के साथ बताता

@@ -26,6 +26,7 @@ import {
   type ExamDayInput,
   type ExamStep,
   type NoticeProposal,
+  type OpenFormDTO,
   type ParsedExamLine,
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
@@ -350,6 +351,45 @@ export async function catchUpExam(exam: ExamRow, now = new Date()): Promise<numb
     added += await addNoticeToExam(exam, { url, kind: p.kind, summary: noticeSummary(p), dates: [date] }, now)
   }
   return added
+}
+
+/**
+ * Forms open now: every exam an approved notice gives a last day to apply
+ * still to come — the newest notice for each exam and round — that this
+ * person is not already tracking. Soonest last day first. Adding one brings
+ * its dates with it (catchUpExam), so finding a form is one tap from having
+ * every reminder for it.
+ */
+export async function openForms(userId: string, now = new Date()): Promise<OpenFormDTO[]> {
+  const today = ymd(now)
+  const rows = await db
+    .select({ url: n.url, title: n.title, proposals: n.proposals })
+    .from(n)
+    .where(and(eq(n.status, 'approved'), sql`${n.proposals} @> ${JSON.stringify([{ dates: [{ step: 'apply_by' }] }])}::jsonb`))
+    .orderBy(asc(n.reviewedAt))
+  const latest = new Map<string, OpenFormDTO>()
+  for (const r of rows) {
+    for (const p of r.proposals) {
+      const by = p.dates.find((d) => d.step === 'apply_by')
+      const exam = examByKey(p.examKey)
+      if (!by || !exam) continue
+      latest.set(`${p.examKey}|${p.cycle ?? ''}`, {
+        examKey: p.examKey,
+        name: exam.name,
+        cycle: p.cycle,
+        applyBy: by.on,
+        tentative: /tentative/i.test(by.note ?? ''),
+        url: r.url,
+        title: r.title,
+      })
+    }
+  }
+  const mine = await db.select({ examKey: e.examKey, cycle: e.cycle }).from(e).where(eq(e.userId, userId))
+  return [...latest.values()]
+    .filter((f) => f.applyBy >= today)
+    .filter((f) => !mine.some((m) => m.examKey === f.examKey && (!m.cycle || !f.cycle || m.cycle === f.cycle)))
+    .sort((a, b) => a.applyBy.localeCompare(b.applyBy))
+    .slice(0, 12)
 }
 
 /**

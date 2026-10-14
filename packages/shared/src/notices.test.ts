@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { datesMentioned, listIn, noticeKind, noticeSummary, proposeFromNotice } from './notices.ts'
+import { datesInNotice, datesMentioned, listIn, noticeKind, noticeSummary, proposeFromNotice } from './notices.ts'
 
 /** Notice titles as RSSB and RPSC list them. */
 
@@ -82,4 +82,45 @@ test('the names boards use in their own notices', () => {
   // The Navy's Agniveer test is not the Army's.
   assert.equal(read('SSC', 'Indian Navy Entrance Test (INET) - [Agniveer (MR as SSR ) and SSR (Medical)]'), null)
   assert.deepEqual(read('', 'Army Agniveer CEE 2026 admit card')?.[0], 'agniveer-army')
+})
+
+test('the dates a notice gives, each by the words beside it', () => {
+  const NOW = new Date(2026, 9, 1, 10, 0)
+  // SSC's "Important Dates", as its PDF reads out.
+  const ssc = `Important Dates
+Dates for submission of online applications 22-09-2026 to 21-10-2026
+Last date and time for receipt of online applications 21-10-2026 (2300 hours)
+Last date and time for making online fee payment 22-10-2026 (2300 hours)
+Dates of ‘Window for Application Form Correction’ and online payment of Correction Charges 25-10-2026 to 26-10-2026 (2300 hours)
+Schedule of Computer Based Examination (Tier-I) November-December, 2026`
+  assert.deepEqual(
+    datesInNotice(ssc, 'ssc-cgl', 'notification', NOW).map((d) => [d.step, d.on]),
+    [['apply_by', '2026-10-21'], ['fee_by', '2026-10-22'], ['correction', '2026-10-26']],
+    'a month with no day is no date',
+  )
+  // A table pulled apart: the label, then its date on the next line.
+  const table = `Opening date of online application
+01.10.2026
+Last date for receipt of online application
+15.11.2026
+Date of Examination
+20.12.2026`
+  assert.deepEqual(datesInNotice(table, 'rssb-patwari', 'notification', NOW).map((d) => [d.step, d.on]), [['apply_by', '2026-11-15'], ['exam', '2026-12-20']])
+  // Two dates in one paragraph, each its own.
+  assert.deepEqual(
+    datesInNotice('The e-Admit Cards will be available for download from 05.11.2026. The examination will be held on 12.11.2026 in two shifts.', 'rrb-ntpc', 'admit_card', NOW).map((d) => [d.step, d.on]),
+    [['admit_card', '2026-11-05'], ['exam', '2026-11-12']],
+  )
+  // An answer key: only the window to challenge it.
+  assert.deepEqual(
+    datesInNotice('Candidates may submit objections, if any, online from 10.10.2026 (06:00 PM) to 12.10.2026 (06:00 PM).', 'ssc-chsl', 'answer_key', NOW).map((d) => [d.step, d.on]),
+    [['answer_key', '2026-10-12']],
+  )
+  // In Hindi, as RSSB and RPSC write them.
+  assert.deepEqual(
+    datesInNotice('ऑनलाइन आवेदन की अंतिम तिथि: 20.11.2026\nपरीक्षा तिथि: 14.12.2026', 'rssb-vdo', 'notification', NOW).map((d) => [d.step, d.on]),
+    [['apply_by', '2026-11-20'], ['exam', '2026-12-14']],
+  )
+  assert.deepEqual(datesInNotice('Result declared on 05.09.2026', 'ssc-cgl', 'result', NOW), [], 'a result proposes no dates')
+  assert.deepEqual(datesInNotice('Last date for receipt of online applications 21-09-2026', 'ssc-cgl', 'notification', NOW), [], 'only dates still to come')
 })

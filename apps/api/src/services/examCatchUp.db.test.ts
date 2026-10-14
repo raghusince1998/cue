@@ -137,3 +137,37 @@ test('every board Cue reads by itself holds an exam in the catalog, and the watc
     assert.ok(EXAMS.some((x) => x.body === body), `${body} holds an exam in the catalog`)
   }
 })
+
+test('forms open now: the last days to apply still to come, for exams not already tracked', async () => {
+  const token = as(admin, 'admin@test.local')
+  const added = await call(token, 'POST', '/admin/notices', { url: 'https://ssc.gov.in/ssc-calender', title: 'SSC calendar 2027', board: null })
+  const proposals = [
+    {
+      examKey: 'ssc-chsl',
+      cycle: '2027',
+      kind: 'notification',
+      dates: [{ step: 'apply_by', on: '2027-05-01', at: null, round: null, note: 'Tentative, from the SSC calendar' }],
+      list: null,
+    },
+  ]
+  await call(token, 'POST', `/admin/notices/${added.body.id}/approve`, { proposals })
+
+  // Asha tracks both: nothing is offered to her.
+  const hers = (await call(as(asha, 'asha@test.local'), 'GET', '/exams/open-forms')).body as unknown as { examKey: string }[]
+  assert.deepEqual(hers.map((f) => f.examKey), [])
+  const forms = (await call(token, 'GET', '/exams/open-forms')).body as unknown as { examKey: string; cycle: string; applyBy: string; tentative: boolean }[]
+  assert.deepEqual(
+    forms.map((f) => [f.examKey, f.cycle, f.applyBy, f.tentative]),
+    [
+      ['ssc-cgl', '2026', '2027-01-10', false],
+      ['ssc-chsl', '2027', '2027-05-01', true],
+    ],
+    'soonest first; the calendar’s marked tentative',
+  )
+
+  // Added from the list, it comes with its date and leaves the list.
+  const made = await call(token, 'POST', '/exams', { examKey: 'ssc-chsl', name: 'SSC CHSL', cycle: '2027', stage: 'to_apply' })
+  assert.equal(made.body.officialDates, 1)
+  const after = (await call(token, 'GET', '/exams/open-forms')).body as unknown as { examKey: string }[]
+  assert.deepEqual(after.map((f) => f.examKey), ['ssc-cgl'])
+})

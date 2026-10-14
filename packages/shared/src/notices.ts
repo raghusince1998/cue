@@ -76,6 +76,64 @@ export function datesMentioned(text: string, now = new Date()): string[] {
   return [...out].sort().slice(0, 20)
 }
 
+const DAY = /\b\d{1,2}\s*[/.-]\s*\d{1,2}\s*[/.-]\s*20\d\d\b|\b\d{1,2}(?:st|nd|rd|th)?[\s-]*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s,.-]*20\d\d\b/gi
+
+/**
+ * The dates a notice's own words give, each by what is said beside it: the
+ * last day to apply, to pay the fee, the correction window, the exam, the
+ * admit card, the window to challenge an answer key. Read out of a PDF, a
+ * table often leaves a label on one line and its date on the next, so a
+ * line that is only a date takes the words of the line before. Only dates
+ * still to come, for the reviewer to check rather than type.
+ */
+export function datesInNotice(text: string, examKey: string, kind: NoticeKind, now = new Date()): NoticeDate[] {
+  if (kind === 'result' || kind === 'dv') return []
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  const out: NoticeDate[] = []
+  const add = (step: ExamStep, on: string, round: string | null = null) => {
+    if (on >= today && !out.some((d) => d.step === step && d.round === round)) out.push({ step, on, at: null, round, note: null })
+  }
+  // Lines, and sentences within them: "Admit cards from 5 Nov. The exam will be held on 12 Nov."
+  const lines = text
+    .split(/\r?\n|(?<=[.।])\s+(?=[A-Zऀ-ॿ])/)
+    .map((l) => l.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+  let label = ''
+  for (const line of lines) {
+    const days = [...line.matchAll(DAY)].map((m) => dateIn(m[0])).filter((d): d is string => d !== null)
+    if (days.length === 0) {
+      label = line.length <= 200 ? line : ''
+      continue
+    }
+    const own = line.replace(DAY, ' ').replace(/[\s:–\-(),.]|to|from|hours?|hrs/gi, '')
+    const words = own.length < 8 ? `${label} ${line}` : line
+    label = ''
+    const first = days[0]!
+    const last = days[days.length - 1]!
+    const range = days.length > 1
+    if (/\b(?:opening|commencement|starting)\s+date\b|\bstart\s+date\b/i.test(words) && !/\b(?:last|closing)\b/i.test(words)) continue
+    if (/objection|challenge|representation|आपत्ति/i.test(words)) {
+      if (kind === 'answer_key' || /answer\s*key|उत्तर\s*कुंजी/i.test(words)) add('answer_key', last)
+      continue
+    }
+    if (kind === 'answer_key') continue
+    if (/correction|edit\s+window|संशोधन|सुधार/i.test(words)) add('correction', last)
+    else if (/\bfee\b|\bfees\b|payment|शुल्क/i.test(words) && /\b(?:last|closing|up\s*to|till)\b|अंतिम|अन्तिम/i.test(words)) add('fee_by', last)
+    else if (
+      (/\b(?:last|closing)\s+date\b|\bup\s*to\b|\btill\b|अंतिम\s+तिथि|अन्तिम\s+तिथि|अंतिम\s+दिनांक/i.test(words) || range) &&
+      /appli|registration|submission|form|आवेदन/i.test(words)
+    )
+      add('apply_by', last)
+    else if (/admit\s*cards?|e-?admit|call\s+letters?|hall\s+tickets?|प्रवेश\s*पत्र/i.test(words)) add('admit_card', first)
+    else if (
+      /date\s+of\s+(?:the\s+)?(?:exam(?:ination)?|test|cbt)|(?:exam(?:ination)?|test|cbt)\s+(?:date|will\s+be\s+(?:held|conducted))|\b(?:held|conducted|scheduled)\s+(?:on|from)\b|परीक्षा\s+(?:तिथि|दिनांक)|परीक्षा\s+का\s+आयोजन/i.test(words)
+    )
+      add('exam', first, roundIn(examKey, words))
+  }
+  return out
+}
+
 /**
  * What a notice proposes for the exam it names: from its title — with the
  * board's name before it, so "Patwari 2025 : …" on RSSB's page reads as

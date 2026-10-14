@@ -219,8 +219,12 @@ test('new notices after it: proposed, and a PDF read for its dates only where al
 
   const patwari = (await svc.listNotices('pending')).find((n) => n.title.startsWith('Patwari'))!
   assert.equal(patwari.title, 'Patwari 2025 : Press Note regarding Exam Schedule (Exam Dates & Time)')
-  assert.deepEqual(patwari.proposals, [{ examKey: 'rssb-patwari', cycle: '2025', kind: 'schedule', dates: [], list: null }])
-  assert.deepEqual(patwari.hints, ['2026-11-18'], 'the dates in its PDF, for the reviewer')
+  assert.deepEqual(
+    patwari.proposals,
+    [{ examKey: 'rssb-patwari', cycle: '2025', kind: 'schedule', dates: [{ step: 'exam', on: '2026-11-18', at: null, round: null, note: null }], list: null }],
+    'the exam day its PDF gives, proposed for the reviewer to check',
+  )
+  assert.deepEqual(patwari.hints, ['2026-11-18'], 'and every date in it, as hints')
   const vdo = (await svc.listNotices('pending')).find((n) => n.title.startsWith('Village'))!
   assert.deepEqual(vdo.hints, [])
 })
@@ -297,4 +301,44 @@ test('RRB: a CEN the reviewer matched once is matched from then on', async () =>
   await svc.runNoticeWatch(NOW, fakeFetch, noPause)
   const next = (await svc.listNotices('pending')).find((n) => n.title === 'RRB CEN 06/2026: E-Call Letters (14-10-2026)')!
   assert.deepEqual(next.proposals, [{ examKey: 'rrb-ntpc', cycle: 'CEN 06/2026', kind: 'admit_card', dates: [], list: null }])
+})
+
+test('the reviewers are told when a watch finds something, and only then', async () => {
+  const sent: { userId: string; title: string; body: string; url?: string }[] = []
+  const send = (async (userId: string, p: { title: string; body: string; url?: string }) => {
+    sent.push({ userId, ...p })
+    return 1
+  }) as unknown as Parameters<typeof svc.tellReviewers>[1]
+  assert.equal(await svc.tellReviewers([{ source: 'rssb-news', ok: true, message: 'Nothing new.', added: 0 }], send), 0)
+  assert.equal(sent.length, 0, 'nothing new, nobody bothered')
+
+  await svc.tellReviewers(
+    [
+      { source: 'ssc-notice-board', ok: true, message: '2 new.', added: 2 },
+      { source: 'rrb-updates', ok: true, message: '1 new.', added: 1 },
+    ],
+    send,
+  )
+  assert.deepEqual(sent, [
+    {
+      userId: admin.userId,
+      title: '3 exam notices to check',
+      body: 'New from SSC, RRB. Nobody tracking those exams hears of them until you approve.',
+      url: '/admin/notices',
+      tag: 'notices-review',
+    },
+  ])
+})
+
+test('a notice added by hand with its text comes with its dates filled in', async () => {
+  const added = await call(as(admin, 'admin@test.local'), 'POST', '/admin/notices', {
+    url: 'https://ssc.gov.in/notice/chsl-2027',
+    title: 'Combined Higher Secondary (10+2) Level Examination, 2027: Notice',
+    board: 'SSC',
+    text: 'Last date and time for receipt of online applications 20-11-2027 (2300 hours)\nLast date and time for making online fee payment 21-11-2027 (2300 hours)',
+  })
+  assert.deepEqual(
+    added.body.proposals[0].dates.map((d: { step: string; on: string }) => [d.step, d.on]),
+    [['apply_by', '2027-11-20'], ['fee_by', '2027-11-21']],
+  )
 })
