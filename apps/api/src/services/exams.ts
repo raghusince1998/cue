@@ -7,6 +7,8 @@ import {
   examStepTitle,
   isLaterExamStage,
   isOpenExamStage,
+  expectedScore,
+  markingFor,
   STAGE_HI,
   examClashes,
   examFit,
@@ -151,6 +153,8 @@ function toDTO(row: ExamRow, dates: Awaited<ReturnType<typeof datesOf>>): ExamDT
     centreCity: row.centreCity,
     notes: row.notes,
     category: row.category,
+    expected: row.expectedScores,
+    examDay: row.examDay ?? null,
     closedAt: row.closedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     dates: dates
@@ -191,10 +195,11 @@ export async function examById(userId: string, id: string): Promise<ExamDTO | nu
   if (!row) return null
   // Official notices about it, as checked and approved, and the result lists
   // its roll number was looked for in: read here, never sent from here.
-  const { noticesForExam, checksForExam } = await import('./noticeWatch.ts')
+  const { noticesForExam, checksForExam, lastCutoffsFor } = await import('./noticeWatch.ts')
   return {
     ...toDTO(row, await datesOf([id])),
     notices: await noticesForExam(row.examKey, row.cycle),
+    lastCutoffs: await lastCutoffsFor(row.examKey),
     checks: await checksForExam(row.id, row.examKey),
     study: await studyFor(row.id),
     mocks: await mocksFor(row.id),
@@ -441,6 +446,49 @@ async function examDaysOf(userId: string, now: Date): Promise<ExamDayItem[]> {
   })
 }
 
+/**
+ * A score worked out from the answer key: right and wrong answers, by the
+ * board's marking (markingFor) or the one the person typed for a paper Cue
+ * does not know. Kept by round, the latest replacing the last.
+ */
+export async function saveExpectedScore(
+  userId: string,
+  id: string,
+  input: { round: string | null; right: number; wrong: number; questions?: number; perRight?: number; perWrong?: number },
+  now = new Date(),
+): Promise<ExamDTO | null | 'no_marking' | 'too_many'> {
+  const row = await owned(userId, id)
+  if (!row) return null
+  const known = markingFor(row.examKey, input.round)
+  const marking =
+    input.questions !== undefined && input.perRight !== undefined && input.perWrong !== undefined
+      ? { questions: input.questions, right: input.perRight, wrong: input.perWrong }
+      : known
+  if (!marking) return 'no_marking'
+  if (input.right + input.wrong > marking.questions) return 'too_many'
+  const { score, outOf } = expectedScore(input.right, input.wrong, marking)
+  const key = input.round ?? ''
+  await db
+    .update(e)
+    .set({
+      expectedScores: {
+        ...row.expectedScores,
+        [key]: {
+          right: input.right,
+          wrong: input.wrong,
+          questions: marking.questions,
+          perRight: marking.right,
+          perWrong: marking.wrong,
+          score,
+          outOf,
+          savedAt: now.toISOString(),
+        },
+      },
+    })
+    .where(eq(e.id, id))
+  return examById(userId, id)
+}
+
 /** Exam days that collide: two on one day, or following days in two cities. */
 export async function clashesFor(userId: string, now = new Date()): Promise<ExamClash[]> {
   return examClashes(await examDaysOf(userId, now))
@@ -677,6 +725,13 @@ export async function saveExamDay(orgId: string, userId: string, card: ExamDayIn
         centreName: card.centreName ?? exam.centreName,
         centreAddress: card.centreAddress ?? exam.centreAddress,
         centreCity: card.centreCity ?? exam.centreCity,
+        examDay: {
+          date: card.date,
+          reportingAt: card.reportingAt ?? null,
+          gateClosesAt: card.gateClosesAt ?? null,
+          startsAt: card.startsAt ?? null,
+          endsAt: card.endsAt ?? null,
+        },
         ...(stage ? { stage, stageChangedAt: now } : {}),
       })
       .where(eq(e.id, exam.id))

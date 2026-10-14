@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { createExamInput, examDateInput, examDayInput, mockScoreInput, readAdmitCard, studyPlanInput, updateExamInput } from '@cue/shared'
+import { createExamInput, examDateInput, examDayInput, expectedScoreInput, mockScoreInput, readAdmitCard, studyPlanInput, updateExamInput } from '@cue/shared'
 import { scope } from '../auth.ts'
 import { findNumber, numbersIn } from '@cue/shared'
 import {
@@ -8,6 +8,7 @@ import {
   addMock,
   createExam,
   clashesFor,
+  saveExpectedScore,
   openForms,
   deleteExam,
   deleteMock,
@@ -44,6 +45,17 @@ export async function examRoutes(app: FastifyInstance) {
   app.get('/exams/open-forms', async (req) => openForms(scope(req).sub))
 
   app.get('/exams/clashes', async (req) => clashesFor(scope(req).sub))
+
+  // A score from the answer key: right and wrong, by the board's marking or one typed in.
+  app.put('/exams/:id/expected', async (req, reply) => {
+    const { id } = idParam.parse(req.params)
+    const body = expectedScoreInput.parse(req.body)
+    const saved = await saveExpectedScore(scope(req).sub, id, body)
+    if (saved === null) return reply.code(404).send({ error: 'not_found' })
+    if (saved === 'no_marking') return reply.code(400).send({ error: 'no_marking' })
+    if (saved === 'too_many') return reply.code(400).send({ error: 'too_many' })
+    return saved
+  })
 
   app.get('/exams/:id', async (req, reply) => {
     const { id } = idParam.parse(req.params)

@@ -942,6 +942,26 @@ export async function noticesForExam(examKey: string | null, cycle: string | nul
     }))
 }
 
+/**
+ * The newest cut-offs Cue holds for an exam, of any year: what an expected
+ * score is held against before this year's result is out. From the most
+ * recently approved result notice that gave them.
+ */
+export async function lastCutoffsFor(examKey: string | null) {
+  if (!examKey) return null
+  const rows = await db
+    .select({ title: schema.notices.title, url: schema.notices.url, proposals: schema.notices.proposals })
+    .from(schema.notices)
+    .where(and(eq(schema.notices.status, 'approved'), sql`${schema.notices.proposals} @> ${JSON.stringify([{ examKey }])}::jsonb`))
+    .orderBy(desc(schema.notices.reviewedAt))
+    .limit(30)
+  for (const r of rows) {
+    const p = r.proposals.find((x) => x.examKey === examKey && (x.cutoffs ?? []).length > 0)
+    if (p) return { title: r.title, url: r.url, cycle: p.cycle, round: p.list?.round ?? null, cutoffs: p.cutoffs! }
+  }
+  return null
+}
+
 /** Twice a day, a little after start. Off with NOTICE_WATCH=off. */
 /**
  * The reviewers, told when a watch found new notices: nothing reaches an

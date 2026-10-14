@@ -1386,6 +1386,31 @@ export interface ExamDTO {
   mocks?: MockScoreDTO[]
   /** Result lists their roll number was looked for in, and whether it was there. */
   checks?: { noticeId: string; title: string; url: string; found: boolean; page: number | null; means: string; round: string | null; checkedAt: string }[]
+  /** Scores worked out from the answer key, by round ('' for an exam of one). */
+  expected?: Record<string, ExpectedScoreDTO>
+  /** The exam day as the admit card gave it, for saying it to family. */
+  examDay?: { date: string; reportingAt: string | null; gateClosesAt: string | null; startsAt: string | null; endsAt: string | null } | null
+  /** The newest cut-offs Cue holds for this exam, of any year: what a score is held against. On the single-exam fetch. */
+  lastCutoffs?: { title: string; url: string; cycle: string | null; round: string | null; cutoffs: { category: string; marks: number }[] } | null
+}
+/** Right and wrong answers from the answer key; the marking only for a paper Cue does not know. */
+export const expectedScoreInput = z.object({
+  round: z.string().max(40).nullable(),
+  right: z.number().int().min(0).max(1000),
+  wrong: z.number().int().min(0).max(1000),
+  questions: z.number().int().min(1).max(1000).optional(),
+  perRight: z.number().min(0).max(100).optional(),
+  perWrong: z.number().min(0).max(100).optional(),
+})
+export interface ExpectedScoreDTO {
+  right: number
+  wrong: number
+  questions: number
+  perRight: number
+  perWrong: number
+  score: number
+  outOf: number
+  savedAt: string
 }
 /** An exam whose form is open now, from an approved official notice: offered to add, its dates with it. */
 export interface OpenFormDTO {
@@ -1403,6 +1428,7 @@ export interface OpenFormDTO {
 }
 export { isExamBody, parseExamEmail, type ExamMail, type ExamMailKind } from './examMail.ts'
 export { examClashes, type ExamClash, type ExamDayItem } from './examClash.ts'
+export { MARKING, expectedScore, markingFor, type Marking } from './marking.ts'
 export {
   NOTICE_KINDS,
   datesInNotice,

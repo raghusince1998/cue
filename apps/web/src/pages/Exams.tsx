@@ -13,6 +13,7 @@ import {
   examStages,
   watchedBoard,
   isOpenExamStage,
+  markingFor,
   subjectsFor,
   type AdmitCard,
   type ExamClash,
@@ -963,6 +964,8 @@ function ExamSheet({
         </>
       )}
 
+      <Expected exam={exam} onChanged={() => void load()} />
+
       <Results exam={exam} onChecked={() => void load()} />
 
       <span className="label-text">{w.examDay}</span>
@@ -983,6 +986,7 @@ function ExamSheet({
         <button className="ghost small-btn" onClick={onReadCard}>
           {w.readTheCard}
         </button>
+        {exam.examDay && <ShareExamDay exam={exam} />}
       </div>
 
       <span className="label-text">{w.details}</span>
@@ -1224,6 +1228,173 @@ function StudyPlan({ exam, onChanged }: { exam: ExamDTO; onChanged: () => void }
 }
 
 /** Mock tests: each score kept, the trend at a glance, and a score added. */
+const marks = (n: number) => String(Math.round(n * 100) / 100)
+
+/**
+ * A score worked out from the answer key: right and wrong answers by the
+ * board's marking where Cue knows it, or one typed in; then held against
+ * the newest cut-off Cue has for their category — a guide, said as one.
+ */
+function Expected({ exam, onChanged }: { exam: ExamDTO; onChanged: () => void }) {
+  const w = useExamWords()
+  // Written papers only: an answer key has nothing to say of a skill test, a medical or an interview.
+  const NOT_MARKED = ['skill', 'dv', 'medical', 'pet', 'interview', 'counselling', 'ssb', 'rally', 'language']
+  const rounds = (examByKey(exam.examKey)?.rounds ?? []).filter((r) => !NOT_MARKED.includes(r.key))
+  const firstKnown = rounds.find((r) => markingFor(exam.examKey, r.key))?.key ?? rounds[0]?.key ?? null
+  const [round, setRound] = useState<string | null>(firstKnown)
+  const known = markingFor(exam.examKey, round)
+  const [other, setOther] = useState(false)
+  const [right, setRight] = useState('')
+  const [wrong, setWrong] = useState('')
+  const [questions, setQuestions] = useState(String(known?.questions ?? 100))
+  const [perRight, setPerRight] = useState(String(known?.right ?? 1))
+  const [perWrong, setPerWrong] = useState(String(known ? marks(known.wrong) : 0))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const custom = other || !known
+  const saved = exam.expected?.[round ?? '']
+
+  async function save() {
+    setBusy(true)
+    setError(null)
+    try {
+      await api(`/exams/${exam.id}/expected`, {
+        method: 'PUT',
+        body: {
+          round,
+          right: Number(right),
+          wrong: Number(wrong || 0),
+          ...(custom ? { questions: Number(questions), perRight: Number(perRight), perWrong: Number(perWrong) } : {}),
+        },
+      })
+      onChanged()
+    } catch (err) {
+      setError(err instanceof ApiError && (err.data as { error?: string } | null)?.error === 'too_many' ? w.tooMany : (err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Against the newest cut-off Cue holds, in their category (or the open one).
+  // Only one for the same round: a CBT 1 cut-off says nothing of a CBT 2 score.
+  const cut = exam.lastCutoffs && (!exam.lastCutoffs.round || !round || exam.lastCutoffs.round === round) ? exam.lastCutoffs : null
+  const category = exam.category ?? 'UR'
+  const line = cut?.cutoffs.find((c) => c.category === category)
+  return (
+    <>
+      <span className="label-text">{w.expectedTitle}</span>
+      <p className="muted small">{w.expectedHow}</p>
+      <div className="tracker-fields">
+        {rounds.length > 1 && (
+          <label>
+            {w.round}
+            <select value={round ?? ''} onChange={(e) => setRound(e.target.value || null)}>
+              {rounds.map((r) => (
+                <option key={r.key} value={r.key}>
+                  {w.stage(exam.examKey, r.key)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label>
+          {w.right}
+          <input type="number" min={0} inputMode="numeric" value={right} onChange={(e) => setRight(e.target.value)} />
+        </label>
+        <label>
+          {w.wrong}
+          <input type="number" min={0} inputMode="numeric" value={wrong} onChange={(e) => setWrong(e.target.value)} />
+        </label>
+        {custom && (
+          <>
+            <label>
+              {w.questions}
+              <input type="number" min={1} inputMode="numeric" value={questions} onChange={(e) => setQuestions(e.target.value)} />
+            </label>
+            <label>
+              {w.perRight}
+              <input type="number" min={0} step="0.25" inputMode="decimal" value={perRight} onChange={(e) => setPerRight(e.target.value)} />
+            </label>
+            <label>
+              {w.perWrong}
+              <input type="number" min={0} step="0.01" inputMode="decimal" value={perWrong} onChange={(e) => setPerWrong(e.target.value)} />
+            </label>
+          </>
+        )}
+      </div>
+      {known && !other && (
+        <p className="muted small">
+          {w.markingKnown(known.questions, marks(known.right), marks(known.wrong))}{' '}
+          <button className="link small" onClick={() => setOther(true)}>
+            {w.markingOther}
+          </button>
+        </p>
+      )}
+      <div className="row">
+        <button className="primary small-btn" onClick={() => void save()} disabled={busy || right === ''}>
+          {w.workItOut}
+        </button>
+      </div>
+      {error && <p className="error small">{error}</p>}
+      {saved && (
+        <div className="small stack tight exam-expected">
+          <strong>{w.expectedIs(marks(saved.score), marks(saved.outOf), saved.right, saved.wrong)}</strong>
+          {cut && line && (
+            <span>
+              {w.cutoffAgainst(cut.title, category, marks(line.marks))}{' '}
+              {saved.score >= line.marks ? w.aboveBy(marks(saved.score - line.marks)) : w.belowBy(marks(line.marks - saved.score))}
+            </span>
+          )}
+          {cut && line && <span className="muted">{w.cutoffCaveat}</span>}
+        </div>
+      )}
+    </>
+  )
+}
+
+/**
+ * The exam day, said to whoever takes them there: the day, when to report,
+ * when the gate closes, the centre and a map — in one tap, in their
+ * language. Never the roll number: it is not needed to get there.
+ */
+function ShareExamDay({ exam }: { exam: ExamDTO }) {
+  const w = useExamWords()
+  const day = exam.examDay!
+  const clock = (t: string) => new Date(`2000-01-01T${t}:00`).toLocaleTimeString(w.lang === 'hi' ? 'hi-IN' : 'en-IN', { hour: 'numeric', minute: '2-digit' })
+  const centre = [exam.centreName, exam.centreAddress, exam.centreCity].filter(Boolean).join(', ')
+  const times = [
+    day.reportingAt ? w.reportBy(clock(day.reportingAt)) : null,
+    day.gateClosesAt ? w.gateAt(clock(day.gateClosesAt)) : null,
+    day.startsAt ? w.examAt(clock(day.startsAt), day.endsAt ? clock(day.endsAt) : null) : null,
+  ].filter(Boolean)
+  const text = [
+    `${examLabel(exam)} — ${w.day(day.date)}`,
+    times.join(' · ') || null,
+    centre ? w.centreIs(centre) : null,
+    centre ? w.mapIs(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(centre)}`) : null,
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  async function send() {
+    if (navigator.share) {
+      try {
+        await navigator.share({ text })
+        return
+      } catch {
+        // Closed without sending, or not allowed here: WhatsApp is the way most families talk.
+      }
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
+  }
+
+  return (
+    <button className="ghost small-btn" onClick={() => void send()}>
+      {w.shareDay}
+    </button>
+  )
+}
+
 function Mocks({ exam, onChanged }: { exam: ExamDTO; onChanged: () => void }) {
   const w = useExamWords()
   const mocks = exam.mocks ?? []

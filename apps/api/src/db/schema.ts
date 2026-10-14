@@ -427,6 +427,10 @@ export const exams = pgTable(
     /** UR, EWS, OBC, MBC, SC or ST: for reading cut-offs. */
     category: text('category'),
     closedAt: timestamp('closed_at', { withTimezone: true }),
+    /** Scores worked out from the answer key, by round ('' for an exam of one paper). */
+    expectedScores: jsonb('expected_scores').$type<Record<string, import('@cue/shared').ExpectedScoreDTO>>().notNull().default({}),
+    /** The exam day as the admit card gave it: for telling family. */
+    examDay: jsonb('exam_day').$type<NonNullable<import('@cue/shared').ExamDTO['examDay']>>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('exams_user_idx').on(t.userId)],
