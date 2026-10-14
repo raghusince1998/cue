@@ -61,6 +61,9 @@ PREPARING
   the exam.
 • Mock test scores, with your trend.
 • A countdown to the exam.
+• Every Sunday evening, your week: study sessions done, mock scores against
+  the week before, and the dates coming up.
+• EWS, OBC or MBC: a yearly 1 April reminder to get that year's certificate.
 • Your photo and signature resized to the form's pixels and KB, on your
   phone — never uploaded.
 
@@ -131,6 +134,9 @@ SBI, LIC, RPSC और RSSB की नई आधिकारिक सूचन�
 • पढ़ाई की योजना: परीक्षा के विषय पूरे हफ़्ते में, परीक्षा से एक दिन पहले तक।
 • मॉक टेस्ट के अंक और आपकी प्रगति।
 • परीक्षा में कितने दिन बचे।
+• हर रविवार शाम आपका हफ़्ता: पढ़ाई के पूरे सत्र, पिछले हफ़्ते के मुकाबले मॉक
+  टेस्ट के अंक, और आगे की तारीखें।
+• EWS, OBC या MBC: हर 1 अप्रैल को उस साल का प्रमाण पत्र बनवाने का रिमाइंडर।
 • फोटो और हस्ताक्षर फॉर्म के माप (px और KB) में — फोन पर ही, कहीं अपलोड नहीं।
 
 पूरी तरह हिन्दी में

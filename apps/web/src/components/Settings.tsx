@@ -10,7 +10,7 @@ import { TemplateManager } from './QuickMessage.tsx'
 import { api } from '../lib/api.ts'
 import { locale, msg, rich, t } from '../lib/i18n.tsx'
 import { useAuth } from '../lib/auth.tsx'
-import { describeWorkHours, hasWork } from '@cue/shared'
+import { FILLABLE, describeWorkHours, hasWork, sectionsFor } from '@cue/shared'
 
 interface Me {
   id: string
@@ -25,6 +25,7 @@ interface Preferences {
   prepPrompts: boolean
   weeklyReviewEnabled: boolean
   weeklyReviewHour: number
+  examWeekEnabled: boolean
   morningBriefEnabled: boolean
   morningBriefHour: number
   reportEnabled: boolean
@@ -83,6 +84,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
   // Work hours only mean something to someone with a working life.
   const { me: account, saveLanguage } = useAuth()
   const working = hasWork(account?.uses ?? [])
+  // The Sunday prep report is for whoever has exams.
+  const aspirant = account ? sectionsFor(account.uses, FILLABLE, account.filled ?? []).includes('exams') : false
 
   useEffect(() => {
     void api<Preferences>('/me/preferences').then(setPrefs)
@@ -132,6 +135,24 @@ export function Settings({ onClose }: { onClose: () => void }) {
       setMessage(
         res.empty
           ? t('Nothing happened this week and nothing is booked next, so there is nothing to review yet.')
+          : res.delivered > 0
+            ? t('Sent: “{title}”', { title: res.title ?? '' })
+            : t('No device registered — enable notifications on the Today screen first.'),
+      )
+    } catch (err) {
+      setMessage((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function testExamWeek() {
+    setBusy(true)
+    try {
+      const res = await api<{ delivered: number; title: string | null; empty?: boolean }>('/me/preferences/test-exam-week', { method: 'POST' })
+      setMessage(
+        res.empty
+          ? t('No study sessions, mock tests or exam dates this week yet, so there is nothing to report.')
           : res.delivered > 0
             ? t('Sent: “{title}”', { title: res.title ?? '' })
             : t('No device registered — enable notifications on the Today screen first.'),
@@ -557,6 +578,35 @@ export function Settings({ onClose }: { onClose: () => void }) {
       )}
 
       <hr className="rule" />
+
+      {/* Sunday evening: the week's preparation, for whoever has exams. */}
+      {aspirant && (
+        <>
+          <div className="setting-row has-infotip">
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={prefs.examWeekEnabled}
+                disabled={busy}
+                onChange={(e) => void update({ examWeekEnabled: e.target.checked })}
+              />
+              <span>{t('Every Sunday evening, my exam prep report')}</span>
+            </label>
+            <InfoTip label={t('What is the prep report?')}>
+              {t(
+                'The study sessions you did this week against those planned, your mock test scores against the week before, the exam dates coming next week, and how far off your next exam is. Nothing on a week with nothing in it.',
+              )}
+            </InfoTip>
+          </div>
+          {prefs.examWeekEnabled && (
+            <button className="ghost small-btn" onClick={testExamWeek} disabled={busy}>
+              {t('Send this week’s now')}
+            </button>
+          )}
+
+          <hr className="rule" />
+        </>
+      )}
 
       {/* The why sits behind the icon: worth reading once, not every time
           Settings opens. Outside the label, so tapping it never ticks the box. */}

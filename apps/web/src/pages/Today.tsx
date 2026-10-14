@@ -1,9 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { WINDOW_LABELS, hasWork, type CommitmentDTO, type Sphere } from '@cue/shared'
+import { FILLABLE, WINDOW_LABELS, hasWork, sectionsFor, type CommitmentDTO, type Sphere } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
 import { UsesPicker } from '../components/UsesPicker.tsx'
 import { Deliveries } from '../components/Deliveries.tsx'
+import { ExamGlance } from '../components/ExamGlance.tsx'
 import { ConnectMailCard } from '../components/ConnectMailCard.tsx'
 import { api } from '../lib/api.ts'
 import { dayBounds, dayLabel, formatSpan, overdueBy } from '../lib/time.ts'
@@ -817,6 +818,8 @@ export default function Today() {
 
       {/* What the app noticed, before what it was told. */}
       <aside className="today-aside stack">
+        {/* For an aspirant, the exams lead: a last date missed costs a year. */}
+        {me && sectionsFor(me.uses, FILLABLE, me.filled ?? []).includes('exams') && <ExamGlance />}
         <NearbyIntentions />
         {/* Above the brief: a parcel at the door today cannot wait for a scroll. */}
         <Deliveries />

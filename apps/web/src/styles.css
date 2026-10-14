@@ -6789,6 +6789,47 @@ a.link-btn:hover {
   color: var(--warn);
 }
 
+/* Today, for an aspirant: the next exam, last dates soon, clashes. */
+.exam-glance {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.exam-glance-head {
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.exam-glance-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.exam-glance-soon {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.exam-glance-near,
+.exam-glance-clash {
+  color: var(--warn);
+}
+
+.exam-certificate {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.exam-certificate p {
+  margin: 0;
+}
+
 .exam-study-form textarea {
   font-size: 14px;
 }

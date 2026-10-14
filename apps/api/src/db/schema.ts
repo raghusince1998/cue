@@ -104,6 +104,12 @@ export const users = pgTable(
     examTraining: text('exam_training').array().notNull().default(sql`'{}'::text[]`),
     /** Told when a form opens for an exam like the ones they track. */
     examFormAlerts: boolean('exam_form_alerts').notNull().default(true),
+    /** Every Sunday evening, the week's preparation, for whoever tracks an exam. */
+    examWeekEnabled: boolean('exam_week_enabled').notNull().default(true),
+    /** Local date of the last Sunday report, so a restart cannot double-send. */
+    lastExamWeekOn: date('last_exam_week_on'),
+    /** The yearly 1 April reminder to get a new EWS/OBC/MBC certificate. */
+    certificateSeriesId: uuid('certificate_series_id').references((): AnyPgColumn => recurrences.id, { onDelete: 'set null' }),
     /**
      * Work and personal kept apart: nagging reminders for one wait while it is
      * the other's time. Only for someone with a working life (see hasWork).

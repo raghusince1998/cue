@@ -11,6 +11,8 @@ import {
   examByKey,
   examLabel,
   examStages,
+  financialYearStart,
+  isRenewedCategory,
   watchedBoard,
   isOpenExamStage,
   markingFor,
@@ -1049,6 +1051,7 @@ function ExamSheet({
           {w.saveDetails}
         </button>
       </div>
+      {isRenewedCategory(exam.category) && <Certificate category={exam.category} on={Boolean(exam.certificateReminder)} onSet={() => void load()} />}
 
       {past.length > 0 && (
         <>
@@ -1069,6 +1072,43 @@ function ExamSheet({
         </button>
       </div>
       {error && <p className="error small">{error}</p>}
+    </div>
+  )
+}
+
+/**
+ * An EWS, OBC or MBC certificate is for one financial year, and most forms
+ * want this year's: said once, and a yearly 1 April reminder in one tap —
+ * under Repeating, the person's own, not tied to any one exam.
+ */
+function Certificate({ category, on, onSet }: { category: string; on: boolean; onSet: () => void }) {
+  const w = useExamWords()
+  const [busy, setBusy] = useState(false)
+  async function remind() {
+    setBusy(true)
+    try {
+      await api('/exams/certificate-reminder', { method: 'POST', body: { category } })
+      announceChange()
+      onSet()
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="card small exam-certificate">
+      <p>
+        {w.certificateWhy(
+          category,
+          new Date(`${financialYearStart()}T00:00:00`).toLocaleDateString(w.lang === 'hi' ? 'hi-IN' : 'en-IN', { day: 'numeric', month: 'long', year: 'numeric' }),
+        )}
+      </p>
+      {on ? (
+        <p className="muted">{w.certificateSet}</p>
+      ) : (
+        <button className="ghost small-btn" onClick={() => void remind()} disabled={busy}>
+          {w.certificateRemind}
+        </button>
+      )}
     </div>
   )
 }

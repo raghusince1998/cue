@@ -58,6 +58,7 @@ import { startMorningBriefWorker } from './services/morningBrief.ts'
 import { startReportWorker } from './services/dailyReport.ts'
 import { startPrepWorker } from './services/meetingPrep.ts'
 import { startWeeklyReviewWorker } from './services/weeklyReview.ts'
+import { startExamWeekWorker } from './services/examWeek.ts'
 import { startFocusWorker } from './services/focus.ts'
 import { startReminderWorker } from './worker/reminders.ts'
 import { sweep } from './services/recurrence.ts'
@@ -199,6 +200,7 @@ const stopFollowUps = startFollowUpWorker()
 const stopBriefs = startMorningBriefWorker()
 const stopPrep = startPrepWorker()
 const stopReviews = startWeeklyReviewWorker()
+const stopExamWeeks = startExamWeekWorker()
 const stopFocus = startFocusWorker()
 const stopReports = startReportWorker()
 const stopBills = startBillWorker()
@@ -247,6 +249,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   stopBriefs()
   stopPrep()
   stopReviews()
+  stopExamWeeks()
   stopFocus()
   stopReports()
   stopBills()

@@ -12,6 +12,7 @@ import {
   STAGE_HI,
   examClashes,
   examFit,
+  nextFirstApril,
   noticeSummary,
   sameCity,
   splitExamStep,
@@ -35,6 +36,7 @@ import {
   type NoticeProposal,
   type OpenFormDTO,
   type ParsedExamLine,
+  type RenewedCategory,
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import type { Executor } from '../db/util.ts'
@@ -203,6 +205,7 @@ export async function examById(userId: string, id: string): Promise<ExamDTO | nu
     checks: await checksForExam(row.id, row.examKey),
     study: await studyFor(row.id),
     mocks: await mocksFor(row.id),
+    certificateReminder: await certificateReminderOn(userId),
   }
 }
 
@@ -1228,4 +1231,54 @@ export async function deleteMock(userId: string, examId: string, mockId: string)
     .where(and(eq(schema.examMocks.id, mockId), eq(schema.examMocks.examId, examId)))
     .returning({ id: schema.examMocks.id })
   return gone.length > 0
+}
+
+// ── Certificates ─────────────────────────────────────────────────────────
+
+/** Whether the yearly certificate reminder is set, and still running. */
+export async function certificateReminderOn(userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ status: rec.status })
+    .from(schema.users)
+    .innerJoin(rec, eq(schema.users.certificateSeriesId, rec.id))
+    .where(eq(schema.users.id, userId))
+  return row?.status === 'active'
+}
+
+/**
+ * A yearly reminder, every 1 April, to get that financial year's EWS, OBC or
+ * MBC certificate: most forms want one issued in the current financial year,
+ * and finding out on the last date to apply is too late. A series under
+ * Repeating, so no section of its own; set once — asked again, it is the one
+ * already running.
+ */
+export async function remindCertificate(orgId: string, userId: string, category: RenewedCategory, now = new Date()): Promise<boolean> {
+  if (await certificateReminderOn(userId)) return false
+  const lang = await langOf(userId)
+  const [row] = await db
+    .insert(rec)
+    .values({
+      orgId,
+      userId,
+      title: t(lang, 'Get this year’s {category} certificate', { category }),
+      notes: t(
+        lang,
+        'Most exam forms want a certificate issued in the current financial year, which starts on 1 April. Each notification says the date it must be issued after.',
+      ),
+      kind: 'task',
+      durationMinutes: 30,
+      freq: 'yearly',
+      interval: 1,
+      // 0 is January.
+      byMonth: 3,
+      byMonthDay: 1,
+      startsOn: nextFirstApril(now),
+      hour: 10,
+      minute: 0,
+      sphere: 'personal',
+    })
+    .returning()
+  await materialise(row!, { now })
+  await db.update(schema.users).set({ certificateSeriesId: row!.id }).where(eq(schema.users.id, userId))
+  return true
 }

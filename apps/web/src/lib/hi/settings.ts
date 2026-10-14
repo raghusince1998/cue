@@ -62,6 +62,12 @@ export const settings: Record<string, string> = {
     'क्या हो गया, क्या छूट गया, किस पर अभी भी आपका कुछ बकाया है, और अगला हफ़्ता अभी से कितना भर रहा है — दो मिनट में, हर हिस्से के साथ उस पर करने वाला एक काम। जिस हफ़्ते में कुछ न हो, उसमें यह चुप रहता है।',
   'Fri {time}': 'शुक्र {time}',
   'Send this week’s now': 'इस हफ़्ते का अभी भेजें',
+  'Every Sunday evening, my exam prep report': 'हर रविवार शाम, मेरी परीक्षा-तैयारी की रिपोर्ट',
+  'What is the prep report?': 'तैयारी की रिपोर्ट क्या है?',
+  'The study sessions you did this week against those planned, your mock test scores against the week before, the exam dates coming next week, and how far off your next exam is. Nothing on a week with nothing in it.':
+    'इस हफ़्ते पढ़ाई के कितने सत्र हुए और कितने तय थे, पिछले हफ़्ते के मुकाबले मॉक टेस्ट के अंक, अगले हफ़्ते की परीक्षा-तारीखें, और अगली परीक्षा कितनी दूर है। जिस हफ़्ते में कुछ न हो, उसमें कुछ नहीं आता।',
+  'No study sessions, mock tests or exam dates this week yet, so there is nothing to report.':
+    'इस हफ़्ते अभी तक पढ़ाई के सत्र, मॉक टेस्ट या परीक्षा-तारीखें नहीं हैं, इसलिए बताने को कुछ नहीं।',
   'Ask me each evening if I logged everything': 'हर शाम मुझसे पूछें कि मैंने सब कुछ दर्ज किया या नहीं',
   'Why ask each evening?': 'हर शाम क्यों पूछें?',
   'Nothing can tell that you went somewhere and never logged it — a browser cannot watch your location in the background. This is the app asking instead.':

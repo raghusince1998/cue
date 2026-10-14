@@ -5,6 +5,24 @@ export const notify: Record<string, string> = {
   '{a} and {b} are both on {day}. Check both admit cards for the shift: if they overlap, you can sit only one.':
     '{a} और {b} दोनों {day} को हैं। दोनों प्रवेश पत्र में शिफ्ट देखें: एक ही समय हो तो एक ही परीक्षा दे पाएँगे।',
 
+  // The Sunday prep report (services/examWeek.ts)
+  'Your prep this week': 'इस हफ़्ते की तैयारी',
+  'Every study session done: {n}.': 'पढ़ाई के सभी {n} सत्र पूरे।',
+  'Studied {done} of {planned} sessions.': 'पढ़ाई के {planned} में से {done} सत्र पूरे।',
+  'Mock tests {now}%, from {then}% the week before.': 'मॉक टेस्ट {now}%, पिछले हफ़्ते {then}% था।',
+  'Mock tests {now}%.': 'मॉक टेस्ट {now}%।',
+  'Coming up: {list}.': 'आगे: {list}।',
+  'Coming up: {list} and {n} more.': 'आगे: {list}, और {n} तारीखें।',
+  '{exam} is tomorrow.': '{exam} कल है।',
+  '{exam} in {n} days.': '{exam} में {n} दिन बाकी।',
+  '1 study session planned next week.': 'अगले हफ़्ते पढ़ाई का 1 सत्र तय है।',
+  '{n} study sessions planned next week.': 'अगले हफ़्ते पढ़ाई के {n} सत्र तय हैं।',
+
+  // The yearly certificate reminder (services/exams.ts)
+  'Get this year’s {category} certificate': 'इस साल का {category} प्रमाण पत्र बनवाएँ',
+  'Most exam forms want a certificate issued in the current financial year, which starts on 1 April. Each notification says the date it must be issued after.':
+    'ज़्यादातर परीक्षा फॉर्म चालू वित्त वर्ष (1 अप्रैल से) में बना प्रमाण पत्र माँगते हैं। हर अधिसूचना बताती है कि वह किस तारीख के बाद का होना चाहिए।',
+
   // A form opening, told to those tracking an exam like it (services/noticeWatch.ts)
   '{exam}: forms open': '{exam}: फॉर्म खुले',
   'Last date {day}. Add it, and its dates and reminders come with it.': 'अंतिम तिथि {day}। जोड़ें, तो उसकी तारीखें और रिमाइंडर साथ आएँगे।',

@@ -8,6 +8,7 @@ import { scope } from '../auth.ts'
 import { sendNudgeTo } from '../services/dailyNudge.ts'
 import { sendBriefTo } from '../services/morningBrief.ts'
 import { sendReportReminderTo } from '../services/dailyReport.ts'
+import { sendExamWeekTo } from '../services/examWeek.ts'
 import { filledSections } from '../services/sections.ts'
 
 /** "" from a cleared input means none. */
@@ -70,6 +71,8 @@ const preferencesInput = z.object({
     .optional(),
   /** Told when a form opens for an exam like theirs. */
   examFormAlerts: z.boolean().optional(),
+  /** Every Sunday, the week's preparation. */
+  examWeekEnabled: z.boolean().optional(),
 })
 
 const selection = {
@@ -93,6 +96,7 @@ const selection = {
   examLevel: schema.users.examLevel,
   examTraining: schema.users.examTraining,
   examFormAlerts: schema.users.examFormAlerts,
+  examWeekEnabled: schema.users.examWeekEnabled,
   upiId: schema.users.upiId,
   uses: schema.users.uses,
   keepApart: schema.users.keepApart,
@@ -173,11 +177,18 @@ export async function meRoutes(app: FastifyInstance) {
         ...(body.examLevel !== undefined ? { examLevel: body.examLevel } : {}),
         ...(body.examTraining !== undefined ? { examTraining: body.examTraining } : {}),
         ...(body.examFormAlerts !== undefined ? { examFormAlerts: body.examFormAlerts } : {}),
+        ...(body.examWeekEnabled !== undefined ? { examWeekEnabled: body.examWeekEnabled } : {}),
       })
       .where(eq(schema.users.id, sub))
 
     const rows = await db.select(selection).from(schema.users).where(eq(schema.users.id, sub))
     return takeFirst(rows, 'preferences')
+  })
+
+  /** This week's prep report, now, whatever the day — to see what it says. */
+  app.post('/me/preferences/test-exam-week', async (req) => {
+    const sent = await sendExamWeekTo(scope(req).sub)
+    return sent ?? { delivered: 0, title: null, body: null, empty: true }
   })
 
   /** Today's report reminder, now, whatever the hour — to see what it says. */

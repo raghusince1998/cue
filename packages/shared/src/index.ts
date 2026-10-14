@@ -1392,6 +1392,8 @@ export interface ExamDTO {
   examDay?: { date: string; reportingAt: string | null; gateClosesAt: string | null; startsAt: string | null; endsAt: string | null } | null
   /** The newest cut-offs Cue holds for this exam, of any year: what a score is held against. On the single-exam fetch. */
   lastCutoffs?: { title: string; url: string; cycle: string | null; round: string | null; cutoffs: { category: string; marks: number }[] } | null
+  /** A yearly 1 April reminder to renew their category certificate is set. On the single-exam fetch. */
+  certificateReminder?: boolean
 }
 /** Right and wrong answers from the answer key; the marking only for a paper Cue does not know. */
 export const expectedScoreInput = z.object({
@@ -1429,6 +1431,19 @@ export interface OpenFormDTO {
 export { isExamBody, parseExamEmail, type ExamMail, type ExamMailKind } from './examMail.ts'
 export { examClashes, type ExamClash, type ExamDayItem } from './examClash.ts'
 export { MARKING, expectedScore, markingFor, type Marking } from './marking.ts'
+export {
+  GLANCE_DAYS,
+  RENEWED_CATEGORIES,
+  daysAway,
+  examGlance,
+  financialYearStart,
+  isRenewedCategory,
+  nextFirstApril,
+  type ExamGlance,
+  type ExamGlanceItem,
+  type GlanceExam,
+  type RenewedCategory,
+} from './examGlance.ts'
 export {
   NOTICE_KINDS,
   datesInNotice,

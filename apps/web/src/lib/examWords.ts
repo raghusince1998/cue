@@ -124,6 +124,15 @@ const EN = {
   next: 'Next',
   centre: 'Centre',
   daysToGo: (n: number) => (n <= 0 ? 'Exam today' : n === 1 ? 'Exam tomorrow' : `${n} days to the exam`),
+  // On Today, for an aspirant
+  allExams: 'All exams',
+  inDays: (n: number) => (n <= 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n} days`),
+  datesClash: (a: string, b: string, day: string) => `Dates clash: ${a} and ${b}, ${day}`,
+  // A category certificate renewed each year
+  certificateWhy: (category: string, from: string) =>
+    `Most forms want an ${category} certificate issued in this financial year: on or after ${from}. If yours is older, get a new one before the next last date.`,
+  certificateRemind: 'Remind me every 1 April',
+  certificateSet: 'You’ll be reminded every 1 April, under Repeating.',
   // Study and mocks
   study: 'Study plan',
   studyHow: 'Each subject on its own days, at the same time, until the day before the exam — on Today, with reminders.',
@@ -318,6 +327,13 @@ const HI: Words = {
   next: 'अगला',
   centre: 'केंद्र',
   daysToGo: (n) => (n <= 0 ? 'आज परीक्षा है' : n === 1 ? 'कल परीक्षा है' : `परीक्षा में ${n} दिन`),
+  allExams: 'सभी परीक्षाएँ',
+  inDays: (n) => (n <= 0 ? 'आज' : n === 1 ? 'कल' : `${n} दिन में`),
+  datesClash: (a, b, day) => `तारीखें टकरा रही हैं: ${a} और ${b}, ${day}`,
+  certificateWhy: (category, from) =>
+    `ज़्यादातर फॉर्म इसी वित्त वर्ष में बना ${category} प्रमाण पत्र माँगते हैं: ${from} या उसके बाद का। आपका पुराना है तो अगली अंतिम तिथि से पहले नया बनवा लें।`,
+  certificateRemind: 'हर 1 अप्रैल को याद दिलाएँ',
+  certificateSet: 'हर 1 अप्रैल को याद दिलाया जाएगा, "दोहराने वाले" में।',
   study: 'पढ़ाई की योजना',
   studyHow: 'हर विषय अपने दिनों पर, एक ही समय, परीक्षा से एक दिन पहले तक — "आज" पर, रिमाइंडर के साथ।',
   subjects: 'विषय, हर पंक्ति में एक',

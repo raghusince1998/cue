@@ -1,6 +1,17 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { createExamInput, examDateInput, examDayInput, expectedScoreInput, mockScoreInput, readAdmitCard, studyPlanInput, updateExamInput } from '@cue/shared'
+import {
+  RENEWED_CATEGORIES,
+  createExamInput,
+  examDateInput,
+  examDayInput,
+  examGlance,
+  expectedScoreInput,
+  mockScoreInput,
+  readAdmitCard,
+  studyPlanInput,
+  updateExamInput,
+} from '@cue/shared'
 import { scope } from '../auth.ts'
 import { findNumber, numbersIn } from '@cue/shared'
 import {
@@ -8,6 +19,7 @@ import {
   addMock,
   createExam,
   clashesFor,
+  remindCertificate,
   saveExpectedScore,
   openForms,
   deleteExam,
@@ -45,6 +57,20 @@ export async function examRoutes(app: FastifyInstance) {
   app.get('/exams/open-forms', async (req) => openForms(scope(req).sub))
 
   app.get('/exams/clashes', async (req) => clashesFor(scope(req).sub))
+
+  // The top of Today for an aspirant: the next exam, last dates soon, clashes.
+  app.get('/exams/glance', async (req) => {
+    const { sub } = scope(req)
+    const now = new Date()
+    return examGlance(await listExams(sub, now), await clashesFor(sub, now), now)
+  })
+
+  // Every 1 April, get that year's EWS, OBC or MBC certificate: set once.
+  app.post('/exams/certificate-reminder', async (req) => {
+    const { orgId, sub } = scope(req)
+    const { category } = z.object({ category: z.enum(RENEWED_CATEGORIES) }).parse(req.body)
+    return { on: true, added: await remindCertificate(orgId, sub, category) }
+  })
 
   // A score from the answer key: right and wrong, by the board's marking or one typed in.
   app.put('/exams/:id/expected', async (req, reply) => {
