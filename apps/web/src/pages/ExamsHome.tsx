@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../lib/auth.tsx'
 import { EXAMS, EXAM_GROUPS, examGroup } from '@cue/shared'
 import { SITE } from '../lib/site.ts'
 import { enterExamsMode, setSignupLanguage, signupLanguage } from '../lib/appMode.ts'
@@ -20,7 +21,10 @@ const T = {
     lead: 'आवेदन की अंतिम तिथि, शुल्क, प्रवेश पत्र, परीक्षा का दिन, परिणाम — हर तारीख समय पर याद। RRB, SSC, UPSC, बैंक, NEET, JEE, RPSC, RSSB और 50 से ज़्यादा परीक्षाएँ।',
     start: 'मुफ़्त शुरू करें',
     signIn: 'साइन इन',
-    small: 'कोई शुल्क नहीं। एंड्रॉइड पर ऐप की तरह, या किसी भी फोन के ब्राउज़र में।',
+    demo: 'डेमो देखें',
+    opening: 'डेमो खुल रहा है…',
+    demoFailed: 'डेमो अभी शुरू नहीं हो सका। एक मिनट बाद फिर कोशिश करें।',
+    small: 'कोई शुल्क नहीं। एंड्रॉइड पर ऐप की तरह, या किसी भी फोन के ब्राउज़र में। डेमो में परीक्षाओं, तारीखों और सूचियों से भरा एक खाता खुलता है, जो एक दिन बाद हट जाता है।',
     featuresTitle: 'जो Cue Exams आपके लिए करता है',
     features: [
       ['📅', 'अंतिम तिथि और शुल्क', 'फॉर्म भरना है? अंतिम तिथि से 3 दिन पहले, एक शाम पहले और उसी दिन याद दिलाता है — जब तक आप भर न दें।'],
@@ -29,6 +33,12 @@ const T = {
       ['📢', 'आधिकारिक सूचनाएँ, जाँचकर', 'SSC, RRB, NTA, CTET, SBI, LIC, RPSC और RSSB की नई सूचनाएँ Cue खुद पढ़ता है — एक व्यक्ति जाँचता है, फिर आपको बताया जाता है, सूचना के लिंक के साथ।'],
       ['🔎', 'परिणाम सूची में आपका रोल नंबर', 'परिणाम या शॉर्टलिस्ट आते ही Cue आपका रोल नंबर सूची में ढूँढता है, और वर्ग के अनुसार कट-ऑफ दिखाता है।'],
       ['📚', 'पढ़ाई, मॉक टेस्ट, फोटो', 'परीक्षा तक की पढ़ाई की योजना, मॉक टेस्ट के अंकों की प्रगति, और फॉर्म के माप में फोटो-हस्ताक्षर — फोन पर ही।'],
+      ['📝', 'हर चरण की सूची', 'फॉर्म में क्या लगेगा — फोटो का माप, अंकतालिकाएँ, आपका वर्ग प्रमाण पत्र — और दस्तावेज़ सत्यापन, मेडिकल और इंटरव्यू में क्या ले जाना है।'],
+      ['⚠️', 'टकराती तारीखें', 'एक दिन दो परीक्षाएँ, या लगातार दिनों में दो शहरों में — तारीख आते ही बताया जाता है।'],
+      ['🧮', 'संभावित अंक', 'उत्तर कुंजी से सही और गलत गिनें: बोर्ड के तरीके से अंक, पिछले कट-ऑफ के सामने।'],
+      ['🗓', 'रविवार की रिपोर्ट', 'हर रविवार शाम: पढ़ाई के पूरे सत्र, पिछले हफ़्ते के मुकाबले मॉक टेस्ट, और आगे की तारीखें।'],
+      ['👨‍👩‍👧', 'परीक्षा का दिन, परिवार को', 'एक टैप में दिन, रिपोर्टिंग का समय और केंद्र, नक्शे के लिंक के साथ, WhatsApp पर — रोल नंबर कभी नहीं।'],
+      ['🪪', 'प्रमाण पत्र समय पर', 'EWS, OBC या MBC: हर 1 अप्रैल को उस साल का प्रमाण पत्र बनवाने का रिमाइंडर।'],
     ],
     examsTitle: 'इन परीक्षाओं के लिए तैयार',
     privacyTitle: 'आपकी जानकारी आपकी',
@@ -47,7 +57,10 @@ const T = {
     lead: 'The last date to apply, the fee, the admit card, the exam day, the result — every date remembered on time. RRB, SSC, UPSC, banks, NEET, JEE, RPSC, RSSB and 50+ exams.',
     start: 'Start free',
     signIn: 'Sign in',
-    small: 'Free. Like an app on Android, or in any phone’s browser.',
+    demo: 'Try the demo',
+    opening: 'Opening the demo…',
+    demoFailed: 'The demo could not start just now. Try again in a minute.',
+    small: 'Free. Like an app on Android, or in any phone’s browser. The demo opens an account full of exams, dates and lists, deleted after a day.',
     featuresTitle: 'What Cue Exams does for you',
     features: [
       ['📅', 'Last dates and fees', 'A form to fill? Reminded 3 days before the last date, the evening before, and on the day — until it is done.'],
@@ -56,6 +69,12 @@ const T = {
       ['📢', 'Official notices, checked', 'Cue reads the new notices of SSC, RRB, NTA, CTET, SBI, LIC, RPSC and RSSB itself — checked by a person before you are told, always with the notice’s link.'],
       ['🔎', 'Your roll number in result lists', 'When a result or shortlist is out, Cue looks for your roll number in it, and shows the cut-offs by category.'],
       ['📚', 'Study, mocks, photos', 'A study plan to the exam day, your mock scores’ trend, and your photo and signature fitted to the form — on your phone.'],
+      ['📝', 'A list for every step', 'What the form asks for — photo sizes, marksheets, your category certificate — and what to carry to document verification, the medical and the interview.'],
+      ['⚠️', 'Clashing dates', 'Two exams on one day, or following days in two cities — pointed out as soon as a date lands.'],
+      ['🧮', 'Expected score', 'Count right and wrong from the answer key: the score by the board’s marking, against the last cut-off.'],
+      ['🗓', 'A Sunday report', 'Every Sunday evening: study sessions done, mock scores against last week, and the dates coming up.'],
+      ['👨‍👩‍👧', 'The exam day, to family', 'One tap sends the day, the reporting time and the centre with a map link on WhatsApp — never the roll number.'],
+      ['🪪', 'Certificates on time', 'EWS, OBC or MBC: a reminder every 1 April to get that year’s certificate.'],
     ],
     examsTitle: 'Ready for these exams',
     privacyTitle: 'Your details stay yours',
@@ -72,6 +91,23 @@ const T = {
 export default function ExamsHome() {
   const [lang, setLang] = useState<'hi' | 'en'>(signupLanguage)
   const t = T[lang]
+  const { enterDemo } = useAuth()
+  const navigate = useNavigate()
+  const [demoBusy, setDemoBusy] = useState(false)
+  const [demoFailed, setDemoFailed] = useState(false)
+
+  // An aspirant's account, already full: exams at every stage, in the language picked here.
+  async function demo() {
+    setDemoBusy(true)
+    setDemoFailed(false)
+    try {
+      await enterDemo('exams')
+      navigate('/exams', { replace: true })
+    } catch {
+      setDemoFailed(true)
+      setDemoBusy(false)
+    }
+  }
   useEffect(() => {
     enterExamsMode()
     // The rest of the website — signing up, the privacy policy — follows the language picked here.
@@ -127,11 +163,12 @@ export default function ExamsHome() {
                 <Link to="/register" className="site-btn primary-btn is-big">
                   {t.start}
                 </Link>
-                <Link to="/login" className="site-btn ghost-btn is-big">
-                  {t.signIn}
-                </Link>
+                <button className="site-btn ghost-btn is-big" onClick={() => void demo()} disabled={demoBusy}>
+                  {demoBusy ? t.opening : t.demo}
+                </button>
               </div>
               <p className="site-small">{t.small}</p>
+              {demoFailed && <p className="error small">{t.demoFailed}</p>}
             </div>
           </div>
         </section>

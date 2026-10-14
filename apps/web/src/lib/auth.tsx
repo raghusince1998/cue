@@ -41,8 +41,8 @@ interface AuthValue {
   saveUses: (uses: string[]) => Promise<void>
   /** English or Hindi, saved and reflected at once. */
   saveLanguage: (language: 'en' | 'hi') => Promise<void>
-  /** Into a fresh demo account, filled with a sample week. */
-  enterDemo: () => Promise<void>
+  /** Into a fresh demo account: a sample week, or (exams) an aspirant's account. */
+  enterDemo: (kind?: 'everyday' | 'exams') => Promise<void>
   /** Deletes the account and everything in it, then signs out. */
   deleteAccount: (password: string) => Promise<void>
 }
@@ -134,15 +134,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMe((m) => (m ? { ...m, language: saved.language } : m))
   }, [])
 
-  const enterDemo = useCallback(async () => {
-    const res = await api<{ token: string }>('/auth/demo', { method: 'POST', body: {} })
-    setToken(res.token)
-    // A demo opened from the Hindi website is a demo in Hindi.
-    if (language() === 'hi') {
-      await api('/me/preferences', { method: 'PATCH', body: { language: 'hi' } }).catch(() => undefined)
-    }
-    await refresh()
-  }, [refresh])
+  const enterDemo = useCallback(
+    async (kind: 'everyday' | 'exams' = 'everyday') => {
+      // A demo opened from the Hindi website is a demo in Hindi — made in
+      // Hindi from the start, so its plans' titles are too.
+      const res = await api<{ token: string }>('/auth/demo', { method: 'POST', body: { kind, language: language() } })
+      setToken(res.token)
+      await refresh()
+    },
+    [refresh],
+  )
 
   const deleteAccount = useCallback(async (password: string) => {
     await api('/auth/me', { method: 'DELETE', body: { password } })

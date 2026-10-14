@@ -3,7 +3,7 @@
 Everything a developer needs to work on Cue: what it does, how it is built,
 how each feature flows from the screen to the database and back, and how it
 is tested and shipped. It is written against the code as of 14 Oct 2026
-(commit `8fc9a6e`, migration `0058`). File links are relative to this
+(exams phases E1–E15, migration `0058`). File links are relative to this
 folder, so they work on GitHub and in an editor.
 
 > **Contents**
@@ -84,6 +84,12 @@ Cue Exams is the same web app in "exams mode" (see
 - **Exams** — every exam applied for with its dates from the boards'
   official notices, admit cards read, results looked up, study plans, mock
   scores, expected scores, clashes, and ready-made lists for each step.
+
+**Two demos, no sign-up.** "Try the demo" on the website opens a 24-hour
+account with a sample week; "Try the Cue Exams demo" (on the website's exams
+section and on the Cue Exams home) opens an aspirant's account with every
+exams feature already in use ([§9.11](#911-the-exams-demo)). Both open in
+the language the visitor was reading.
 
 ---
 
@@ -311,10 +317,12 @@ These are decisions, not accidents. Keep them.
 - **Password reset**: a 32-byte token stored as a SHA-256 hash, single use,
   one hour; `/auth/forgot` answers the same whether or not the address
   exists.
-- **Demo accounts**: `POST /auth/demo` makes org "Demo" with user "Asha"
-  and a sample week; 5 per address per hour, 120 per hour overall; deleted
-  after 24 hours. Demos cannot connect Google/Microsoft and get a smaller AI
-  allowance.
+- **Demo accounts**: `POST /auth/demo {kind?: 'everyday'|'exams',
+  language?: 'en'|'hi'}` makes org "Demo" with user "Asha" — a sample week
+  (`sampleDay.ts`), or an aspirant's account (`examsDemo.ts`) — in that
+  language from the start; 5 per address per hour, 120 per hour overall;
+  deleted after 24 hours. Demos cannot connect Google/Microsoft and get a
+  smaller AI allowance.
 - **Admins** are the addresses in `ADMIN_EMAILS`. `/api/auth/me` returns
   `isAdmin`; `/api/admin/notices*` answer 404 to anyone else.
 - **Account deletion** needs the password (not for demos), revokes OAuth
@@ -717,7 +725,7 @@ are checked while the app is open.
 
 ## 9. The exams module
 
-Built in phases E1–E14 (13–14 Oct 2026). The aim throughout: an aspirant
+Built in phases E1–E15 (13–14 Oct 2026). The aim throughout: an aspirant
 types almost nothing — dates come from the boards, cards are read, lists are
 ready-made — and nothing is ever done by logging in as them.
 
@@ -920,6 +928,25 @@ sequenceDiagram
 | `PUT /exams/:id/expected` | Expected score |
 | `POST /exams/certificate-reminder` | The yearly certificate reminder |
 
+
+### 9.11 The exams demo
+
+[`services/examsDemo.ts`](../apps/api/src/services/examsDemo.ts) fills an
+aspirant's account (uses `['exams']`, graduate, home Jaipur, category OBC)
+with every exams feature in use, dated relative to the moment it is opened:
+
+| In the demo | Shows |
+|---|---|
+| SSC CGL 2026, Tier 1 in 12 days, admit card read (reporting 07:30, gate 08:30, centre in Jaipur) | Countdown on Today, the exam day and its carry list, "send the exam day to family" |
+| Four mock scores (108 → 129 of 200) and a study plan running since Monday (one session missed) | Mock trend, study sessions on Today, the Sunday report ("Studied 2 of 3… 65%, from 61%…") |
+| REET 2026 on the same day as CGL | The clash on Today and the exams page |
+| SSC CHSL 2027, form to fill: last date in 5 days, fee in 7 | Today's last dates, the form's list ("0 of 7 ready") |
+| RRB NTPC (CEN 05/2024) at document verification in 18 days | The verification list, the expected CBT 2 score (86 of 120) |
+| OBC | The yearly 1 April certificate reminder under Repeating |
+
+Past study sessions are marked done (one missed), and no reminder is left to
+ring for the demo's past. Tested in `examsDemo.db.test.ts`.
+
 ---
 
 ## 10. The web client
@@ -948,8 +975,8 @@ worker, catches a shared item (`catchShare`) before routing, and renders
 
 | Page | Shows and does |
 |---|---|
-| `Home` | Public site: a cycling capture demo, email finds, how it works, who it is for, Cue Exams call-out, privacy; Hindi toggle; demo |
-| `ExamsHome` | Cue Exams landing page, Hindi first; swaps in the exams manifest |
+| `Home` | Public site, in English or Hindi: a cycling capture demo; what arrives from email; how it works; **a day with Cue** (morning brief → meeting prep → follow-ups → reminders → evening plan → Friday review); who it is for; **Cue Exams in detail** (twelve points) with "Try the Cue Exams demo"; **every feature in detail** (eight areas); privacy; both demos |
+| `ExamsHome` | Cue Exams landing page, Hindi first: twelve features, the exams covered, privacy, the disclaimer; "Try the demo" opens the exams demo; swaps in the exams manifest |
 | `Login`, `ResetPassword` | Sign in / up / forgot; reset link |
 | `Today` | Capture box, uses picker (first time), connect-mail card, search; aside: exam glance, nearby wishes, parcels, day brief, calendar, install and push banners; main: List/Week/Month, Work/Personal, follow-ups due, waiting on others, now, overdue (Move it), today, whenever, coming up, closed today. Many deep links (`?review=1`, `?day=1`, `?nudge=id`, `?action=done&id=`…) |
 | `History` | Visits and plans done, cancelled or let go; edit or forget |

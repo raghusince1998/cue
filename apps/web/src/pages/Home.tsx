@@ -55,18 +55,114 @@ const PEOPLE = [
   { title: msg('Freelance and business'), points: [msg('Clients and payments due'), msg('Expenses and claims'), msg('Bills and renewals')] },
 ]
 
-/** Everything else, in a line each. */
-const FEATURES = [
-  { mark: '⚡', title: msg('One line is enough'), text: msg('Type or speak a plan in plain words — Hindi time words too. Cue works out what, when, who and where.') },
-  { mark: '🔔', title: msg('Reminders that follow up'), text: msg('On your phone at the right time, and again if it is still open. Things do not quietly slip.') },
-  { mark: '☀️', title: msg('Your day, at a glance'), text: msg('Today shows what is due, what is overdue, what is waiting on others, and what Cue noticed.') },
-  { mark: '📅', title: msg('Your calendar, in one step'), text: msg('Google or Microsoft calendar mirrored in, alongside everything else you plan here.') },
-  { mark: '✈️', title: msg('Trips'), text: msg('Save things for a city; they surface when you plan a trip there, with tickets and stays attached.') },
-  { mark: '👥', title: msg('People'), text: msg('Who you know, where they work, when you last spoke, and a nudge to keep in touch.') },
-  { mark: '📋', title: msg('Trackers'), text: msg('Job applications, candidates and deals, each with its next step and a nudge when it stalls.') },
-  { mark: '🧾', title: msg('Bills and renewals'), text: msg('Due dates, amounts and one-tap “paid” that moves each to its next date.') },
-  { mark: '💸', title: msg('Expenses and money owed'), text: msg('Log spending, claim it back from work, split with friends and remind them to pay.') },
-  { mark: '📱', title: msg('Works like an app'), text: msg('Add it to your home screen. Works offline and catches up when you are back online.') },
+/** Through the day: when Cue speaks up on its own. */
+const DAY = [
+  { at: msg('Morning'), title: msg('The day’s shape, before you start'), text: msg('Meetings and tasks, a journey with the time to leave, parcels and the cash to keep ready, bills due, your longest free stretch.') },
+  { at: msg('Before a meeting'), title: msg('What is still open from last time'), text: msg('Fifteen minutes before, the follow-ups still open from earlier meetings with the same people.') },
+  { at: msg('After a meeting'), title: msg('Anything to follow up?'), text: msg('Say what came of it: your next steps become tasks, theirs become “waiting on” items Cue chases politely.') },
+  { at: msg('All day'), title: msg('Reminders that follow up'), text: msg('A buzz at the time, then again until it is done, snoozed or moved. Missed it? Three real free slots to move it to.') },
+  { at: msg('Evening'), title: msg('Tomorrow, planned'), text: msg('Did you log everything? Cue proposes where tomorrow’s loose ends fit, and writes up your day for whoever you report to.') },
+  { at: msg('Friday'), title: msg('The week, in two minutes'), text: msg('What got done, what slipped, who still owes you, and how next week is already filling up.') },
+]
+
+/** Cue Exams, point by point: what an aspirant gets. */
+const EXAM_POINTS = [
+  { mark: '📢', title: msg('Dates from official notices'), text: msg('Cue reads the boards’ own notice pages. A person checks each notice before anyone is told, and its link is always beside the date.') },
+  { mark: '📅', title: msg('Last dates that are not missed'), text: msg('Reminded before the last date to apply and to pay, and on the day, until the form is filled.') },
+  { mark: '📝', title: msg('A list for every step'), text: msg('What the form asks for — photo sizes, marksheets, your category certificate — and what to carry to document verification, the medical and the interview.') },
+  { mark: '🎫', title: msg('Admit card to exam day'), text: msg('Share the admit card PDF: reporting time, gate closing, the centre, what to carry, and the journey if the centre is in another city.') },
+  { mark: '👨‍👩‍👧', title: msg('The exam day, sent to family'), text: msg('One tap sends the day, the reporting time and the centre with a map link on WhatsApp — never your roll number.') },
+  { mark: '⚠️', title: msg('Clashes caught'), text: msg('Two exams on one day, or on following days in two cities, pointed out the moment a date lands.') },
+  { mark: '🔎', title: msg('Your roll number in the result'), text: msg('When a result list is out, Cue looks for your roll number and shows the cut-offs for your category.') },
+  { mark: '🧮', title: msg('Your expected score'), text: msg('Count your right and wrong answers from the answer key: Cue works out the score by the board’s marking and holds it against the last cut-off.') },
+  { mark: '📚', title: msg('Study plan and mock tests'), text: msg('Subjects across the week until the day before the exam, with a weekly mock test and your scores’ trend.') },
+  { mark: '🗓', title: msg('A Sunday report'), text: msg('Every Sunday evening: sessions done, mock scores against last week, and the dates coming up.') },
+  { mark: '📣', title: msg('Forms open now'), text: msg('New forms with their last dates, marked by whether they fit what you studied — and a heads-up when one opens for an exam like yours.') },
+  { mark: '🪪', title: msg('Certificates on time'), text: msg('EWS, OBC or MBC: a reminder every 1 April to get that year’s certificate, before a form asks for it.') },
+]
+
+/** Everything, area by area, a few lines each. */
+const DETAIL = [
+  {
+    mark: '⚡',
+    title: msg('Capture in one line'),
+    points: [
+      msg('Type, speak, or share a message in from WhatsApp or SMS'),
+      msg('English, Hinglish and Hindi: “kal shaam 6 baje doctor”'),
+      msg('Plans, repeating plans, trips, bills, expenses, parcels, money owed and exams — from the same box'),
+      msg('It shows what it understood before saving, and asks rather than guesses'),
+    ],
+  },
+  {
+    mark: '🔔',
+    title: msg('Plans and reminders'),
+    points: [
+      msg('Reminders that repeat until a thing is done, snoozed or moved'),
+      msg('Clashes caught as you plan, with free times offered instead'),
+      msg('Overdue items moved to a real free slot, or cleared in one sitting'),
+      msg('Work and personal kept apart, and focus time kept quiet'),
+    ],
+  },
+  {
+    mark: '📬',
+    title: msg('Email and calendar'),
+    points: [
+      msg('Gmail or Outlook, read-only: tickets, stays, parcels, bills, insurance, PUC, FASTag, challans, exam emails'),
+      msg('Google and Microsoft calendars, or any calendar link, mirrored in'),
+      msg('No email is stored, and none is sent to any AI'),
+      msg('One notification when something new is found'),
+    ],
+  },
+  {
+    mark: '✈️',
+    title: msg('Trips'),
+    points: [
+      msg('Made from bookings, and from plans in another city'),
+      msg('Day by day, with the time to leave for each journey'),
+      msg('A packing list the evening before'),
+      msg('Things saved for a city, offered when you go there'),
+    ],
+  },
+  {
+    mark: '👥',
+    title: msg('People'),
+    points: [
+      msg('Who they are, where they work, when you last spoke'),
+      msg('A nudge to keep in touch, at the pace you choose'),
+      msg('Birthdays, anniversaries and festival greetings, a tap each'),
+      msg('Money owed to you, with a WhatsApp reminder and your UPI ID'),
+    ],
+  },
+  {
+    mark: '💼',
+    title: msg('Work'),
+    points: [
+      msg('Boards for a job hunt, hiring and deals, each with its next step'),
+      msg('Companies, and where each one stands'),
+      msg('Weekly targets for calls and visits'),
+      msg('A daily report or standup, written for you'),
+    ],
+  },
+  {
+    mark: '🧾',
+    title: msg('Money'),
+    points: [
+      msg('Bills and renewals with one-tap “paid”'),
+      msg('Expenses by month, claims from work, receipts'),
+      msg('Parcels arriving today, and the cash on delivery'),
+      msg('Car insurance, PUC and service, by number plate'),
+    ],
+  },
+  {
+    mark: '🌐',
+    title: msg('Everywhere, in your language'),
+    points: [
+      msg('The whole app in English or Hindi'),
+      msg('On any phone’s browser, and as an Android app'),
+      msg('Works offline, and catches up when you are back'),
+      msg('Your data is never sold or used for ads'),
+    ],
+  },
 ]
 
 function CaptureDemo({ lang }: { lang: Lang }) {
@@ -139,12 +235,12 @@ export default function Home() {
     setLang(next)
   }
 
-  async function demo() {
+  async function demo(kind: 'everyday' | 'exams' = 'everyday') {
     setDemoBusy(true)
     setDemoError(null)
     try {
-      await enterDemo()
-      navigate('/', { replace: true })
+      await enterDemo(kind)
+      navigate(kind === 'exams' ? '/exams' : '/', { replace: true })
     } catch {
       setDemoError(t('The demo could not start just now. Try again in a minute, or create a free account.'))
       setDemoBusy(false)
@@ -167,7 +263,8 @@ export default function Home() {
           </Link>
           <nav className="site-nav" aria-label={t('Sections')}>
             <a href="#from-email">{t('From your email')}</a>
-            <a href="#for-you">{t('Who it is for')}</a>
+            <a href="#day">{t('A day with Cue')}</a>
+            <a href="#exams">{t('Exams')}</a>
             <a href="#features">{t('Features')}</a>
             <Link to="/privacy">{t('Privacy')}</Link>
           </nav>
@@ -283,7 +380,26 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="site-section" id="for-you">
+        <section className="site-section" id="day">
+          <div className="site-wrap">
+            <div className="site-section-head">
+              <span className="site-eyebrow">{t('A day with Cue')}</span>
+              <h2>{t('It speaks up at the right moments')}</h2>
+              <p>{t('You do not open Cue to check on things; it tells you, on your phone, when it matters.')}</p>
+            </div>
+            <ol className="site-day">
+              {DAY.map((d) => (
+                <li key={d.title}>
+                  <span className="site-day-at">{t(d.at)}</span>
+                  <h3>{t(d.title)}</h3>
+                  <p>{t(d.text)}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="site-section is-tinted" id="for-you">
           <div className="site-wrap">
             <div className="site-section-head">
               <span className="site-eyebrow">{t('Made for your kind of day')}</span>
@@ -313,23 +429,66 @@ export default function Home() {
           </div>
         </section>
 
+        <section className="site-section site-exams" id="exams">
+          <div className="site-wrap">
+            <div className="site-section-head">
+              <span className="site-eyebrow">{t('For aspirants')}</span>
+              <h2>{t('Every exam, from the form to the result')}</h2>
+              <p>
+                {t(
+                  'Built for government and entrance exams — RRB, SSC, UPSC, banks, NEET, JEE, CTET, RPSC, RSSB and 50+ more — in Hindi and English. Cue never signs in to an exam portal and never asks for a password, an OTP or a date of birth.',
+                )}
+              </p>
+            </div>
+            <div className="site-cards">
+              {EXAM_POINTS.map((f) => (
+                <article key={f.title} className="site-card">
+                  <span className="site-mark" aria-hidden>
+                    {f.mark}
+                  </span>
+                  <h3>{t(f.title)}</h3>
+                  <p>{t(f.text)}</p>
+                </article>
+              ))}
+            </div>
+            <div className="site-ctas site-exams-ctas">
+              <button className="site-btn primary-btn is-big" onClick={() => void demo('exams')} disabled={demoBusy}>
+                {demoBusy ? t('Opening the demo…') : t('Try the Cue Exams demo')}
+              </button>
+              <Link to="/exams-app" className="site-btn ghost-btn is-big">
+                {t('Open Cue Exams')}
+              </Link>
+            </div>
+            <p className="site-small">
+              {t(
+                'The exams demo opens an aspirant’s account: SSC CGL in 12 days with its admit card read, a clash with REET, a form still to fill, and document verification — each with its list.',
+              )}
+            </p>
+          </div>
+        </section>
+
         <section className="site-section is-tinted" id="features">
           <div className="site-wrap">
             <div className="site-section-head">
               <span className="site-eyebrow">{t('Everything in one place')}</span>
               <h2>{t('Less to remember. Nothing that slips.')}</h2>
+              <p>{t('Every feature, in a few lines each. All of it is open to everyone; what you pick only decides what comes first.')}</p>
             </div>
-            <div className="site-features">
-              {FEATURES.map((f) => (
-                <div key={f.title} className="site-feature">
-                  <span className="site-mark small" aria-hidden>
-                    {f.mark}
-                  </span>
-                  <div>
-                    <h3>{t(f.title)}</h3>
-                    <p>{t(f.text)}</p>
-                  </div>
-                </div>
+            <div className="site-people site-detail">
+              {DETAIL.map((g) => (
+                <article key={g.title} className="site-person">
+                  <h3>
+                    <span className="site-detail-mark" aria-hidden>
+                      {g.mark}
+                    </span>
+                    {t(g.title)}
+                  </h3>
+                  <ul>
+                    {g.points.map((x) => (
+                      <li key={x}>{t(x)}</li>
+                    ))}
+                  </ul>
+                </article>
               ))}
             </div>
           </div>

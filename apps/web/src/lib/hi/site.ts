@@ -8,7 +8,6 @@ export const site: Record<string, string> = {
   'Try the demo': 'डेमो देखें',
   Sections: 'हिस्से',
   'From your email': 'आपके ईमेल से',
-  'Who it is for': 'किसके लिए',
   Features: 'खूबियाँ',
   Privacy: 'गोपनीयता',
   'Get started': 'शुरू करें',
@@ -136,31 +135,113 @@ export const site: Record<string, string> = {
   'Bills and renewals': 'बिल और रिन्यूअल',
 
   // Everything else
-  'One line is enough': 'एक लाइन काफ़ी है',
-  'Type or speak a plan in plain words — Hindi time words too. Cue works out what, when, who and where.':
-    'प्लान सीधे शब्दों में लिखें या बोलें — हिंग्लिश में भी, जैसे “kal shaam 7 baje”। Cue समझ लेता है क्या, कब, कौन और कहाँ।',
   'Reminders that follow up': 'रिमाइंडर जो पीछा न छोड़ें',
-  'On your phone at the right time, and again if it is still open. Things do not quietly slip.':
-    'सही समय पर आपके फ़ोन पर, और काम बाकी हो तो फिर से। कुछ चुपचाप नहीं छूटता।',
-  'Your day, at a glance': 'आपका दिन, एक नज़र में',
-  'Today shows what is due, what is overdue, what is waiting on others, and what Cue noticed.':
-    '“आज” में दिखता है क्या करना है, किसका समय निकल गया, किसके लिए दूसरों का इंतज़ार है, और Cue ने क्या देखा।',
-  'Your calendar, in one step': 'आपका कैलेंडर, एक कदम में',
-  'Google or Microsoft calendar mirrored in, alongside everything else you plan here.':
-    'Google या Microsoft कैलेंडर यहीं दिखता है, यहाँ बनाए बाकी प्लान के साथ।',
-  'Save things for a city; they surface when you plan a trip there, with tickets and stays attached.':
-    'किसी शहर के लिए चीज़ें सहेजें; वहाँ की यात्रा बनाते ही सामने आ जाती हैं, टिकट और ठहरने की जगह के साथ।',
-  'Who you know, where they work, when you last spoke, and a nudge to keep in touch.':
-    'आप किसे जानते हैं, वे कहाँ काम करते हैं, आखिरी बार कब बात हुई, और संपर्क में रहने की याद।',
-  Trackers: 'ट्रैकर',
-  'Job applications, candidates and deals, each with its next step and a nudge when it stalls.':
-    'नौकरी के आवेदन, उम्मीदवार और डील — हर एक का अगला कदम, और रुकने पर याद।',
-  'Due dates, amounts and one-tap “paid” that moves each to its next date.':
-    'आखिरी तारीखें, राशि, और एक टैप में “चुकाया”, जो उसे अगली तारीख पर ले जाता है।',
-  'Expenses and money owed': 'खर्च और बकाया पैसे',
-  'Log spending, claim it back from work, split with friends and remind them to pay.':
-    'खर्च लिखें, ऑफ़िस से क्लेम करें, दोस्तों के साथ बाँटें और उन्हें चुकाने की याद दिलाएँ।',
-  'Works like an app': 'ऐप की तरह चलता है',
-  'Add it to your home screen. Works offline and catches up when you are back online.':
-    'होम स्क्रीन पर जोड़ें। इंटरनेट के बिना भी चलता है, और ऑनलाइन होते ही सब अपडेट हो जाता है।',
+
+  // A day with Cue, Cue Exams in detail, every feature (E15)
+  'A day with Cue': 'Cue के साथ एक दिन',
+  'It speaks up at the right moments': 'सही समय पर खुद बताता है',
+  'You do not open Cue to check on things; it tells you, on your phone, when it matters.':
+    'चीज़ें देखने के लिए आपको Cue खोलना नहीं पड़ता; जब ज़रूरी हो, यह आपके फ़ोन पर खुद बताता है।',
+  'The day’s shape, before you start': 'दिन शुरू होने से पहले, पूरा दिन एक नज़र में',
+  'Meetings and tasks, a journey with the time to leave, parcels and the cash to keep ready, bills due, your longest free stretch.':
+    'मीटिंग और काम, सफ़र और निकलने का समय, पार्सल और तैयार रखने वाला कैश, देय बिल, और आपका सबसे लंबा खाली समय।',
+  'Before a meeting': 'मीटिंग से पहले',
+  'What is still open from last time': 'पिछली बार का क्या बाकी है',
+  'Fifteen minutes before, the follow-ups still open from earlier meetings with the same people.':
+    'पंद्रह मिनट पहले, उन्हीं लोगों के साथ पिछली मीटिंगों के बाकी फ़ॉलो-अप।',
+  'After a meeting': 'मीटिंग के बाद',
+  'Say what came of it: your next steps become tasks, theirs become “waiting on” items Cue chases politely.':
+    'बताएँ कि क्या तय हुआ: आपके अगले कदम काम बन जाते हैं, और उनके “इंतज़ार” वाले, जिनकी Cue विनम्रता से याद दिलाता है।',
+  'A buzz at the time, then again until it is done, snoozed or moved. Missed it? Three real free slots to move it to.':
+    'समय पर रिमाइंडर, फिर दोबारा — जब तक काम हो न जाए, टल न जाए या खिसक न जाए। छूट गया? उसे खिसकाने के लिए तीन सच में खाली समय।',
+  'Tomorrow, planned': 'कल की योजना तैयार',
+  'Did you log everything? Cue proposes where tomorrow’s loose ends fit, and writes up your day for whoever you report to.':
+    'सब दर्ज हुआ? Cue बताता है कि कल के बचे काम कहाँ फ़िट होंगे, और जिसे आप रिपोर्ट करते हैं उसके लिए आपके दिन की रिपोर्ट लिख देता है।',
+  'The week, in two minutes': 'पूरा हफ़्ता, दो मिनट में',
+  'What got done, what slipped, who still owes you, and how next week is already filling up.':
+    'क्या हुआ, क्या छूटा, किस पर अब भी आपका बकाया है, और अगला हफ़्ता अभी से कितना भर रहा है।',
+  'For aspirants': 'परीक्षा की तैयारी करने वालों के लिए',
+  'Every exam, from the form to the result': 'हर परीक्षा, फॉर्म से परिणाम तक',
+  'Built for government and entrance exams — RRB, SSC, UPSC, banks, NEET, JEE, CTET, RPSC, RSSB and 50+ more — in Hindi and English. Cue never signs in to an exam portal and never asks for a password, an OTP or a date of birth.':
+    'सरकारी और प्रवेश परीक्षाओं के लिए बना — RRB, SSC, UPSC, बैंक, NEET, JEE, CTET, RPSC, RSSB और 50 से ज़्यादा — हिन्दी और अंग्रेज़ी में। Cue कभी किसी परीक्षा पोर्टल पर लॉग इन नहीं करता और कभी पासवर्ड, OTP या जन्मतिथि नहीं माँगता।',
+  'Dates from official notices': 'आधिकारिक सूचनाओं से तारीखें',
+  'Cue reads the boards’ own notice pages. A person checks each notice before anyone is told, and its link is always beside the date.':
+    'Cue बोर्ड के अपने सूचना-पृष्ठ पढ़ता है। किसी को बताने से पहले एक व्यक्ति हर सूचना जाँचता है, और उसका लिंक हमेशा तारीख के साथ रहता है।',
+  'Last dates that are not missed': 'अंतिम तिथि छूटे नहीं',
+  'Reminded before the last date to apply and to pay, and on the day, until the form is filled.':
+    'आवेदन और शुल्क की अंतिम तिथि से पहले और उसी दिन रिमाइंडर, जब तक फॉर्म भर न जाए।',
+  'A list for every step': 'हर चरण की सूची',
+  'What the form asks for — photo sizes, marksheets, your category certificate — and what to carry to document verification, the medical and the interview.':
+    'फॉर्म में क्या लगेगा — फोटो का माप, अंकतालिकाएँ, आपका वर्ग प्रमाण पत्र — और दस्तावेज़ सत्यापन, मेडिकल और इंटरव्यू में क्या ले जाना है।',
+  'Admit card to exam day': 'प्रवेश पत्र से परीक्षा का दिन',
+  'Share the admit card PDF: reporting time, gate closing, the centre, what to carry, and the journey if the centre is in another city.':
+    'प्रवेश पत्र का PDF शेयर करें: रिपोर्टिंग का समय, गेट बंद होने का समय, केंद्र, साथ ले जाने की सूची, और केंद्र दूसरे शहर में हो तो सफ़र।',
+  'The exam day, sent to family': 'परीक्षा का दिन, परिवार को',
+  'One tap sends the day, the reporting time and the centre with a map link on WhatsApp — never your roll number.':
+    'एक टैप में दिन, रिपोर्टिंग का समय और केंद्र, नक्शे के लिंक के साथ, WhatsApp पर — रोल नंबर कभी नहीं।',
+  'Clashes caught': 'टकराती तारीखें पकड़ी जाती हैं',
+  'Two exams on one day, or on following days in two cities, pointed out the moment a date lands.':
+    'एक दिन दो परीक्षाएँ, या लगातार दिनों में दो शहरों में — तारीख आते ही बताया जाता है।',
+  'Your roll number in the result': 'परिणाम में आपका रोल नंबर',
+  'When a result list is out, Cue looks for your roll number and shows the cut-offs for your category.':
+    'परिणाम सूची आते ही Cue उसमें आपका रोल नंबर ढूँढता है और आपके वर्ग का कट-ऑफ दिखाता है।',
+  'Your expected score': 'आपके संभावित अंक',
+  'Count your right and wrong answers from the answer key: Cue works out the score by the board’s marking and holds it against the last cut-off.':
+    'उत्तर कुंजी से अपने सही और गलत उत्तर गिनें: Cue बोर्ड के तरीके से अंक निकालता है और पिछले कट-ऑफ से मिलाता है।',
+  'Study plan and mock tests': 'पढ़ाई की योजना और मॉक टेस्ट',
+  'Subjects across the week until the day before the exam, with a weekly mock test and your scores’ trend.':
+    'परीक्षा से एक दिन पहले तक पूरे हफ़्ते में विषय, हर हफ़्ते मॉक टेस्ट, और आपके अंकों की प्रगति।',
+  'A Sunday report': 'रविवार की रिपोर्ट',
+  'Every Sunday evening: sessions done, mock scores against last week, and the dates coming up.':
+    'हर रविवार शाम: पढ़ाई के पूरे सत्र, पिछले हफ़्ते के मुकाबले मॉक टेस्ट के अंक, और आगे की तारीखें।',
+  'Forms open now': 'अभी खुले फॉर्म',
+  'New forms with their last dates, marked by whether they fit what you studied — and a heads-up when one opens for an exam like yours.':
+    'नए फॉर्म अपनी अंतिम तिथि के साथ, आपकी पढ़ाई के हिसाब से चिह्नित — और आपकी जैसी परीक्षा का फॉर्म खुलते ही सूचना।',
+  'Certificates on time': 'प्रमाण पत्र समय पर',
+  'EWS, OBC or MBC: a reminder every 1 April to get that year’s certificate, before a form asks for it.':
+    'EWS, OBC या MBC: हर 1 अप्रैल को उस साल का प्रमाण पत्र बनवाने का रिमाइंडर, फॉर्म में माँगे जाने से पहले।',
+  'Try the Cue Exams demo': 'Cue Exams का डेमो देखें',
+  'Open Cue Exams': 'Cue Exams खोलें',
+  'The exams demo opens an aspirant’s account: SSC CGL in 12 days with its admit card read, a clash with REET, a form still to fill, and document verification — each with its list.':
+    'परीक्षा डेमो में एक अभ्यर्थी का खाता खुलता है: 12 दिन बाद SSC CGL और उसका पढ़ा हुआ प्रवेश पत्र, REET से टकराती तारीख, भरने को बाकी एक फॉर्म, और दस्तावेज़ सत्यापन — हर एक अपनी सूची के साथ।',
+  'Every feature, in a few lines each. All of it is open to everyone; what you pick only decides what comes first.':
+    'हर खूबी, कुछ लाइनों में। सब कुछ सबके लिए खुला है; आप जो चुनते हैं, उससे बस यह तय होता है कि पहले क्या दिखे।',
+  'Capture in one line': 'एक लाइन में दर्ज',
+  'Type, speak, or share a message in from WhatsApp or SMS': 'लिखें, बोलें, या WhatsApp या SMS से मैसेज शेयर करें',
+  'English, Hinglish and Hindi: “kal shaam 6 baje doctor”': 'अंग्रेज़ी, हिंग्लिश और हिन्दी: “kal shaam 6 baje doctor”',
+  'Plans, repeating plans, trips, bills, expenses, parcels, money owed and exams — from the same box':
+    'प्लान, दोहराने वाले प्लान, यात्राएँ, बिल, खर्च, पार्सल, उधार और परीक्षाएँ — एक ही बॉक्स से',
+  'It shows what it understood before saving, and asks rather than guesses': 'सहेजने से पहले दिखाता है कि क्या समझा, और अंदाज़ा लगाने के बजाय पूछ लेता है',
+  'Plans and reminders': 'प्लान और रिमाइंडर',
+  'Reminders that repeat until a thing is done, snoozed or moved': 'रिमाइंडर, जो तब तक दोहराते हैं जब तक काम हो न जाए, टल न जाए या खिसक न जाए',
+  'Clashes caught as you plan, with free times offered instead': 'प्लान करते समय ही टकराव पकड़ा जाता है, और बदले में खाली समय सुझाए जाते हैं',
+  'Overdue items moved to a real free slot, or cleared in one sitting': 'छूटे काम सच में खाली समय पर खिसकाएँ, या एक बार में निपटाएँ',
+  'Work and personal kept apart, and focus time kept quiet': 'काम और निजी अलग-अलग, और फ़ोकस के समय शांति',
+  'Email and calendar': 'ईमेल और कैलेंडर',
+  'Gmail or Outlook, read-only: tickets, stays, parcels, bills, insurance, PUC, FASTag, challans, exam emails':
+    'Gmail या Outlook, सिर्फ़ पढ़ने के लिए: टिकट, होटल, पार्सल, बिल, बीमा, PUC, FASTag, चालान, परीक्षा के ईमेल',
+  'Google and Microsoft calendars, or any calendar link, mirrored in': 'Google और Microsoft कैलेंडर, या कोई भी कैलेंडर लिंक, सब यहीं दिखता है',
+  'No email is stored, and none is sent to any AI': 'कोई ईमेल सहेजा नहीं जाता, और कोई भी AI को नहीं भेजा जाता',
+  'One notification when something new is found': 'कुछ नया मिलने पर एक नोटिफ़िकेशन',
+  'Made from bookings, and from plans in another city': 'बुकिंग से, और दूसरे शहर के प्लान से अपने आप बनती हैं',
+  'Day by day, with the time to leave for each journey': 'दिन-ब-दिन, हर सफ़र के निकलने के समय के साथ',
+  'A packing list the evening before': 'एक शाम पहले सामान की सूची',
+  'Things saved for a city, offered when you go there': 'किसी शहर के लिए सहेजी चीज़ें, वहाँ जाने पर याद',
+  'Who they are, where they work, when you last spoke': 'कौन हैं, कहाँ काम करते हैं, आखिरी बार कब बात हुई',
+  'A nudge to keep in touch, at the pace you choose': 'संपर्क बनाए रखने की याद, आपकी चुनी रफ़्तार से',
+  'Birthdays, anniversaries and festival greetings, a tap each': 'जन्मदिन, सालगिरह और त्योहार की शुभकामनाएँ, हर एक एक टैप में',
+  'Money owed to you, with a WhatsApp reminder and your UPI ID': 'आपका बकाया, WhatsApp रिमाइंडर और आपकी UPI ID के साथ',
+  'Boards for a job hunt, hiring and deals, each with its next step': 'नौकरी की तलाश, भर्ती और डील के बोर्ड, हर एक का अगला कदम',
+  'Companies, and where each one stands': 'कंपनियाँ, और हर एक कहाँ तक पहुँची',
+  'Weekly targets for calls and visits': 'कॉल और विज़िट के साप्ताहिक लक्ष्य',
+  'A daily report or standup, written for you': 'रोज़ की रिपोर्ट या स्टैंडअप, आपके लिए लिखा हुआ',
+  'Bills and renewals with one-tap “paid”': 'बिल और रिन्यूअल, एक टैप में “भर दिया”',
+  'Expenses by month, claims from work, receipts': 'महीने के खर्च, ऑफ़िस से क्लेम, रसीदें',
+  'Parcels arriving today, and the cash on delivery': 'आज आने वाले पार्सल, और कैश ऑन डिलीवरी',
+  'Car insurance, PUC and service, by number plate': 'गाड़ी का बीमा, PUC और सर्विस, नंबर प्लेट के हिसाब से',
+  'Everywhere, in your language': 'हर जगह, आपकी भाषा में',
+  'The whole app in English or Hindi': 'पूरा ऐप अंग्रेज़ी या हिन्दी में',
+  'On any phone’s browser, and as an Android app': 'किसी भी फ़ोन के ब्राउज़र में, और Android ऐप की तरह',
+  'Works offline, and catches up when you are back': 'बिना इंटरनेट भी चलता है, और वापस ऑनलाइन होने पर सब मिला लेता है',
+  'Your data is never sold or used for ads': 'आपका डेटा कभी बेचा नहीं जाता, न विज्ञापनों में इस्तेमाल होता है',
 }

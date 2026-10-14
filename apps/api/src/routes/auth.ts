@@ -81,7 +81,11 @@ export async function authRoutes(app: FastifyInstance) {
     const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
     const address = forwarded.at(-1) ?? req.ip
     if (!demoAllowed(address)) return reply.code(429).send({ error: 'too_many_demos' })
-    const demo = await createDemo()
+    // The everyday week, or — from Cue Exams — an aspirant's; in the visitor's language.
+    const opts = z
+      .object({ kind: z.enum(['everyday', 'exams']).optional(), language: z.enum(['en', 'hi']).optional() })
+      .parse(req.body ?? {})
+    const demo = await createDemo(new Date(), opts)
     const token = app.jwt.sign({ sub: demo.userId, orgId: demo.orgId, email: demo.email })
     return reply.code(201).send({ token })
   })

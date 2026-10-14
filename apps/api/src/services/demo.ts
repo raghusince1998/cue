@@ -7,11 +7,14 @@ import { createBill } from './bills.ts'
 import { recordDelivery } from './deliveries.ts'
 import { createItem } from './trackers.ts'
 import { addOwed } from './owed.ts'
+import { loadExamsDemo } from './examsDemo.ts'
 
 /**
  * Trying Cue without signing up: an account of its own, filled with a
  * realistic week — plans, a trip, bills, a parcel, a job application, money
- * owed — and gone a day later. Nothing in it is anyone's real data.
+ * owed — and gone a day later. Nothing in it is anyone's real data. From
+ * Cue Exams, an aspirant's account instead (examsDemo.ts). In the language
+ * the visitor was reading, set first, so every title is made in it.
  */
 
 /** How long a demo lives. */
@@ -21,7 +24,11 @@ const pad = (n: number) => String(n).padStart(2, '0')
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 const inDays = (now: Date, n: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + n)
 
-export async function createDemo(now = new Date()): Promise<{ userId: string; orgId: string; email: string }> {
+export async function createDemo(
+  now = new Date(),
+  opts: { kind?: 'everyday' | 'exams'; language?: 'en' | 'hi' } = {},
+): Promise<{ userId: string; orgId: string; email: string }> {
+  const exams = opts.kind === 'exams'
   const email = `demo-${randomBytes(6).toString('hex')}@demo.cue`
   // Nobody signs in to a demo with a password; this one exists only to fill the column.
   const passwordHash = await bcrypt.hash(randomBytes(24).toString('hex'), 8)
@@ -37,12 +44,19 @@ export async function createDemo(now = new Date()): Promise<{ userId: string; or
         passwordHash,
         role: 'owner',
         isDemo: true,
-        uses: ['personal', 'office'],
-        homeCity: 'Mumbai',
+        uses: exams ? ['exams'] : ['personal', 'office'],
+        homeCity: exams ? 'Jaipur' : 'Mumbai',
+        language: opts.language ?? 'en',
+        ...(exams ? { examLevel: 'graduate' as const } : {}),
       })
       .returning()
     return { org: org!, user: user! }
   })
+
+  if (exams) {
+    await loadExamsDemo(org.id, user.id, now)
+    return { userId: user.id, orgId: org.id, email }
+  }
 
   await loadSampleDay(org.id, user.id, now)
 
