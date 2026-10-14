@@ -10,12 +10,16 @@ import {
   findNumber,
   isLaterExamStage,
   listFoundHi,
+  listIn,
+  noticeKind,
   noticeLineHi,
   noticeSummary,
   numbersIn,
   proposeFromNotice,
   type ListMeaning,
+  type NoticeDate,
   type NoticeDTO,
+  type NoticeKind,
   type NoticeProposal,
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
@@ -40,19 +44,37 @@ export const USER_AGENT = 'CueBot/1.0 (+https://cue.vitelio.in; exam notices for
 export interface NoticeSource {
   id: string
   name: string
-  /** Said before each title, so "Patwari 2025 : …" reads as this board's Patwari. */
+  /** The board, as the exams page names it: WATCHED_BOARDS in @cue/shared. */
   board: string
+  /** Said before each title, so "Patwari 2025 : …" reads as this board's Patwari. The board, unless set. */
+  prefix?: string
   url: string
-  read: 'links' | 'rpsc-dates'
+  /**
+   * How the page lists its notices: links; RPSC's table of exam dates; SSC's
+   * notice data (the same the browser fetches for its own page) and its
+   * calendar; RRB's list of updates by CEN; SBI's cards, one a recruitment.
+   */
+  read: 'links' | 'rpsc-dates' | 'ssc-api' | 'ssc-calendar' | 'rrb-updates' | 'sbi-careers'
   /** For a page of links: which are notices. */
   linkPattern?: RegExp
+  /** What every notice from it is, when the source says so and its titles do not. */
+  kind?: NoticeKind
+  /** Where a person reads them, when a notice has no link of its own. */
+  page?: string
 }
+
+/** SSC's own query for a kind of notice, as its website sends it. */
+const ssc = (path: string, contentType: string, attributes: string, order = 'key=createdAt&order=DESC') =>
+  `https://ssc.gov.in/api/general-website/portal/${path}?page=1&limit=20&contentType=${contentType}&${order}&isAttachment=true&language=english&attributes=${attributes}`
+const SSC_FIELDS = 'id,headline,examId,examYear,contentType,startDate,endDate,language,createdAt'
 
 /**
  * The pages watched: those that answer a named robot, allow it, and list
- * notices in the page itself. UPSC and NTA's exam sites refuse robots; SSC,
- * IBPS, RRB and Rajasthan Police build theirs in the browser, with nothing
- * to read in the page.
+ * notices in the page itself or in data the page fetches. Checked 13 Oct
+ * 2026: UPSC and NTA's NEET and JEE Main sites refuse robots; IBPS's
+ * certificate cannot be verified; Rajasthan Police builds its page in the
+ * browser from nothing CueBot can read; RRB's notice pages turn CueBot away,
+ * so its list of updates is read and each update links to them for people.
  */
 export const NOTICE_SOURCES: NoticeSource[] = [
   {
@@ -65,6 +87,31 @@ export const NOTICE_SOURCES: NoticeSource[] = [
   },
   { id: 'rpsc-exam-dates', name: 'RPSC: exam dates', board: 'RPSC', url: 'https://rpsc.rajasthan.gov.in/proposedexamdate', read: 'rpsc-dates' },
   { id: 'nta-notices', name: 'NTA: notices', board: 'NTA', url: 'https://nta.ac.in/', read: 'links', linkPattern: /\/Download\/Notice\//i },
+  { id: 'ugc-net', name: 'UGC NET: notices', board: 'NTA', prefix: 'UGC NET', url: 'https://ugcnet.nta.ac.in/', read: 'links', linkPattern: /\/images\/.+\.pdf$/i },
+  { id: 'csir-net', name: 'CSIR NET: notices', board: 'NTA', prefix: 'CSIR NET', url: 'https://csirnet.nta.ac.in/', read: 'links', linkPattern: /\/images\/.+\.pdf$/i },
+  {
+    id: 'ssc-notice-board',
+    name: 'SSC: notice board',
+    board: 'SSC',
+    url: ssc('notice-boards', 'notice-boards', 'id,headline,examId,contentType,redirectUrl,startDate,endDate,language,createdAt'),
+    read: 'ssc-api',
+    page: 'https://ssc.gov.in/home/notice-board',
+  },
+  { id: 'ssc-admit-cards', name: 'SSC: admit cards', board: 'SSC', url: ssc('records', 'admit-card', SSC_FIELDS), read: 'ssc-api', kind: 'admit_card', page: 'https://ssc.gov.in/' },
+  { id: 'ssc-answer-keys', name: 'SSC: answer keys', board: 'SSC', url: ssc('records', 'answer-key', SSC_FIELDS), read: 'ssc-api', kind: 'answer_key', page: 'https://ssc.gov.in/' },
+  { id: 'ssc-results', name: 'SSC: results', board: 'SSC', url: ssc('records', 'results', SSC_FIELDS), read: 'ssc-api', kind: 'result', page: 'https://ssc.gov.in/' },
+  {
+    id: 'ssc-calendar',
+    name: 'SSC: exam calendar',
+    board: 'SSC',
+    url: ssc('ssc-calendar', 'ssc-calendar', 'id,headline,examId,examYear,desc,content,contentType,startDate,endDate,language,createdAt', 'key=startDate&order=ASC&isPaginationRequired=false'),
+    read: 'ssc-calendar',
+    page: 'https://ssc.gov.in/ssc-calender',
+  },
+  { id: 'rrb-updates', name: 'RRB: updates about recruitments', board: 'RRB', url: 'https://rrb.indianrailways.gov.in/ajmer', read: 'rrb-updates' },
+  { id: 'sbi-careers', name: 'SBI: current openings', board: 'SBI', url: 'https://sbi.bank.in/web/careers/current-openings', read: 'sbi-careers' },
+  { id: 'lic-careers', name: 'LIC: careers', board: 'LIC', url: 'https://licindia.in/careers', read: 'links', linkPattern: /recruitment/i },
+  { id: 'ctet-notices', name: 'CTET: public notices', board: 'CTET', url: 'https://ctet.nic.in/', read: 'links', linkPattern: /s3waas\.gov\.in\/.+\/uploads\//i },
 ]
 
 /** Notices added by hand, for the pages no robot can read. */
@@ -76,6 +123,12 @@ export interface FoundItem {
   title: string
   /** A table that gives the exam's day beside it. */
   examDate?: string | null
+  /** What the source says it is, when its words do not. */
+  kind?: NoticeKind
+  /** The round, when the source names it: "CEN 06/2026". */
+  cycle?: string | null
+  /** Dates the source gives in its own fields: a calendar's last day to apply. */
+  dates?: NoticeDate[]
 }
 
 const ENTITIES: Record<string, string> = { amp: '&', nbsp: ' ', quot: '"', apos: "'", lt: '<', gt: '>', ndash: '–', mdash: '—' }
@@ -236,15 +289,163 @@ async function mayRead(fetcher: Fetcher, url: string, cache: Map<string, Rules |
   return rules !== 'refused' && robotsAllow(rules, `${u.pathname}${u.search}`)
 }
 
+// ── SSC, RRB and SBI ─────────────────────────────────────────────────────
+
+interface SscRecord {
+  id: string
+  headline?: string | null
+  redirectUrl?: string | null
+  createdAt?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  examYear?: string | null
+  content?: string | null
+  attachments?: { path?: string | null; fileName?: string | null }[]
+}
+
+function sscRecords(body: string): SscRecord[] {
+  try {
+    const json = JSON.parse(body) as { statusCode?: string; data?: unknown }
+    return String(json.statusCode) === '200' && Array.isArray(json.data) ? (json.data as SscRecord[]) : []
+  } catch {
+    return []
+  }
+}
+
+/** An SSC attachment's address: its path, the way SSC's own page builds it. */
+const sscFile = (path: string) => encodeURI(`https://ssc.gov.in/api/attachment/${path.replace(/\\/g, '/')}`)
+
+/** SSC's notices, from the data its page fetches: each with its first file, or the page. */
+export function readSscNotices(body: string, source: Pick<NoticeSource, 'page' | 'kind'>): FoundItem[] {
+  return sscRecords(body).flatMap((x) => {
+    const title = clean(x.headline ?? '')
+    if (title.length < 8) return []
+    const file = x.attachments?.find((a) => a.path)?.path
+    const url = file ? sscFile(file) : x.redirectUrl?.startsWith('http') ? x.redirectUrl : (source.page ?? 'https://ssc.gov.in/')
+    return [{ key: x.id, url, title, ...(source.kind ? { kind: source.kind } : {}) }]
+  })
+}
+
+const dm = (on: string) => new Date(`${on}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+
+/**
+ * SSC's calendar: for each exam, when applications open and close, and the
+ * month it is held. The last day to apply is proposed, as tentative: the
+ * calendar is SSC's plan, the notification its word.
+ */
+export function readSscCalendar(body: string, page: string): FoundItem[] {
+  return sscRecords(body).flatMap((x) => {
+    const headline = clean(x.headline ?? '')
+    const end = /^\d{4}-\d{2}-\d{2}/.exec(x.endDate ?? '')?.[0]
+    const start = /^\d{4}-\d{2}-\d{2}/.exec(x.startDate ?? '')?.[0]
+    if (headline.length < 8 || !end) return []
+    const month = clean(x.content ?? '')
+    const title = `${headline} — applications ${start ? `${dm(start)} to ` : 'until '}${dm(end)}${month ? `; exam ${month}` : ''} (SSC calendar, tentative)`
+    return [
+      {
+        key: `${x.id}|${end}`,
+        url: page,
+        title,
+        kind: 'notification' as const,
+        dates: [{ step: 'apply_by', on: end, at: null, round: null, note: 'Tentative, from the SSC calendar' }],
+      },
+    ]
+  })
+}
+
+/** What each of RRB's update categories is. */
+const RRB_KINDS: [RegExp, NoticeKind][] = [
+  [/e-?call\s+letters?|city\s+intimation/i, 'admit_card'],
+  [/exam\s+schedule|special\s+notice\s+on\s+exam/i, 'schedule'],
+  [/results?|selection\s+list/i, 'result'],
+  [/document\s+verification|medical/i, 'dv'],
+  [/objection|answer\s+key/i, 'answer_key'],
+  [/indicative\s+notice|notification/i, 'notification'],
+]
+
+/**
+ * RRB's "Updates About Recruitments": "(06/2026) Exam Schedule (12-10-2026)".
+ * It names the CEN, never the exam; the reviewer says which exam a CEN is
+ * once, and every later update for it is matched (see examForRound).
+ */
+export function readRrbUpdates(html: string, base: string): FoundItem[] {
+  const out = new Map<string, FoundItem>()
+  for (const m of html.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"']*getdata[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const text = clean(m[2]!)
+    const said = /^\(\s*((?:RPF\s+)?\d{1,2}\/20\d\d)\s*\)\s*(.+?)\s*\((\d{2})-(\d{2})-(20\d\d)\)$/i.exec(text)
+    if (!said) continue
+    const [, cen, category, d, mo, y] = said
+    const round = /^rpf/i.test(cen!) ? cen!.toUpperCase().replace(/\s+/g, ' ') : `CEN ${cen}`
+    const key = `${round}|${category}|${y}-${mo}-${d}`
+    if (out.has(key)) continue
+    let url: string
+    try {
+      url = new URL(m[1]!.replace(/&amp;/g, '&'), base).toString()
+    } catch {
+      continue
+    }
+    out.set(key, {
+      key,
+      url,
+      title: `RRB ${round}: ${category} (${d}-${mo}-${y})`,
+      cycle: round,
+      kind: RRB_KINDS.find(([re]) => re.test(category!))?.[1] ?? 'other',
+    })
+  }
+  return [...out.values()]
+}
+
+/**
+ * SBI's current openings: a card for each recruitment, its heading and the
+ * line beside it that says what is new — "(PRELIMINARY EXAMINATION CALL
+ * LETTER IS AVAILABLE FOR DOWNLOAD)". A new line is a new notice.
+ */
+export function readSbiCareers(html: string, base: string): FoundItem[] {
+  const out: FoundItem[] = []
+  const cards = html.split(/(?=<div\b[^>]*\bdata-articleid\s*=)/i).slice(1)
+  for (const card of cards) {
+    const advert = /data-articleid\s*=\s*["']([^"']+)["']/i.exec(card)?.[1]
+    const heading = /<p\b[^>]*>([\s\S]*?)<\/p>/i.exec(card)?.[1]
+    if (!advert || !heading) continue
+    const title = clean(heading)
+    if (title.length < 12) continue
+    out.push({ key: `${advert}|${title}`, url: `${base}#${encodeURIComponent(advert)}`, title: `${title} — ${advert}` })
+  }
+  return out
+}
+
 // ── Reading the pages ────────────────────────────────────────────────────
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
-/** What a found notice proposes, if it names an exam in the list. */
-function propose(source: { board: string }, item: FoundItem): NoticeProposal[] {
-  const p = proposeFromNotice({ title: item.title, board: source.board, examDate: item.examDate ?? null })
-  return p ? [p] : []
+/**
+ * The exam a round belongs to, as a reviewer has already said: RRB names a
+ * CEN, never its exam, so the first update for "CEN 06/2026" is matched by
+ * hand and every later one by that.
+ */
+async function examForRound(cycle: string): Promise<string | null> {
+  const [row] = await db
+    .select({ proposals: schema.notices.proposals })
+    .from(schema.notices)
+    .where(and(eq(schema.notices.status, 'approved'), sql`${schema.notices.proposals} @> ${JSON.stringify([{ cycle }])}::jsonb`))
+    .orderBy(desc(schema.notices.reviewedAt))
+    .limit(1)
+  return row?.proposals.find((p) => p.cycle === cycle)?.examKey ?? null
+}
+
+/** What a found notice proposes, if it names an exam in the list — or its round was matched before. */
+async function propose(source: Pick<NoticeSource, 'board' | 'prefix'>, item: FoundItem): Promise<NoticeProposal[]> {
+  const found = proposeFromNotice({ title: item.title, board: source.prefix ?? source.board, examDate: item.examDate ?? null })
+  const learned = !found && item.cycle ? await examForRound(item.cycle) : null
+  const p: NoticeProposal | null =
+    found ?? (learned ? { examKey: learned, cycle: item.cycle ?? null, kind: item.kind ?? noticeKind(item.title), dates: [], list: null } : null)
+  if (!p) return []
+  if (item.kind) p.kind = item.kind
+  if (item.cycle) p.cycle = item.cycle
+  if (item.dates?.length) p.dates = [...p.dates, ...item.dates]
+  p.list = listIn(p.examKey, p.kind, item.title)
+  return [p]
 }
 
 async function note(id: string, ok: boolean, message: string, now: Date, baselineDone?: boolean) {
@@ -295,7 +496,18 @@ export async function runNoticeWatch(
       continue
     }
     const html = page.body.toString('utf8')
-    const items = source.read === 'rpsc-dates' ? readRpscDates(html, source.url) : readLinks(html, source.url, source.linkPattern)
+    const items =
+      source.read === 'rpsc-dates'
+        ? readRpscDates(html, source.url)
+        : source.read === 'ssc-api'
+          ? readSscNotices(html, source)
+          : source.read === 'ssc-calendar'
+            ? readSscCalendar(html, source.page ?? source.url)
+            : source.read === 'rrb-updates'
+              ? readRrbUpdates(html, source.url)
+              : source.read === 'sbi-careers'
+                ? readSbiCareers(html, source.url)
+                : readLinks(html, source.url, source.linkPattern)
     if (items.length === 0) {
       const message = 'No notices found on the page: it may have changed. Check that it still lists them.'
       await note(source.id, false, message, now)
@@ -310,8 +522,9 @@ export async function runNoticeWatch(
     )
     let added = 0
     for (const item of items.filter((i) => !known.has(i.key))) {
-      const proposals = propose(source, item)
-      const ahead = Boolean(item.examDate && item.examDate >= ymd(now))
+      const proposals = await propose(source, item)
+      const today = ymd(now)
+      const ahead = Boolean((item.examDate && item.examDate >= today) || item.dates?.some((d) => d.on >= today))
       const status = first && !ahead ? 'baseline' : proposals.length > 0 ? 'pending' : 'unmatched'
       let hints: string[] = []
       if (status === 'pending' && /\.pdf(?:$|\?)/i.test(item.url) && pdfBudget > 0 && (await mayRead(fetcher, item.url, cache))) {
@@ -392,7 +605,7 @@ export async function sourceStatus() {
 
 /** A notice seen on a page no robot reads, added by the reviewer: proposed from its title, hinted from its text. */
 export async function addNotice(input: { url: string; title: string; board?: string | null; text?: string | null }, now = new Date()): Promise<NoticeDTO> {
-  const proposals = propose({ board: input.board ?? '' }, { key: input.url, url: input.url, title: input.title })
+  const proposals = await propose({ board: input.board ?? '' }, { key: input.url, url: input.url, title: input.title })
   const [row] = await db
     .insert(schema.notices)
     .values({

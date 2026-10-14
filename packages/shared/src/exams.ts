@@ -102,9 +102,9 @@ export const EXAMS: CatalogExam[] = [
   // Staff Selection Commission
   { key: 'ssc-cgl', name: 'SSC CGL', ...SSC, aliases: ['ssc\\s*cgl', 'cgl', 'combined\\s+graduate\\s+level'], rounds: [R.tier1, R.tier2, R.dv] },
   { key: 'ssc-chsl', name: 'SSC CHSL', ...SSC, aliases: ['ssc\\s*chsl', 'chsl', 'combined\\s+higher\\s+secondary'], rounds: [R.tier1, as(R.tier2, 'Tier 2 (with skill test)'), R.dv] },
-  { key: 'ssc-mts', name: 'SSC MTS & Havaldar', ...SSC, aliases: ['ssc\\s*mts', 'multi[\\s-]tasking\\s+staff'], rounds: [R.cbt, as(R.pet, 'PET/PST (Havaldar)'), R.dv] },
-  { key: 'ssc-gd', name: 'SSC GD Constable', ...SSC, aliases: ['ssc\\s*gd', 'gd\\s+constable'], rounds: [R.cbt, as(R.pet, 'PET/PST'), R.medical, R.dv] },
-  { key: 'ssc-cpo', name: 'SSC CPO (SI in Delhi Police & CAPFs)', ...SSC, aliases: ['ssc\\s*cpo', 'delhi\\s+police\\s+si'], rounds: [R.paper1, as(R.pet, 'PET/PST'), R.paper2, R.medical] },
+  { key: 'ssc-mts', name: 'SSC MTS & Havaldar', ...SSC, aliases: ['ssc\\s*mts', 'multi[\\s-]tasking\\s+staff', 'multi[\\s-]tasking\\s*\\(\\s*non[\\s-]*technical\\s*\\)\\s*staff'], rounds: [R.cbt, as(R.pet, 'PET/PST (Havaldar)'), R.dv] },
+  { key: 'ssc-gd', name: 'SSC GD Constable', ...SSC, aliases: ['ssc\\s*gd', 'gd\\s+constable', 'constable\\s*\\(\\s*gd\\s*\\)'], rounds: [R.cbt, as(R.pet, 'PET/PST'), R.medical, R.dv] },
+  { key: 'ssc-cpo', name: 'SSC CPO (SI in Delhi Police & CAPFs)', ...SSC, aliases: ['ssc\\s*cpo', 'delhi\\s+police\\s+si', 'sub[\\s-]*inspector\\s+in\\s+delhi\\s+police'], rounds: [R.paper1, as(R.pet, 'PET/PST'), R.paper2, R.medical] },
   { key: 'ssc-je', name: 'SSC JE', ...SSC, aliases: ['ssc\\s*je', 'ssc\\s+junior\\s+engineer'], rounds: [R.paper1, R.paper2, R.dv] },
   { key: 'ssc-steno', name: 'SSC Stenographer', ...SSC, aliases: ['ssc\\s*steno(?:grapher)?'], rounds: [R.cbt, R.skill, R.dv] },
   { key: 'ssc-selection-post', name: 'SSC Selection Post', ...SSC, aliases: ['ssc\\s+selection\\s+posts?', 'ssc\\s+phase[\\s-]*(?:[ivx]+|\\d+)'], rounds: [R.cbt, R.dv] },
@@ -121,11 +121,11 @@ export const EXAMS: CatalogExam[] = [
   { key: 'ibps-clerk', name: 'IBPS Clerk', ...IBPS, aliases: ['ibps\\s*clerk', 'crp[\\s-]*clerks?'], rounds: [R.prelims, R.mains] },
   { key: 'ibps-rrb', name: 'IBPS RRB (Gramin Bank)', ...IBPS, aliases: ['ibps\\s*rrb', 'crp[\\s-]*rrbs?','rrb\\s*(?:po|clerk|officer\\s+scale|office\\s+assistant)', 'gramin\\s+bank'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview (officers)')] },
   { key: 'ibps-so', name: 'IBPS SO', ...IBPS, aliases: ['ibps\\s*so', 'crp[\\s-]*spl'], rounds: [R.prelims, R.mains, R.interview] },
-  { key: 'sbi-po', name: 'SBI PO', ...SBI, aliases: ['sbi\\s*po', 'sbi\\s+probationary\\s+officers?'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview & group exercise')] },
-  { key: 'sbi-clerk', name: 'SBI Clerk (Junior Associate)', ...SBI, aliases: ['sbi\\s*clerk', 'sbi\\s+junior\\s+associates?'], rounds: [R.prelims, R.mains, { key: 'language', label: 'Language test' }] },
+  { key: 'sbi-po', name: 'SBI PO', ...SBI, aliases: ['sbi\\s*po', 'sbi\\s+probationary\\s+officers?', 'sbi\\s+recruitment\\s+of\\s+probationary\\s+officers?'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview & group exercise')] },
+  { key: 'sbi-clerk', name: 'SBI Clerk (Junior Associate)', ...SBI, aliases: ['sbi\\s*clerk', 'sbi\\s+junior\\s+associates?', 'junior\\s+associates?'], rounds: [R.prelims, R.mains, { key: 'language', label: 'Language test' }] },
   { key: 'rbi-grade-b', name: 'RBI Grade B', ...RBI, aliases: ['rbi\\s*grade[\\s-]*b'], rounds: [R.phase1, R.phase2, R.interview] },
   { key: 'rbi-assistant', name: 'RBI Assistant', ...RBI, aliases: ['rbi\\s*assistant'], rounds: [R.prelims, R.mains, { key: 'language', label: 'Language test (LPT)' }] },
-  { key: 'lic-aao', name: 'LIC AAO', body: 'Life Insurance Corporation', site: 'https://licindia.in', scope: 'national', aliases: ['lic\\s*aao'], rounds: [R.prelims, R.mains, R.interview] },
+  { key: 'lic-aao', name: 'LIC AAO', body: 'Life Insurance Corporation', site: 'https://licindia.in', scope: 'national', aliases: ['lic\\s*aao', 'lic\\s+recruitment\\s+of\\s+aao', 'aao\\s+generalists?'], rounds: [R.prelims, R.mains, R.interview] },
 
   // Entrance and eligibility tests
   { key: 'jee-main', name: 'JEE Main', ...NTA, site: 'https://jeemain.nta.nic.in', aliases: ['jee\\s*mains?', 'jee\\s*\\(\\s*main\\s*\\)'], rounds: [R.session1, R.session2], carry: NTA_CARRY },
@@ -140,7 +140,7 @@ export const EXAMS: CatalogExam[] = [
   { key: 'ctet', name: 'CTET', body: 'CBSE', site: 'https://ctet.nic.in', scope: 'national', aliases: ['ctet'], rounds: [R.exam] },
 
   // Defence
-  { key: 'agniveer-army', name: 'Army Agniveer', body: 'Indian Army', site: 'https://joinindianarmy.nic.in', scope: 'national', aliases: ['(?:army\\s+)?agniveer', 'agnipath'], rounds: [as(R.cbt, 'Online exam (CEE)'), { key: 'rally', label: 'Recruitment rally' }, R.medical] },
+  { key: 'agniveer-army', name: 'Army Agniveer', body: 'Indian Army', site: 'https://joinindianarmy.nic.in', scope: 'national', aliases: ['(?<!(?:navy|vayu|air\\s*force)[^\\n]{0,40})(?:army\\s+)?agniveer(?![^\\n]{0,30}(?:navy|vayu|air\\s*force))', 'agnipath'], rounds: [as(R.cbt, 'Online exam (CEE)'), { key: 'rally', label: 'Recruitment rally' }, R.medical] },
   { key: 'afcat', name: 'AFCAT', body: 'Indian Air Force', site: 'https://careerindianairforce.cdac.in', scope: 'national', aliases: ['afcat'], rounds: [as(R.exam, 'Online exam'), as(R.ssb, 'AFSB interview'), R.medical] },
 
   // Rajasthan
@@ -173,6 +173,11 @@ export const WATCHED_BOARDS: Record<string, string> = {
   RSSB: 'Rajasthan Staff Selection Board',
   RPSC: 'Rajasthan Public Service Commission',
   NTA: 'National Testing Agency',
+  SSC: 'Staff Selection Commission',
+  RRB: 'Railway Recruitment Boards',
+  SBI: 'State Bank of India',
+  LIC: 'Life Insurance Corporation',
+  CTET: 'CBSE',
 }
 
 /** "RSSB", when Cue reads the notices of the board that holds this exam itself. */
@@ -400,7 +405,7 @@ export function cycleIn(text: string, found: { at: number; length: number }): { 
     /^[\s,(\-–)]*(?:\((?:ug|pg|main|mains|preliminary)\)\s*)?(?:(?:level\s+)?exam(?:ination)?s?)?[\s,(\-–]*(20\d\d)(?:\s*[-–/]\s*(?:20)?\d\d)?\b/i.exec(after)?.[1] ?? null
   // Or a little further on, with only words between: "RAJ. STATE AND SUB.
   // SERVICES COMB. COMP EXAM 2026". Never a date's year: "20/11/2026".
-  const near = year ?? /^[^:—|\n\d]{0,40}?(?<![\d/.-])(20\d\d)\b(?![/.-]\d)/.exec(after)?.[1] ?? null
+  const near = year ?? /^(?:[^:—|\n\d(]|\([^)\n]{0,40}\)){0,80}?(?<![\d/.-])(20\d\d)\b(?![/.-]\d)/.exec(after)?.[1] ?? null
   return { cycle: cen ? `CEN ${cen[1]!.replace(/\s+/g, '')}` : near, cen, year: near }
 }
 

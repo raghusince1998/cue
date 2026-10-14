@@ -63,3 +63,23 @@ test('a list says what it is', () => {
   assert.equal(noticeSummary({ ...base, list: { means: 'selected', round: null, pdfUrl: null } }), 'RRB NTPC CEN 05/2024: final result out')
   assert.equal(noticeSummary({ ...base, list: { means: 'result', round: null, pdfUrl: null } }), 'RRB NTPC CEN 05/2024: result out')
 })
+
+test('the names boards use in their own notices', () => {
+  const read = (board: string, title: string) => {
+    const p = proposeFromNotice({ title, board })
+    return p ? [p.examKey, p.cycle] : null
+  }
+  // As SSC's notice board, results and calendar word them.
+  assert.deepEqual(read('SSC', 'Constable (GD) in Central Armed Police Forces (CAPFs) and SSF, and Rifleman (GD) in Assam Rifles Examination, 2026– Shortlisting'), ['ssc-gd', null])
+  assert.deepEqual(read('SSC', 'Combined Higher Secondary (10+2) Level Examination, 2026'), ['ssc-chsl', '2026'])
+  assert.deepEqual(read('SSC', 'Junior Engineer (Civil, Mechanical & Electrical) Examination, 2026'), ['ssc-je', '2026'])
+  assert.deepEqual(read('SSC', 'Sub-Inspector in Delhi Police & Central Armed Police Forces Examination, 2026'), ['ssc-cpo', '2026'])
+  assert.deepEqual(read('SSC', 'Multi-Tasking (Non-Technical) Staff, and Havaldar (CBIC & CBN) Examination, 2026'), ['ssc-mts', '2026'])
+  // SBI's and LIC's careers pages.
+  assert.deepEqual(read('SBI', 'RECRUITMENT OF JUNIOR ASSOCIATES (CUSTOMER SUPPORT & SALES) (PRELIMINARY EXAMINATION CALL LETTER IS AVAILABLE)'), ['sbi-clerk', null])
+  assert.deepEqual(read('SBI', 'RECRUITMENT OF PROBATIONARY OFFICERS (RESULT OF MAIN EXAMINATION)'), ['sbi-po', null])
+  assert.deepEqual(read('LIC', 'Recruitment of AAO Generalists Specialists Assistant Engineers 2025'), ['lic-aao', '2025'])
+  // The Navy's Agniveer test is not the Army's.
+  assert.equal(read('SSC', 'Indian Navy Entrance Test (INET) - [Agniveer (MR as SSR ) and SSR (Medical)]'), null)
+  assert.deepEqual(read('', 'Army Agniveer CEE 2026 admit card')?.[0], 'agniveer-army')
+})

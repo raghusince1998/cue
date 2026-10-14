@@ -158,6 +158,16 @@ if (existsSync(join(webDist, 'index.html'))) {
     }
     return reply.sendFile('index.html')
   })
+  // A file shared into Cue Exams before its service worker was running
+  // reaches here instead of the worker (sw.ts). The file cannot be kept
+  // without a page to give it to, so the reader opens to choose it again.
+  await app.register(async (share) => {
+    share.addContentTypeParser('multipart/form-data', (_req, payload, done) => {
+      payload.resume()
+      payload.on('end', () => done(null))
+    })
+    share.post('/share-file', async (_req, reply) => reply.redirect('/exams?app=exams&card=1', 303))
+  })
   app.log.info(`serving the built web app from ${webDist}`)
 } else {
   app.log.info('no web build found — run npm run build to serve the app from here')

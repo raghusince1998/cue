@@ -45,9 +45,11 @@ the journey.
 
 THINGS COME IN BY THEMSELVES
 Connect your email (read-only) and registration, admit card and result emails
-from the boards move your exams along on their own. New official notices on
-RPSC, RSSB and NTA's pages are checked by a person before anyone is told,
-always with the notice's own link.
+from the boards move your exams along on their own. Cue reads the official
+notices of SSC, RRB, NTA, CTET, SBI, LIC, RPSC and RSSB itself, and a person
+checks each one before anyone is told, always with the notice's own link.
+Share an admit card's PDF to Cue Exams from WhatsApp or Downloads, and it is
+read straight away.
 
 YOUR ROLL NUMBER IN THE RESULT LIST
 When a result or shortlist is published, Cue looks for your roll number in
@@ -113,9 +115,11 @@ REET जैसी परीक्षाएँ, और 50 से ज़्या�
 
 सब अपने आप
 ईमेल जोड़ें (केवल पढ़ने के लिए), तो बोर्ड के रजिस्ट्रेशन, प्रवेश पत्र और
-परिणाम के ईमेल आपकी परीक्षा को अपने आप आगे बढ़ाते हैं। RPSC, RSSB और NTA
-की नई आधिकारिक सूचनाएँ एक व्यक्ति जाँचता है, फिर बताई जाती हैं — हमेशा सूचना
-के लिंक के साथ।
+परिणाम के ईमेल आपकी परीक्षा को अपने आप आगे बढ़ाते हैं। SSC, RRB, NTA, CTET,
+SBI, LIC, RPSC और RSSB की नई आधिकारिक सूचनाएँ Cue खुद पढ़ता है, और एक व्यक्ति
+हर सूचना जाँचता है, फिर बताई जाती है — हमेशा सूचना के लिंक के साथ। WhatsApp
+या Downloads से प्रवेश पत्र का PDF Cue Exams में शेयर करें, वह तुरंत पढ़ लिया
+जाता है।
 
 परिणाम सूची में आपका रोल नंबर
 परिणाम या शॉर्टलिस्ट आते ही Cue उसमें आपका रोल नंबर ढूँढकर पृष्ठ के साथ बताता

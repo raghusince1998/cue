@@ -1386,6 +1386,7 @@ export { isExamBody, parseExamEmail, type ExamMail, type ExamMailKind } from './
 export {
   NOTICE_KINDS,
   datesMentioned,
+  listIn,
   noticeKind,
   noticeSummary,
   proposeFromNotice,

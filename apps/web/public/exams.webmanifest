@@ -5,7 +5,10 @@
   "description": "Every exam you apply for, from the form to the result: last dates and fees as reminders, the admit card made into the exam day, official notices and result lists checked for you. परीक्षा की हर तारीख याद, हिन्दी में भी।",
   "lang": "hi",
   "dir": "ltr",
-  "categories": ["education", "productivity"],
+  "categories": [
+    "education",
+    "productivity"
+  ],
   "start_url": "/exams?app=exams",
   "scope": "/",
   "display": "standalone",
@@ -13,34 +16,84 @@
   "theme_color": "#0f172a",
   "background_color": "#0f172a",
   "icons": [
-    { "src": "/exams-icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/exams-icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/exams-icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "/exams-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/exams-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/exams-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/exams-icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/exams-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "shortcuts": [
     {
       "name": "Read an admit card",
       "short_name": "Admit card",
       "url": "/exams?app=exams&card=1",
-      "icons": [{ "src": "/exams-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "/exams-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Add an exam",
       "short_name": "Add exam",
       "url": "/exams?app=exams&add=1",
-      "icons": [{ "src": "/exams-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "/exams-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Today",
       "short_name": "Today",
       "url": "/?app=exams",
-      "icons": [{ "src": "/exams-icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "/exams-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ],
   "share_target": {
-    "action": "/share",
-    "method": "GET",
-    "params": { "title": "title", "text": "text", "url": "url" }
+    "action": "/share-file",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "file",
+          "accept": [
+            "application/pdf",
+            ".pdf"
+          ]
+        }
+      ]
+    }
   }
 }

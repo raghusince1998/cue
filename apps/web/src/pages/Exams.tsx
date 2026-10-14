@@ -18,6 +18,7 @@ import {
 } from '@cue/shared'
 import { ApiError, api, apiSendFile } from '../lib/api.ts'
 import { announceChange, useOnChange } from '../lib/changes.ts'
+import { takeSharedFile } from '../lib/sharedFile.ts'
 import { useExamWords, type ExamWords } from '../lib/examWords.ts'
 import { Modal } from '../components/Modal.tsx'
 import { PhotoFitter } from '../components/PhotoFitter.tsx'
@@ -87,13 +88,17 @@ export default function Exams() {
   const [params, setParams] = useSearchParams()
   const [exams, setExams] = useState<ExamDTO[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [reading, setReading] = useState<{ examId: string } | null>(null)
+  const [reading, setReading] = useState<{ examId: string; file?: File } | null>(null)
   const [fitting, setFitting] = useState(false)
   const openId = params.get('exam')
   // The app icon's shortcuts: straight to reading an admit card, or adding an exam.
   const [adding, setAdding] = useState(() => params.get('add') === '1')
   useEffect(() => {
     if (params.get('card') === '1') setReading({ examId: '' })
+    // Shared from another app: the reader opens with the file already in it.
+    if (params.get('card') === 'shared') {
+      void takeSharedFile().then((file) => setReading({ examId: '', ...(file ? { file } : {}) }))
+    }
     if (params.has('card') || params.has('add')) {
       params.delete('card')
       params.delete('add')
@@ -218,6 +223,7 @@ export default function Exams() {
         <Modal title={w.readCard} onClose={() => setReading(null)} closeOnBackdrop={false}>
           <AdmitCardReader
             examId={reading.examId}
+            sharedFile={reading.file}
             exams={open}
             onDone={() => {
               setReading(null)
@@ -1081,7 +1087,18 @@ function Mocks({ exam, onChanged }: { exam: ExamDTO; onChanged: () => void }) {
  * shown to be put right, and only then made into the day. A card read wrong
  * should cost a correction here, not a missed gate.
  */
-function AdmitCardReader({ examId, exams, onDone }: { examId: string; exams: ExamDTO[]; onDone: () => void }) {
+function AdmitCardReader({
+  examId,
+  sharedFile,
+  exams,
+  onDone,
+}: {
+  examId: string
+  /** A file shared in from another app, read as soon as the reader opens. */
+  sharedFile?: File
+  exams: ExamDTO[]
+  onDone: () => void
+}) {
   const w = useExamWords()
   const [draft, setDraft] = useState<CardDraft | null>(null)
   const [pasted, setPasted] = useState('')
@@ -1110,6 +1127,15 @@ function AdmitCardReader({ examId, exams, onDone }: { examId: string; exams: Exa
       centreCity: card.centreCity ?? '',
     })
   }
+
+  useEffect(() => {
+    if (!sharedFile) return
+    // A photo of an admit card cannot be read: only its PDF, or its text.
+    if (sharedFile.type !== 'application/pdf' && !/\.pdf$/i.test(sharedFile.name)) setError(w.sharedNotPdf)
+    else void read({ file: sharedFile })
+    // Once, for the file it opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedFile])
 
   async function read(source: { file: File } | { text: string }) {
     setBusy(true)

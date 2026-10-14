@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
 import { NavigationRoute, registerRoute } from 'workbox-routing'
+import { receiveShare } from './lib/shareTarget.ts'
 
 declare const self: ServiceWorkerGlobalScope
 
@@ -24,6 +25,13 @@ registerRoute(
 
 self.addEventListener('install', () => {
   void self.skipWaiting()
+})
+
+// Shared into Cue Exams from another app: see lib/shareTarget.ts.
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+  if (event.request.method !== 'POST' || url.pathname !== '/share-file') return
+  event.respondWith(receiveShare(event.request, (name) => caches.open(name)))
 })
 
 self.addEventListener('activate', (event) => {
