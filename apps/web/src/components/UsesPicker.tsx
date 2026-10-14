@@ -11,6 +11,9 @@ import { t } from '../lib/i18n.tsx'
 export function UsesPicker({ onDone, compact = false }: { onDone?: () => void; compact?: boolean }) {
   const { me, saveUses } = useAuth()
   const [picked, setPicked] = useState<string[]>(me?.uses ?? [])
+  // Competitive exams is offered only to those who already have it (Cue
+  // Exams starts accounts with it); for everyone else it is not on offer yet.
+  const [offerExams] = useState(() => (me?.uses ?? []).includes('exams'))
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -47,7 +50,7 @@ export function UsesPicker({ onDone, compact = false }: { onDone?: () => void; c
         <div key={g.key} className="uses-group" role="group" aria-label={t(g.label)}>
           <span className="uses-group-label">{t(g.label)}</span>
           <div className="uses-grid">
-            {USES.filter((u) => u.group === g.key).map((u) => (
+            {USES.filter((u) => u.group === g.key && (u.key !== 'exams' || offerExams)).map((u) => (
               <button
                 key={u.key}
                 type="button"

@@ -131,7 +131,7 @@ interface DueUser {
   local_date: string
 }
 
-/** Whose Sunday evening has come, who tracks an exam, and has not had this week's yet. */
+/** Whose Sunday evening has come, who chose Competitive exams and tracks one, and has not had this week's yet. */
 export async function usersDueForExamWeek(now = new Date()): Promise<DueUser[]> {
   const at = now.toISOString()
   const rows = await db.execute(sql`
@@ -143,6 +143,7 @@ export async function usersDueForExamWeek(now = new Date()): Promise<DueUser[]> 
       and extract(hour from (${at}::timestamptz at time zone u.timezone)) < ${REPORT_HOUR + 3}
       and (u.last_exam_week_on is null
         or u.last_exam_week_on < (${at}::timestamptz at time zone u.timezone)::date)
+      and 'exams' = any(u.uses)
       and exists (select 1 from exams x where x.user_id = u.id and x.closed_at is null)
   `)
   return rows as unknown as DueUser[]

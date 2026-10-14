@@ -10,7 +10,7 @@ import { TemplateManager } from './QuickMessage.tsx'
 import { api } from '../lib/api.ts'
 import { locale, msg, rich, t } from '../lib/i18n.tsx'
 import { useAuth } from '../lib/auth.tsx'
-import { FILLABLE, describeWorkHours, hasWork, sectionsFor } from '@cue/shared'
+import { describeWorkHours, hasWork } from '@cue/shared'
 
 interface Me {
   id: string
@@ -84,8 +84,8 @@ export function Settings({ onClose }: { onClose: () => void }) {
   // Work hours only mean something to someone with a working life.
   const { me: account, saveLanguage } = useAuth()
   const working = hasWork(account?.uses ?? [])
-  // The Sunday prep report is for whoever has exams.
-  const aspirant = account ? sectionsFor(account.uses, FILLABLE, account.filled ?? []).includes('exams') : false
+  // The Sunday prep report is for whoever chose Competitive exams.
+  const aspirant = Boolean(account?.uses.includes('exams'))
 
   useEffect(() => {
     void api<Preferences>('/me/preferences').then(setPrefs)

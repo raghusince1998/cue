@@ -104,8 +104,13 @@ export type Section =
   | 'bills'
   | 'exams'
 
-/** Sections that hold things of their own, so can be kept for having something in them. */
-export const FILLABLE: readonly Section[] = ['trips', 'expenses', 'bills', 'jobs', 'hiring', 'deals', 'exams']
+/**
+ * Sections that hold things of their own, so can be kept for having
+ * something in them. Not Exams: it is there only for those who chose
+ * Competitive exams — an exam typed in or found in email still has its page
+ * (one link away, with a way to add it to the menu) and its dates on Today.
+ */
+export const FILLABLE: readonly Section[] = ['trips', 'expenses', 'bills', 'jobs', 'hiring', 'deals']
 
 /** How the menu groups sections, in this order. */
 export const SECTION_GROUPS: readonly { label: string; sections: readonly Section[] }[] = [
@@ -118,8 +123,8 @@ export const SECTION_GROUPS: readonly { label: string; sections: readonly Sectio
 /**
  * What everybody has, whatever they picked — the basics of a planner: the
  * people in their life, journeys, what repeats, what is done. Everything
- * else (bills, deals, exams…) only for those who picked it, or who already
- * have something in it.
+ * else (bills, deals…) only for those who picked it, or who already have
+ * something in it; Exams only for those who picked Competitive exams.
  */
 const EVERYONE: readonly Section[] = ['people', 'trips', 'repeating', 'history']
 
@@ -152,7 +157,7 @@ const picked = (uses: readonly string[]): Use[] => uses.filter((u): u is Use => 
 export function sectionsFor(uses: readonly string[], available: readonly Section[], filled: readonly string[] = []): Section[] {
   const known = picked(uses)
   const theirs = new Set<Section>(known.length ? [...EVERYONE, ...known.flatMap((u) => LEADS[u])] : UNSAID)
-  return available.filter((s) => theirs.has(s) || filled.includes(s))
+  return available.filter((s) => theirs.has(s) || (FILLABLE.includes(s) && filled.includes(s)))
 }
 
 /**

@@ -23,6 +23,7 @@ before(async () => {
   week = await import('./examWeek.ts')
   asha = await seedUser(h.sql, 'asha@test.local')
   bob = await seedUser(h.sql, 'bob@test.local')
+  await h.sql`update users set uses = '{exams}' where id in (${asha.userId}, ${bob.userId})`
   const Fastify = (await import('fastify')).default
   const { registerAuth } = await import('../auth.ts')
   const { examRoutes } = await import('../routes/exams.ts')
@@ -98,6 +99,9 @@ test('sent once on Sunday evening, only to those tracking an exam who have not t
 
   await h.sql`update users set exam_week_enabled = false, last_exam_week_on = null where id = ${asha.userId}`
   assert.equal(await week.runExamWeeks(sundayEvening, send), 0, 'turned off')
+
+  await h.sql`update users set exam_week_enabled = true, uses = '{personal}' where id = ${asha.userId}`
+  assert.equal(await week.runExamWeeks(sundayEvening, send), 0, 'not for someone who did not choose competitive exams')
 })
 
 test('a week with nothing in it says nothing', () => {

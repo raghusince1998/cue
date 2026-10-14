@@ -169,10 +169,10 @@ while (i < lines.length) {
     out.push(new Paragraph({ spacing: { after: 400 }, children: [new TextRun({ text: 'Developer guide', font: FONT, size: 44, color: '0F1620' })] }))
     out.push(
       para([
-        new TextRun({ text: 'Every feature and how it flows, the architecture, data model, background jobs, the exams module, testing and deploy.', font: FONT, size: 24, color: MUTED }),
+        new TextRun({ text: 'Every feature and how it flows, the architecture, data model, background jobs, testing and deploy.', font: FONT, size: 24, color: MUTED }),
       ]),
     )
-    out.push(new Paragraph({ spacing: { before: 600, after: 60 }, children: [new TextRun({ text: 'As of 14 October 2026 · exams phases E1–E15 · migration 0058', font: FONT, size: 20, color: MUTED })] }))
+    out.push(new Paragraph({ spacing: { before: 600, after: 60 }, children: [new TextRun({ text: 'As of 14 October 2026 · migration 0058', font: FONT, size: 20, color: MUTED })] }))
     out.push(new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: 'Source: docs/DEVELOPER.md in the repository (this file is generated from it)', font: FONT, size: 20, color: MUTED })] }))
     out.push(new Paragraph({ children: [new PageBreak()] }))
     i += 1

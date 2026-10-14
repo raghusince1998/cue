@@ -3,7 +3,7 @@
 Everything a developer needs to work on Cue: what it does, how it is built,
 how each feature flows from the screen to the database and back, and how it
 is tested and shipped. It is written against the code as of 14 Oct 2026
-(exams phases E1–E15, migration `0058`). File links are relative to this
+(migration `0058`). File links are relative to this
 folder, so they work on GitHub and in an editor.
 
 > **Contents**
@@ -15,17 +15,16 @@ folder, so they work on GitHub and in an editor.
 > 6. [The server](#6-the-server)
 > 7. [Data model](#7-data-model)
 > 8. [Core flows](#8-core-flows)
-> 9. [The exams module](#9-the-exams-module)
-> 10. [The web client](#10-the-web-client)
-> 11. [Languages: English and Hindi](#11-languages-english-and-hindi)
-> 12. [Push notifications](#12-push-notifications)
-> 13. [Android apps](#13-android-apps)
-> 14. [Testing](#14-testing)
-> 15. [Database migrations](#15-database-migrations)
-> 16. [CI, deploy and production](#16-ci-deploy-and-production)
-> 17. [Security and privacy, as enforced in code](#17-security-and-privacy-as-enforced-in-code)
-> 18. [Recipes](#18-recipes)
-> 19. [Known gaps and loose ends](#19-known-gaps-and-loose-ends)
+> 9. [The web client](#9-the-web-client)
+> 10. [Languages: English and Hindi](#10-languages-english-and-hindi)
+> 11. [Push notifications](#11-push-notifications)
+> 12. [The Android app](#12-the-android-app)
+> 13. [Testing](#13-testing)
+> 14. [Database migrations](#14-database-migrations)
+> 15. [CI, deploy and production](#15-ci-deploy-and-production)
+> 16. [Security and privacy, as enforced in code](#16-security-and-privacy-as-enforced-in-code)
+> 17. [Recipes](#17-recipes)
+> 18. [Known gaps and loose ends](#18-known-gaps-and-loose-ends)
 
 ---
 
@@ -35,43 +34,31 @@ Cue is a personal assistant for anyone with a lot to remember: say a thing
 once — typed, dictated, shared from another app, or found in your email —
 and Cue turns it into a plan with the right reminders, and keeps at you
 until it is done. It is built for India first: Hinglish and Hindi lines are
-understood, the whole app is in English and Hindi, rupees, UPI, IRCTC,
-FASTag, PUC and the exam boards are all known.
+understood, the whole app is in English and Hindi, and rupees, UPI, IRCTC,
+FASTag and PUC are all known.
 
 It is generic on purpose. What a person picks they use Cue for (personal
-life, office work, sales, hiring, freelance, a job search, studies,
-competitive exams) only decides which sections they see first; every
-feature is open to everyone.
+life, office work, sales, hiring, freelance, a job search, studies) only
+decides which sections they see first; every feature is open to everyone.
 
-**Two apps, one codebase.**
-
-| | Cue | Cue Exams |
-|---|---|---|
-| Who | Everyone | Aspirants for government and entrance exams |
-| Web | `https://cue.vitelio.in/` | `https://cue.vitelio.in/exams?app=exams` |
-| Android (TWA) | `in.vitelio.cue` | `in.vitelio.cue.exams` |
-| Lands on | Today | Exams, Hindi first |
-
-Cue Exams is the same web app in "exams mode" (see
-[§10.8](#108-cue-exams-mode)), not a separate build.
+It runs at `https://cue.vitelio.in/` — in any phone's browser, installed to
+the home screen, or as an Android app (`in.vitelio.cue`).
 
 **What it does, by area**
 
 - **Capture** — one box understands plain sentences in English, Hinglish
   and Hindi: plans, repeating plans, trips, wishes ("when I'm in Pune…"),
-  bills, expenses, money owed, parcels, bookings, exam lines, job/hiring/deal
-  updates. An optional AI reading helps only with lines the rules are unsure
+  bills, expenses, money owed, parcels, bookings, job/hiring/deal updates. An optional AI reading helps only with lines the rules are unsure
   of.
 - **Plans and nagging** — every plan gets reminders that escalate until it
   is done, snoozed or moved; overdue items are triaged, moved into real free
   slots, or let go.
 - **The day's rhythm** — morning brief, meeting prep, after-meeting
   follow-ups, focus blocks, an evening nudge that plans tomorrow, a daily
-  report for whoever you report to, a Friday weekly review, and for
-  aspirants a Sunday prep report.
+  report for whoever you report to, and a Friday weekly review.
 - **Your inbox and calendar, read for you** — Gmail/Outlook (read-only)
   give tickets, hotel stays, parcels, bills, insurance, PUC, service dates,
-  FASTag, challans and exam emails; Google/Microsoft calendars and ICS feeds
+  FASTag and challans; Google/Microsoft calendars and ICS feeds
   are mirrored.
 - **Trips** — assembled from bookings and plans in other cities, with
   packing lists and "while I'm there" wishes.
@@ -81,15 +68,9 @@ Cue Exams is the same web app in "exams mode" (see
   weekly targets.
 - **Money** — bills and renewals, expenses and claims, parcels with cash on
   delivery.
-- **Exams** — every exam applied for with its dates from the boards'
-  official notices, admit cards read, results looked up, study plans, mock
-  scores, expected scores, clashes, and ready-made lists for each step.
 
-**Two demos, no sign-up.** "Try the demo" on the website opens a 24-hour
-account with a sample week; "Try the Cue Exams demo" (on the website's exams
-section and on the Cue Exams home) opens an aspirant's account with every
-exams feature already in use ([§9.11](#911-the-exams-demo)). Both open in
-the language the visitor was reading.
+**A demo, no sign-up.** "Try the demo" on the website opens a 24-hour
+account with a sample week, in the language the visitor was reading.
 
 ---
 
@@ -99,30 +80,26 @@ the language the visitor was reading.
 flowchart TB
   subgraph Phone["Phone or browser"]
     TWA1["Android app<br/>in.vitelio.cue"]
-    TWA2["Android app<br/>in.vitelio.cue.exams"]
     PWA["React PWA<br/>apps/web"]
     SW["Service worker<br/>sw.ts"]
   end
   subgraph Server["One Node process on the server (systemd 'cue')"]
     STATIC["Web build<br/>+ SPA fallback"]
     API["Fastify API<br/>/api/*"]
-    W["Background workers<br/>reminders, briefs, mail, notices"]
+    W["Background workers<br/>reminders, briefs, mail, bills"]
   end
   DB[("PostgreSQL")]
   subgraph Outside["Outside services"]
     G["Google / Microsoft<br/>sign-in, calendar, mail"]
-    B["Exam boards'<br/>public pages"]
     P["Web Push services"]
     AI["Anthropic API<br/>optional, capture only"]
   end
   TWA1 --> PWA
-  TWA2 --> PWA
   PWA -->|loads| STATIC
   PWA -->|"HTTPS + JWT"| API
   API --> DB
   W --> DB
   W -->|read-only| G
-  W -->|"CueBot, robots.txt"| B
   W -->|notifications| P
   P --> SW
   API -.->|unsure lines only| AI
@@ -134,7 +111,7 @@ flowchart TB
 |---|---|
 | [`apps/api`](../apps/api) | Fastify 5 API, run as TypeScript through `tsx` (no build step). Drizzle ORM over postgres.js. Hand-written SQL migrations. |
 | [`apps/web`](../apps/web) | React 18 + react-router 7 + Vite 6 PWA (vite-plugin-pwa, `injectManifest`). One global stylesheet. |
-| [`packages/shared`](../packages/shared) | `@cue/shared`: zod input schemas, DTO types, and all the pure logic both sides need — the sentence parsers, recurrence rules, the exam catalog, notice readers, Hindi tables. Consumed as TS source. |
+| [`packages/shared`](../packages/shared) | `@cue/shared`: zod input schemas, DTO types, and all the pure logic both sides need — the sentence parsers, recurrence rules, Hindi tables. Consumed as TS source. |
 | [`android`](../android) | Bubblewrap TWA definitions and Play Store listings for both apps. |
 | [`scripts`](../scripts) | `setup-db.ps1` (Windows local Postgres). |
 | [`.github/workflows`](../.github/workflows) | `deploy.yml` (check + deploy), `android.yml` (build an app). |
@@ -147,8 +124,8 @@ flowchart TB
 - *Logic in `shared`.* Parsers and rules are pure functions with unit tests;
   the server calls them to save, the web calls some of them to preview or
   label.
-- *Everything is a commitment.* A plan, an exam date, a study session, a
-  mirrored calendar event, a booking and a bill reminder all end up as rows
+- *Everything is a commitment.* A plan, a repeating plan's day, a mirrored
+  calendar event, a booking and a bill reminder all end up as rows
   in `commitments`, so Today, the calendar, search and the reminder engine
   work for all of them without knowing where they came from.
 
@@ -203,8 +180,6 @@ npm install
    - Google/Microsoft: client id/secret plus `ENCRYPTION_KEY`;
      `npm run check:oauth` prints what the server derives (never secrets).
    - Capture AI: `ANTHROPIC_API_KEY`.
-   - Exam notices: `ADMIN_EMAILS` to review them; `NOTICE_WATCH=off` to stop
-     the watcher reading boards' sites from your machine.
    - `npm run seed` creates a local demo tenant; or press "Try the demo" on
      the website, which makes a 24-hour demo account with a sample week.
 
@@ -243,10 +218,7 @@ All server configuration is environment variables, read once in
 | `ANTHROPIC_API_KEY`, `CAPTURE_AI_MODEL` | empty / `claude-haiku-5-5` | Capture AI; empty means rules only |
 | `CAPTURE_AI_DAILY_LIMIT`, `CAPTURE_AI_DEMO_LIMIT` | 40 / 8 | AI readings per user per day |
 | `AI_DEFAULT_MODEL` | `claude-haiku-5-5` | An org's own-key extraction |
-| `ADMIN_EMAILS` | empty | Comma-separated; who reviews exam notices. **Nothing from the boards reaches anyone until this is set and notices are approved.** |
-| `NOTICE_WATCH` | `on` | `off` stops the exam-board watcher |
 | `ANDROID_PACKAGE`, `ANDROID_CERT_SHA256` | `in.vitelio.cue` / none | Digital Asset Links for the Cue app |
-| `ANDROID_EXAMS_PACKAGE`, `ANDROID_EXAMS_CERT_SHA256` | `in.vitelio.cue.exams` / none | …and for Cue Exams |
 | `TRAVEL_SPEED_KMH` | 45 | Travel-time estimates between places |
 | `REMINDER_POLL_MS`, `ESCALATION_MINUTES`, `MAX_ESCALATIONS` | 20000 / 15 / 4 | The nag engine |
 | `CUE_NEW_DATABASE` | unset | `1` only for the very first migrate of an empty database |
@@ -262,26 +234,20 @@ These are decisions, not accidents. Keep them.
 
 1. **Every user-visible string has Hindi.** Web text goes through `t()`,
    `msg()` or `rich()` with an entry in `apps/web/src/lib/hi/*.ts`; server
-   text through `t(lang, …)` with an entry in `apps/api/src/hi/*.ts`; exam
-   screens through `examWords`. Tests fail otherwise
-   ([§11](#11-languages-english-and-hindi)). Policies are kept in pairs.
+   text through `t(lang, …)` with an entry in `apps/api/src/hi/*.ts`. Tests
+   fail otherwise
+   ([§10](#10-languages-english-and-hindi)). Policies are kept in pairs.
 2. **Email is never sent to any AI service.** The privacy policy promises
    it. The mail path has no AI call; keep it that way.
-3. **Exams: no portal logins, ever.** Cue never signs in to an exam or SSO
-   portal, never asks for a portal password, an OTP or a date of birth, and
-   never spoofs a browser to get past a bot refusal. It reads boards' public
-   pages as `CueBot`, obeys robots.txt, and accepts a WAF's "no".
-4. **Nothing from a board reaches a person without a human.** Notices are
-   proposed by code and approved by a reviewer (`ADMIN_EMAILS`).
-5. **Sections appear because they are wanted.** The defaults are People,
+3. **Sections appear because they are wanted.** The defaults are People,
    Trips, Repeating and History; anything else shows because the person
    picked a use that leads to it or already has something in it
    ([§8.12](#812-sections-who-sees-what)).
-6. **Migrations are hand-written SQL, forward-only and idempotent.**
+4. **Migrations are hand-written SQL, forward-only and idempotent.**
    `schema.ts` is kept in step by hand. The migrate script refuses a
    database with no history unless told it is new.
-7. **Tests run against a real Postgres.** Never against production.
-8. **Comments explain why, in plain words.** The code base reads like a
+5. **Tests run against a real Postgres.** Never against production.
+6. **Comments explain why, in plain words.** The code base reads like a
    description of the product; match it.
 
 ---
@@ -298,10 +264,9 @@ These are decisions, not accidents. Keep them.
 2. CORS for `WEB_ORIGIN`; JWT auth (`registerAuth`); static serving of
    `apps/web/dist` with an SPA fallback (404 JSON for `/api*` and non-GET).
 3. Unprefixed: `GET /health` → `{ok, push}` (does not touch the DB);
-   `GET /.well-known/assetlinks.json` (built from the `ANDROID_*` variables);
-   `POST /share-file` fallback for the Cue Exams share target.
-4. Every route module registered under `/api` (36 files,
-   [§6.3](#63-route-catalogue)).
+   `GET /.well-known/assetlinks.json` (built from the `ANDROID_*` variables).
+4. Every route module registered under `/api`
+   ([§6.3](#63-route-catalogue)).
 5. Start-up checks: `select 1`, the time zone, OAuth redirect sanity, VAPID
    presence.
 6. Starts the workers ([§6.4](#64-background-workers)); on SIGINT/SIGTERM
@@ -319,14 +284,11 @@ These are decisions, not accidents. Keep them.
 - **Password reset**: a 32-byte token stored as a SHA-256 hash, single use,
   one hour; `/auth/forgot` answers the same whether or not the address
   exists.
-- **Demo accounts**: `POST /auth/demo {kind?: 'everyday'|'exams',
-  language?: 'en'|'hi'}` makes org "Demo" with user "Asha" — a sample week
-  (`sampleDay.ts`), or an aspirant's account (`examsDemo.ts`) — in that
+- **Demo accounts**: `POST /auth/demo {language?: 'en'|'hi'}` makes org
+  "Demo" with user "Asha" and a sample week (`sampleDay.ts`), in that
   language from the start; 5 per address per hour, 120 per hour overall;
   deleted after 24 hours. Demos cannot connect Google/Microsoft and get a
   smaller AI allowance.
-- **Admins** are the addresses in `ADMIN_EMAILS`. `/api/auth/me` returns
-  `isAdmin`; `/api/admin/notices*` answer 404 to anyone else.
 - **Account deletion** needs the password (not for demos), revokes OAuth
   grants first, then deletes the user — or the whole org if they were alone.
 
@@ -338,7 +300,7 @@ All under `/api`, all authenticated unless noted. Files are in
 | File | Endpoints | For |
 |---|---|---|
 | `auth.ts` | `POST /auth/register`, `/login`, `/demo`, `/forgot`, `/reset`, `/change-password`; `GET/DELETE /auth/me`; avatar `POST/DELETE /auth/avatar`, `GET /auth/avatar/:id`; `PATCH /auth/profile` | Accounts |
-| `me.ts` | `GET /me/filled`; `GET/PATCH /me/preferences`; `POST /me/preferences/test-brief`, `test-nudge`, `test-report`, `test-exam-week` | Preferences, sections with something in them, "send it now" |
+| `me.ts` | `GET /me/filled`; `GET/PATCH /me/preferences`; `POST /me/preferences/test-brief`, `test-nudge`, `test-report` | Preferences, sections with something in them, "send it now" |
 | `quickAdd.ts` | `GET /quick/suggestions`; `POST /quick/preview`; `POST /quick`; `DELETE /quick/:kind/:id` | The capture box ([§8.1](#81-capture-the-one-box)) |
 | `commitments.ts` | `GET /commitments/range`, `/agenda`, `/queue`; `POST /commitments`, `/check-conflicts`, `/suggest-slots`; `GET/PATCH/DELETE /commitments/:id`; `POST /:id/done`, `/cancel`, `/snooze`, `/reschedule`, `/wrap-up`; `GET /:id/slots`, `/:id/prep`; `GET /people/summary`, `/people/:id/overview`, `/accounts/overview` | Plans |
 | `checklist.ts` | `GET/POST /commitments/:id/checklist`; `PATCH/DELETE /checklist/:itemId` | Lists on plans |
@@ -371,8 +333,6 @@ All under `/api`, all authenticated unless noted. Files are in
 | `mail.ts` | `GET /mail/found`; `POST /mail/check`; `POST /oauth/accounts/:id/mail-off` | Mail reading |
 | `push.ts` | `GET /push/public-key` (no auth); `POST /push/subscribe`, `/unsubscribe`, `/test` | Web push |
 | `ai.ts` | `GET/PATCH /ai/settings`; `POST /ai/ollama-models`, `/ai/test`, `/ai/extract` | An org's own AI key (owner only) |
-| `exams.ts` | 18 routes under `/exams` | [§9](#9-the-exams-module) |
-| `notices.ts` | 6 routes under `/admin/notices` (admins only) | [§9.4](#94-official-notices-the-watcher-and-the-reviewer) |
 
 ### 6.4 Background workers
 
@@ -388,14 +348,12 @@ date it last sent, so a restart cannot send twice.
 | Evening nudge | `services/dailyNudge.ts` | 5 min | At `dailyNudgeHour` (19): "did you log everything?", and tomorrow planned |
 | Daily report | `services/dailyReport.ts` | 5 min | Opt-in, at `reportHour` (18): "your report is ready" |
 | Weekly review | `services/weeklyReview.ts` | 10 min | Friday at `weeklyReviewHour` (17) |
-| Sunday prep report | `services/examWeek.ts` | 10 min | Sunday 18:00–21:00 for anyone with an open exam |
 | Meeting prep | `services/meetingPrep.ts` | 2 min | 15 min before a meeting with things open from last time |
 | Follow-ups | `services/wrapUp.ts` | 2 min | A one-off meeting that just ended: "anything to follow up?" |
 | Focus | `services/focus.ts` | 2 min | Closes finished focus blocks (no push) |
 | Bills | `services/bills.ts` | 15 min | Days before, on the day, the day after (09:00–21:00 local) |
 | Deliveries | `services/deliveries.ts` | 15 min | "Arriving today", with cash on delivery |
 | Mail | `services/mailReader.ts` | 15 min | Reads connected mailboxes ([§8.5](#85-reading-email)) |
-| Exam notices | `services/noticeWatch.ts` | 2 min after start, then 12 h | Reads exam boards' pages ([§9.4](#94-official-notices-the-watcher-and-the-reviewer)); `NOTICE_WATCH=off` stops it |
 | Demo clean-up | `services/demo.ts` | 1 h | Deletes demo orgs older than 24 h |
 | Recurrence sweep | `services/recurrence.ts` | 1 h | Keeps 120 days of repeating plans written ahead |
 | Calendar sync | `services/calendarFeed.ts` | 30 min | Re-reads ICS, Google and Microsoft calendars |
@@ -407,7 +365,7 @@ date it last sent, so a restart cannot send twice.
 
 The types live in [`apps/api/src/db/schema.ts`](../apps/api/src/db/schema.ts)
 (Drizzle); the truth is the SQL in
-[`apps/api/migrations`](../apps/api/migrations). 37 tables. The diagram
+[`apps/api/migrations`](../apps/api/migrations). The diagram
 shows how plans hang together; the table after it lists every table.
 
 ```mermaid
@@ -423,22 +381,17 @@ erDiagram
   oauth_accounts ||--o{ calendar_feeds : provides
   contacts ||--o{ commitments : about
   places ||--o{ commitments : at
-  exams ||--o{ commitments : "dates (exam_step)"
-  exams ||--o{ recurrences : "study plan"
-  exams ||--o{ exam_mocks : scores
-  exams ||--o{ exam_list_checks : "roll no. looked up"
 ```
 
 | Group | Tables |
 |---|---|
-| Accounts | `orgs` (tenant; own-key AI settings), `users` (credentials, role, timezone, language, notification preferences and last-sent dates, uses, home city, UPI id, exam preferences, `is_demo`), `password_resets`, `oauth_states`, `oauth_accounts` (encrypted tokens, mail on/off), `push_subscriptions` |
-| Plans | `commitments` (the core: kind `callback/meeting/task/followup/focus`, status `pending/done/cancelled/deleted`, `due_at`, duration, `flexibility`, priority, `waiting_on`, `booking` jsonb, `sphere`, links to contact/place/trip/feed/recurrence/exam), `reminders` (`fire_at`, `status`, `attempt`, `held`), `checklist_items`, `recurrences`, `schedules`, `interactions` (visits, calls), `voice_notes` |
+| Accounts | `orgs` (tenant; own-key AI settings), `users` (credentials, role, timezone, language, notification preferences and last-sent dates, uses, home city, UPI id, `is_demo`), `password_resets`, `oauth_states`, `oauth_accounts` (encrypted tokens, mail on/off), `push_subscriptions` |
+| Plans | `commitments` (the core: kind `callback/meeting/task/followup/focus`, status `pending/done/cancelled/deleted`, `due_at`, duration, `flexibility`, priority, `waiting_on`, `booking` jsonb, `sphere`, links to contact/place/trip/feed/recurrence), `reminders` (`fire_at`, `status`, `attempt`, `held`), `checklist_items`, `recurrences`, `schedules`, `interactions` (visits, calls), `voice_notes` |
 | Calendars and mail | `calendar_feeds` (ICS URL, upload, Google or Microsoft calendar), `mail_seen` (message ids read and a one-line summary of what was found — never the content) |
 | People | `contacts` (phone, organization, birthday/anniversary `MM-DD`, keep-in-touch), `accounts` (a company's stage and notes, matched by name), `message_templates`, `greeting_runs`, `greeting_sends`, `money_owed` |
 | Places and trips | `places` (lat/lng/radius), `trips`, `intentions` (wishes), `geocode_cache` |
 | Money | `bills`, `bill_payments`, `expenses` (paise; receipts as bytea), `deliveries` |
 | Work | `tracker_items`, `tracker_events` (jobs, hiring, deals) |
-| Exams | `exams`, `exam_mocks`, `notices`, `notice_lists`, `exam_list_checks`, `notice_sources` ([§9.2](#92-data)) |
 
 ---
 
@@ -461,7 +414,7 @@ sequenceDiagram
   participant R as Rules (shared parsers)
   participant AI as Capture AI (optional)
   participant DB as Postgres
-  U->>Q: "RRB NTPC ka form bharna hai, last date 20 nov"
+  U->>Q: "kal shaam 6 baje doctor, call Ravi before"
   Q->>P: text (250 ms after typing stops)
   P->>R: interpret()
   R-->>P: plan + assumptions (+ unsure?)
@@ -484,25 +437,24 @@ sequenceDiagram
 2. `normalizeHinglish` — Roman and Devanagari time words become English
    (kal, parso, subah, shaam ko, baje…); nothing else changes.
 3. `parseDelivery` → **delivery**.
-4. `parseExamLine` → **exam** (`saveExamLine`).
-5. `parseChallan` → **bill** (vehicle).
-6. `parseFastag` (low balance) → a "Recharge FASTag" to-do.
-7. `parseVehicleNotice` (PUC) → renewal **bill**.
-8. `parseBooking` / a service notice → **commitment with a booking**.
-9. `parseWishList` → several **wishes**.
-10. `parseInsurance` → yearly **bill**.
-11. `parseBill` → **bill** (rent, EMI, passport expiry…).
-12. `parseTrackerLine` → **tracker** item (jobs, hiring, deals).
-13. `parseOwed` → **money owed**.
-14. `parseExpense` (unless it starts "pay/send/book…") → **expense**.
-15. A pronoun with no name ("call him") → **ask who**.
-16. `parseIntention` → **wish**.
-17. `parseTrip` → **trip**.
-18. `parseRecurrence` / a birthday or anniversary → **repeating plan** (one
+4. `parseChallan` → **bill** (vehicle).
+5. `parseFastag` (low balance) → a "Recharge FASTag" to-do.
+6. `parseVehicleNotice` (PUC) → renewal **bill**.
+7. `parseBooking` / a service notice → **commitment with a booking**.
+8. `parseWishList` → several **wishes**.
+9. `parseInsurance` → yearly **bill**.
+10. `parseBill` → **bill** (rent, EMI, passport expiry…).
+11. `parseTrackerLine` → **tracker** item (jobs, hiring, deals).
+12. `parseOwed` → **money owed**.
+13. `parseExpense` (unless it starts "pay/send/book…") → **expense**.
+14. A pronoun with no name ("call him") → **ask who**.
+15. `parseIntention` → **wish**.
+16. `parseTrip` → **trip**.
+17. `parseRecurrence` / a birthday or anniversary → **repeating plan** (one
     series per clock time).
-19. `parseRelative` ("after standup") → anchored plan, or **ask when**.
-20. `extractRoles` (kind, person, place, subject) → plan, or ask who / when.
-21. `parseWhen` → a dated plan; with no date, a learned habit hour, an
+18. `parseRelative` ("after standup") → anchored plan, or **ask when**.
+19. `extractRoles` (kind, person, place, subject) → plan, or ask who / when.
+20. `parseWhen` → a dated plan; with no date, a learned habit hour, an
     appointment question, or a flexible item for today marked unsure.
 
 Then **`enrich()`** links a certain person, place, company or trip (a plan
@@ -543,12 +495,12 @@ stateDiagram-v2
      one for the next work day (`services/workLife.ts`); times the person
      chose, and critical items, always ring;
   4. pushes the right words: focus starting, waiting-on check-in, a
-     booking's "leaves in 45 min", an exam line, a mirrored event's
+     booking's "leaves in 45 min", a mirrored event's
      "starting now", or "due now" then "still open — 30 min overdue";
   5. queues the next attempt `ESCALATION_MINUTES` later, up to
      `MAX_ESCALATIONS` buzzes.
 - **Never chased:** mirrored calendar events, waiting-on items, focus blocks,
-  bookings; exam dates only for the last date to apply or pay.
+  bookings.
 - **Overdue** (`services/overdue.ts canBeOverdue`) excludes calendar
   history, all-day mirrored events, meetings awaiting their wrap-up (7 days),
   waiting-on, focus and bookings. Chased-out items surface in **Triage**
@@ -602,7 +554,6 @@ flowchart TD
   B1 & B2 & B3 --> C[Only known senders or matching subjects<br/>Gmail: server-side query · Outlook: headers first]
   C --> D[Open ≤25 unseen; PDFs ≤2 × 3 MB read in memory]
   D --> E{actOn}
-  E -->|exam board| X[examFromEmail]
   E -->|ticket / hotel / bus with a reference| T[saveFoundBooking → trip, reminders, web check-in]
   E -->|card or utility due notice| BL[billFromNotice]
   E -->|PUC / service| V[renewal bill / service plan]
@@ -610,7 +561,7 @@ flowchart TD
   E -->|challan| CH[bill; paid notice pays it]
   E -->|insurance| I[yearly renewal bill]
   E -->|parcel| DL[recordDelivery]
-  X & T & BL & V & F & CH & I & DL --> M[mail_seen: id + one-line summary]
+  T & BL & V & F & CH & I & DL --> M[mail_seen: id + one-line summary]
   M --> N[One push per person: N things found]
 ```
 
@@ -647,7 +598,6 @@ flowchart TD
 | Any time | Focus block: reminders held, closed when time is up | `focus.ts` |
 | Evening | Daily report for your manager (opt-in), then the nudge that plans tomorrow (`planTomorrow.ts`) | `dailyReport.ts`, `dailyNudge.ts` |
 | Friday | Weekly review: done, slipped, waiting, gone quiet, next week, targets | `weeklyReview.ts` |
-| Sunday | Exam prep report ([§9.9](#99-keeping-on-track)) | `examWeek.ts` |
 
 ### 8.8 People
 
@@ -703,18 +653,16 @@ are checked while the app is open.
 
 [`packages/shared/src/uses.ts`](../packages/shared/src/uses.ts):
 
-- **Uses**: personal, office, sales, hiring, freelance, job_search, student,
-  exams.
+- **Uses**: personal, office, sales, hiring, freelance, job_search, student.
 - **Sections**: people, history, trips, repeating, expenses, jobs, hiring,
-  deals, bills, exams.
+  deals, bills.
 - `EVERYONE` = people, trips, repeating, history — what anyone sees.
-- `LEADS[use]` — each use's sections in priority order (e.g. exams → exams,
-  trips, repeating, people).
+- `LEADS[use]` — each use's sections in priority order (e.g. job_search →
+  jobs, people, history, repeating).
 - `sectionsFor(uses, available, filled)` = EVERYONE ∪ the picked uses'
   LEADS, plus any **filled** section (`services/sections.ts
-  filledSections`: has trips, expenses, bills, an *open* exam, or a board
-  item). So "applied to Infosys" makes Jobs appear for someone who never
-  picked it, and an exam that is over does not keep Exams.
+  filledSections`: has trips, expenses, bills, or a board item). So
+  "applied to Infosys" makes Jobs appear for someone who never picked it.
 - `tabsFor` deals up to 4 main tabs round-robin across the picked uses; the
   rest go in **More**.
 - `hasWork`, `hasClients`, `hasCompanies` switch work-only features
@@ -722,262 +670,34 @@ are checked while the app is open.
 
 ---
 
-## 9. The exams module
+## 9. The web client
 
-Built in phases E1–E15 (13–14 Oct 2026). The aim throughout: an aspirant
-types almost nothing — dates come from the boards, cards are read, lists are
-ready-made — and nothing is ever done by logging in as them.
-
-### 9.1 The catalog
-
-[`packages/shared/src/exams.ts`](../packages/shared/src/exams.ts): 53 exams
-(railways, SSC, UPSC and defence, banks and insurance, entrance and
-eligibility, Rajasthan), each with:
-
-- `key`, name, board (`body`), official `site` and `applyAt` (verified),
-  `aliases` (how people write it, Hindi included), RRB regions;
-- `rounds` (tier1, cbt1, prelims, mains, dv, medical, interview, ssb…) —
-  stages are `to_apply`, `applied`, the rounds, then the closing stages
-  `selected`, `not_selected`, `dropped`;
-- `needs` — the least the form asks for (`level`: 10th, 12th, graduate,
-  postgraduate; `training`: iti, engineering, teaching) — for 51 of 53;
-- `carry` — anything special to carry on the day.
-
-Other shared modules: `examMail.ts` (board emails), `notices.ts` (reading
-notices), `results.ts` (categories, cut-offs, roll numbers), `marking.ts`
-(answer-key marking), `study.ts` (study weeks), `examClash.ts`,
-`examGlance.ts`, `examReady.ts`, `examHindi.ts` (all exam words in Hindi).
-
-### 9.2 Data
-
-| Where | What |
-|---|---|
-| `exams` | One per exam a person tracks: `exam_key`, name, `cycle` ("2026", "CEN 05/2026"), region, registration and roll numbers, `stage` + `stage_changed_at`, centre, notes, `category` (UR/EWS/OBC/MBC/SC/ST; set once, shared by all their exams), `closed_at`, `expected_scores` (by round), `exam_day` (times from the admit card) |
-| `commitments.exam_id` + `exam_step` | **Each exam date is an ordinary plan**: `apply_by`, `fee_by`, `correction`, `admit_card`, `exam`, `answer_key`, `result`, `other`; a round as `exam:tier1`. So dates are on Today, in the brief, and reminded like anything else. |
-| `checklist_items` | The exam-day carry list; each step's list (E14) |
-| `recurrences.exam_id` | The study plan: one weekly series per subject, plus the mock test |
-| `exam_mocks` | Mock test scores |
-| `notices`, `notice_sources` | Official notices found, proposals, review status; each watched page's last status |
-| `notice_lists`, `exam_list_checks` | Roll numbers in result lists, page by page; each lookup for a person |
-| `users` | `exam_level`, `exam_training`, `exam_form_alerts`, `exam_week_enabled`, `last_exam_week_on`, `certificate_series_id` — never a date of birth |
-
-### 9.3 Adding an exam, and dates arriving by themselves
-
-```mermaid
-flowchart LR
-  subgraph In["Ways an exam or a date comes in"]
-    A1[Exams page picker / add form]
-    A2[Typed line: 'RRB NTPC ka form bhar diya']
-    A3[Board's email: registration, admit card, result]
-    A4[Approved official notice]
-    A5[Admit card PDF, read and checked]
-  end
-  A1 & A2 --> C[createExam / saveExamLine]
-  C --> CU[catchUpExam: future dates from<br/>already-approved notices]
-  A3 --> EM[examFromEmail<br/>official senders only may start an exam or set dates]
-  A4 --> AP[approveNotice → addNoticeToExam]
-  A5 --> DAY[saveExamDay]
-  CU & EM & AP --> AD[addDate]
-  AD --> PL[plan + reminders + step's list]
-  DAY --> PD[exam-day plan + carry list + trip if another city]
-```
-
-- **`addDate`** ([`services/exams.ts`](../apps/api/src/services/exams.ts)) is
-  the one place a date becomes a plan: the same step on the same day is one
-  plan; a date said by the board itself (a notice or its own email)
-  **moves** the plan already there, reminders and all; reminders follow
-  `examReminderTimes(step)`; the plan carries its list (E14).
-- The **category** is per person: set on one exam, it fills the rest; new
-  exams inherit it.
-- **Typed lines** in English, Hinglish or Hindi (`parseExamLine`): "applied
-  for SSC CGL 2026, reg no …", "REET ka form bharna hai, last date 20 nov",
-  "परीक्षा 23 नवंबर को", "mock 124/200".
-- **Board emails** (`parseExamEmail`, `isExamBody`): the sender's *address
-  domain* must be official (gov.in, nic.in, nta.ac.in, ibps.in…) to start an
-  exam or set dates; anyone else (coaching sites) can only add news to an
-  exam already tracked. OTP and password emails are ignored.
-
-### 9.4 Official notices: the watcher and the reviewer
-
-```mermaid
-sequenceDiagram
-  participant W as Notice watcher (12 h)
-  participant B as Board's public page
-  participant DB as notices
-  participant R as Reviewer (ADMIN_EMAILS)
-  participant E as Aspirants
-  W->>B: GET as CueBot (robots.txt obeyed, refusals respected)
-  B-->>W: page / JSON / PDF links
-  W->>DB: new items only (first visit = baseline)<br/>proposals: exam, cycle, kind, dates, list, cut-offs
-  W->>R: push: N notices to review
-  R->>DB: /admin/notices — correct, then approve or dismiss
-  DB->>E: dates onto every open exam with that key and cycle
-  DB->>E: roll numbers looked up in result lists
-  DB->>E: "forms open" to those tracking a similar exam
-  DB->>E: "two exams on one day" if a new date clashes
-```
-
-- **Sources** (`NOTICE_SOURCES` in
-  [`services/noticeWatch.ts`](../apps/api/src/services/noticeWatch.ts)): RSSB
-  news, RPSC exam dates, NTA, UGC NET, CSIR NET, SSC (notice board, admit
-  cards, answer keys, results, calendar — via its site's own JSON), RRB
-  (Ajmer updates), SBI and LIC careers, CTET. Not readable and left alone:
-  UPSC, NEET/JEE (robots refuse), IBPS (certificate chain fails), Rajasthan
-  Police (script-only), RRB detail pages (WAF refuses). Reviewers add those
-  by hand on `/admin/notices`.
-- **Proposals** come from `shared/notices.ts`: the exam and cycle from the
-  title (`proposeFromNotice`), dates from the notice's PDF or text
-  (`datesInNotice`, English and Hindi), whether it carries a list
-  (`listIn`: shortlist, selected, result) and cut-offs (`cutOffsIn`). RRB
-  notices name only a CEN; `examForRound` learns which exam a CEN is from
-  approvals.
-- **Approval** (`approveNotice`) applies dates to open exams with that key
-  and a compatible cycle (never twice), fetches result lists (public https
-  only, robots obeyed, or the reviewer uploads one), looks up each tracker's
-  roll or registration number (`exam_list_checks`) and moves their stage, and
-  tells people as described. The reviewer sees how many were told.
-- **Admin endpoints**: `GET /admin/notices?status`, `POST /admin/notices`
-  (add by hand), `POST /admin/notices/check` (run the watcher now),
-  `POST /admin/notices/:id/approve`, `/dismiss`, `/list` (upload a PDF).
-
-### 9.5 Forms open now, and who is told
-
-- `GET /exams/open-forms` (`openForms`): approved notices with a future last
-  date for exams the person does not track; each marked against what they
-  studied (`examFit`: "fits what you studied" or "usually needs
-  graduation"); fits first, none hidden. One tap adds it, and catch-up brings
-  its dates.
-- When a reviewer approves an opening, `formOpenedFor` pushes to people
-  tracking an exam of the same family who have not turned alerts off and are
-  not plainly under-qualified — once per form, never for a tentative
-  calendar.
-
-### 9.6 The exam day
-
-1. The person hands over the admit card PDF (or shares it into Cue Exams
-   from WhatsApp/Downloads — the service worker keeps the file and opens the
-   reader).
-2. `POST /exams/admit-card` reads it (`readAdmitCard`): date, reporting
-   time, gate closing, start/end, centre, roll number, round.
-3. The person checks each field; `POST /exams/day` (`saveExamDay`) makes the
-   exam-day plan with reminders the evening before and that morning, the
-   carry list, a trip with a "book your journey" reminder if the centre is in
-   another city, stores `exam_day`, and moves the stage.
-4. **Send the exam day to family**: one tap shares the day, reporting and
-   gate times, centre and a map link by the phone's share sheet or WhatsApp —
-   never the roll number.
-
-### 9.7 After the exam: expected score and results
-
-- **Expected score** (`PUT /exams/:id/expected`): right and wrong answers
-  from the answer key, by the board's marking where `marking.ts` knows it,
-  or one typed in; kept by round, held against the newest cut-off Cue has
-  for their category (`lastCutoffsFor`) — "a guide, not a forecast".
-- **Results**: lists from approved notices are checked automatically; a
-  person can also check a list PDF themselves
-  (`POST /exams/:id/check-list`). Found moves the stage on; not found is
-  said carefully and the stage stays.
-
-### 9.8 Preparing
-
-- **Study plan** (`POST /exams/:id/study-plan`, `makeStudyPlan`): subjects
-  (suggested by `subjectsFor`) dealt across the chosen days at one time, plus
-  a weekly mock test — weekly recurrences until the day before the exam;
-  stopped when the exam closes.
-- **Mock scores** (`exam_mocks`), typed on the page or in a line, shown as a
-  trend.
-- **Photo and signature fitter**: resized to the form's pixels and KB on the
-  phone; never uploaded.
-- **Clashes** (`GET /exams/clashes`, `examClashes`): two exams on one day,
-  shifts far apart in one city, or following days in two cities. A new date
-  that lands on another exam's day is pushed at once (`tellOfClashes`).
-
-### 9.9 Keeping on track
-
-- **Today leads with exams** (`GET /exams/glance`, `ExamGlance`): the next
-  exam and its countdown, last dates to apply/pay/correct within 14 days,
-  clashes. Only for people with the Exams section.
-- **Sunday prep report** (`services/examWeek.ts`): study sessions done of
-  those planned, mock average against the week before, the dates coming up,
-  the next exam's countdown, next week's sessions. Sunday 18:00–21:00 local,
-  once, only with an open exam; switch in Settings; "send this week's now".
-- **Certificate reminder** (`POST /exams/certificate-reminder`): for EWS,
-  OBC or MBC — most forms want a certificate issued in the current financial
-  year — a yearly 1 April series under Repeating, the person's own, set once.
-- **Each step's list** (E14, `shared/examReady.ts`): the last date to apply
-  carries what the form asks for (photo/signature sizes, 10th marksheet,
-  the qualification the exam needs with a final-year hint, their training,
-  their category certificate — this financial year's for EWS/OBC/MBC — ID,
-  fee, saving the PDF); document verification, medical, interview and SSB
-  dates carry what to bring. In their language. The exam page shows "5 of 8
-  ready" against each date; a tap opens the list to tick.
-
-### 9.10 Exam endpoints
-
-| Endpoint | For |
-|---|---|
-| `GET /exams` · `POST /exams` | List (open first, soonest date first) · add (with dates; catches up from approved notices) |
-| `GET/PATCH/DELETE /exams/:id` | One exam with notices, checks, study plan, mocks, last cut-offs, certificate reminder · edit (a closing stage removes dates still to come) · delete |
-| `POST /exams/:id/dates` | Add a date |
-| `GET /exams/open-forms` · `/clashes` · `/glance` | Forms open now · clashes · Today's card |
-| `POST /exams/admit-card` · `POST /exams/day` | Read a card (PDF or text) · save the checked day |
-| `POST /exams/:id/check-list` | Look for their number in a list PDF |
-| `POST/DELETE /exams/:id/study-plan` | Make / stop the study plan |
-| `POST /exams/:id/mocks` · `DELETE /exams/:id/mocks/:mockId` | Mock scores |
-| `PUT /exams/:id/expected` | Expected score |
-| `POST /exams/certificate-reminder` | The yearly certificate reminder |
-
-
-### 9.11 The exams demo
-
-[`services/examsDemo.ts`](../apps/api/src/services/examsDemo.ts) fills an
-aspirant's account (uses `['exams']`, graduate, home Jaipur, category OBC)
-with every exams feature in use, dated relative to the moment it is opened:
-
-| In the demo | Shows |
-|---|---|
-| SSC CGL 2026, Tier 1 in 12 days, admit card read (reporting 07:30, gate 08:30, centre in Jaipur) | Countdown on Today, the exam day and its carry list, "send the exam day to family" |
-| Four mock scores (108 → 129 of 200) and a study plan running since Monday (one session missed) | Mock trend, study sessions on Today, the Sunday report ("Studied 2 of 3… 65%, from 61%…") |
-| REET 2026 on the same day as CGL | The clash on Today and the exams page |
-| SSC CHSL 2027, form to fill: last date in 5 days, fee in 7 | Today's last dates, the form's list ("0 of 7 ready") |
-| RRB NTPC (CEN 05/2024) at document verification in 18 days | The verification list, the expected CBT 2 score (86 of 120) |
-| OBC | The yearly 1 April certificate reminder under Repeating |
-
-Past study sessions are marked done (one missed), and no reminder is left to
-ring for the demo's past. Tested in `examsDemo.db.test.ts`.
-
----
-
-## 10. The web client
-
-### 10.1 Shell and routing
+### 9.1 Shell and routing
 
 [`apps/web/src/main.tsx`](../apps/web/src/main.tsx) registers the service
 worker, catches a shared item (`catchShare`) before routing, and renders
 `BrowserRouter > AuthProvider > App`.
 [`App.tsx`](../apps/web/src/App.tsx):
 
-- **Signed out**: `/` website (`Home`, or `ExamsHome` in exams mode),
-  `/exams-app`, `/login`, `/register`, `/reset`, `/privacy`, `/terms`.
+- **Signed out**: `/` website (`Home`), `/login`, `/register`, `/reset`,
+  `/privacy`, `/terms`.
 - **Signed in**: `/` Today, `/history`, `/trips`, `/repeating`, `/people`,
   `/places` (URL only), `/expenses`, `/jobs` `/hiring` `/deals` (one
-  `Tracker` component), `/bills`, `/exams`, `/admin/notices` (admins).
+  `Tracker` component), `/bills`.
 - The shell holds the demo banner, nav, sync status, the Add sheet, Search
   and Settings modals; `<div className="app" key={language()}>` remounts
   everything when the language changes. Keyboard: Ctrl/Cmd+K or `/` search,
   `n` add.
 - **Tabs**: Today first, then up to four from `tabsFor`, then **More**
-  (grouped; admins also get "Review exam notices"; "What I use Cue for…"
-  at the end). Bottom bar on phones, top bar from 900 px.
+  (grouped; "What I use Cue for…" at the end). Bottom bar on phones, top bar from 900 px.
 
-### 10.2 Pages
+### 9.2 Pages
 
 | Page | Shows and does |
 |---|---|
-| `Home` | Public site, in English or Hindi: a cycling capture demo; what arrives from email; how it works; **a day with Cue** (morning brief → meeting prep → follow-ups → reminders → evening plan → Friday review); who it is for; **Cue Exams in detail** (twelve points) with "Try the Cue Exams demo"; **every feature in detail** (eight areas); privacy; both demos |
-| `ExamsHome` | Cue Exams landing page, Hindi first: twelve features, the exams covered, privacy, the disclaimer; "Try the demo" opens the exams demo; swaps in the exams manifest |
+| `Home` | Public site, in English or Hindi: a cycling capture demo; what arrives from email; how it works; **a day with Cue** (morning brief → meeting prep → follow-ups → reminders → evening plan → Friday review); who it is for; **every feature in detail** (eight areas); privacy; the demo |
 | `Login`, `ResetPassword` | Sign in / up / forgot; reset link |
-| `Today` | Capture box, uses picker (first time), connect-mail card, search; aside: exam glance, nearby wishes, parcels, day brief, calendar, install and push banners; main: List/Week/Month, Work/Personal, follow-ups due, waiting on others, now, overdue (Move it), today, whenever, coming up, closed today. Many deep links (`?review=1`, `?day=1`, `?nudge=id`, `?action=done&id=`…) |
+| `Today` | Capture box, uses picker (first time), connect-mail card, search; aside: nearby wishes, parcels, day brief, calendar, install and push banners; main: List/Week/Month, Work/Personal, follow-ups due, waiting on others, now, overdue (Move it), today, whenever, coming up, closed today. Many deep links (`?review=1`, `?day=1`, `?nudge=id`, `?action=done&id=`…) |
 | `History` | Visits and plans done, cancelled or let go; edit or forget |
 | `Trips` | New trip, trips by time, trip detail (days, packing, wishes), the wishlist |
 | `Repeating` | Repeating plans and step schedules; stop |
@@ -985,40 +705,36 @@ worker, catches a shared item (`catchShare`) before routing, and renders
 | `Expenses` | Month view, categories, claims, money owed |
 | `Bills` | Due this week, later, overdue, renewals; one-tap paid with undo |
 | `Tracker` | Jobs / hiring / deals stage boards |
-| `Exams` | Picker, add, clashes, exam cards, forms open, what you studied; the exam sheet (stage, dates with their lists, certificate, study plan, mocks, expected score, results, exam day, details); admit card reader; photo fitter |
-| `NoticeReview` | Admin: watched pages, add by hand, review tabs, approve/dismiss, result lists and cut-offs |
 | `Legal` | Privacy and terms in English and Hindi (English prevails) |
 
-### 10.3 Components worth knowing
+### 9.3 Components worth knowing
 
 `QuickAdd` (the box: preview, questions, clash handling, undo),
 `CommitmentSheet` / `CommitmentEditor` (a plan), `Checklist`, `DayBrief`,
 `YourDay`, `WeeklyReview`, `DailyReport`, `Targets`, `Triage`, `MoveIt`,
 `PlanTomorrow`, `WrapUp`, `Nudge`, `FocusStart`, `CalendarView`,
-`Deliveries`, `ExamGlance`, `NearbyIntentions`, `AddPanel` (Add sheet:
+`Deliveries`, `NearbyIntentions`, `AddPanel` (Add sheet:
 upcoming, past visit, repeating, schedule, share availability), `Search`,
 `Settings`, `UsesPicker`, `ConnectMailCard`, `Integrations`,
 `CalendarFeeds`, `PersonSheet`, `Greetings`, `QuickMessage`, `Owed`,
-`TripDetail`, `PhotoFitter`, `Modal` (portal; Escape closes the top one),
+`TripDetail`, `Modal` (portal; Escape closes the top one),
 `InfoTip`, `DictateButton`.
 
-### 10.4 Client libraries
+### 9.4 Client libraries
 
 | File | Role |
 |---|---|
 | `lib/api.ts` | `api<T>()` with the Bearer token (`cue.token`), JSON, `ApiError(status, code, data)`; a 401 clears the token; `apiSendFile` for raw uploads |
 | `lib/auth.tsx` | `useAuth()`: `me` (uses, filled, isDemo, isAdmin, language), login/register/demo/logout, `saveUses`, `saveLanguage`; refreshes `filled` after changes while a section is hidden |
 | `lib/changes.ts` | `announceChange()` / `useOnChange()` — the app-wide "something was saved, reload" event |
-| `lib/i18n.tsx`, `lib/hi/*` | Language and Hindi ([§11](#11-languages-english-and-hindi)) |
-| `lib/examWords.ts` | Exam screens' words in both languages |
-| `lib/appMode.ts` | Cue Exams mode |
-| `lib/share.ts`, `shareTarget.ts`, `sharedFile.ts` | Sharing text and files in |
+| `lib/i18n.tsx`, `lib/hi/*` | Language and Hindi ([§10](#10-languages-english-and-hindi)) |
+| `lib/share.ts` | Sharing text in from other apps |
 | `lib/push.ts` | Subscribing to push |
 | `lib/outbox.ts`, `idb.ts`, `online.ts`, `cache.ts` | Offline: visits queued in IndexedDB and replayed idempotently; places and contacts cached |
 | `lib/time.ts` | Day bounds, labels; `YYYY-MM-DD` parsed as local midnight |
 | `lib/addSheet.ts`, `reopen.ts`, `calls.ts`, `dictation.ts`, `audio.ts`, `geo.ts`, `deviceContacts.ts` | Opening Add from anywhere, reopening, call tracking, speech, recording, location, contact picker |
 
-### 10.5 First visit
+### 9.5 First visit
 
 1. Website (`Home`), optionally switched to Hindi.
 2. Sign up, sign in or **Try the demo** (a 24-hour account with a sample
@@ -1028,37 +744,21 @@ upcoming, past visit, repeating, schedule, share availability), `Search`,
 4. The browser's time zone is saved; the outbox sync loop and push
    re-registration start.
 
-### 10.6 Offline and the PWA
+### 9.6 Offline and the PWA
 
 - Workbox precaches the app shell; navigations fall back to `index.html`
   except `/api/*`; **API responses are never cached**.
 - Visits logged offline (with voice clips) go to an IndexedDB outbox keyed
   by a client id and replay idempotently when back online.
-- Manifests: Cue's is generated by Vite (shortcuts: speak, add, log a call;
-  share target `GET /share`); Cue Exams' is
-  [`public/exams.webmanifest`](../apps/web/public/exams.webmanifest)
-  (shortcuts: admit card, add exam, Today; share target `POST /share-file`
-  for PDFs).
+- The manifest is generated by Vite (shortcuts: speak, add, log a call;
+  share target `GET /share`).
 
-### 10.7 Sharing into Cue
+### 9.7 Sharing into Cue
 
 - **Text** (WhatsApp messages, SMS, links): `/share?title&text&url` →
   stored for 15 minutes in sessionStorage → Today opens with the box filled.
-- **A PDF into Cue Exams**: the service worker (`receiveShare`) keeps the
-  file in Cache Storage and redirects to `/exams?app=exams&card=shared`;
-  the exams page takes it once and opens the admit card reader. Before the
-  service worker runs, the server's `/share-file` fallback redirects to the
-  reader.
 
-### 10.8 Cue Exams mode
-
-`?app=exams` (the Android app's start URL), the Android referrer, or
-`/exams-app` set the mode for the session (`lib/appMode.ts`). In it: the
-signed-out home is `ExamsHome`; sign-up starts with uses `['exams']` and the
-chosen language (Hindi by default); the brand and title are "Cue Exams"; the
-signed-in app is otherwise the same, with Exams first.
-
-### 10.9 Styling
+### 9.8 Styling
 
 One plain stylesheet, [`styles.css`](../apps/web/src/styles.css): tokens on
 `:root` (`--bg`, `--surface`, `--text`, `--muted`, `--accent`, `--warn`,
@@ -1069,7 +769,7 @@ Shared vocabulary: `.card`, `.stack`, `.row`, `.chip`, `.tile`, `.tag`,
 
 ---
 
-## 11. Languages: English and Hindi
+## 10. Languages: English and Hindi
 
 The whole of Cue is in English and Hindi, chosen per person
 (`users.language`).
@@ -1082,8 +782,6 @@ The whole of Cue is in English and Hindi, chosen per person
 - Dictionaries by area in [`lib/hi`](../apps/web/src/lib/hi) (common,
   today, add, money, people, settings, plans, work, site);
   `common.ts` describes the house style for Hindi.
-- Exam screens use `examWords(lang)` — both languages side by side, with
-  functions for plurals.
 - Policies: `PrivacyEn/PrivacyHi`, `TermsEn/TermsHi`, checked for parity.
 
 **Server**
@@ -1092,7 +790,7 @@ The whole of Cue is in English and Hindi, chosen per person
   [`apps/api/src/hi`](../apps/api/src/hi) (`notify.ts`, `capture.ts`).
 - Push payloads carry `lang`, so the service worker labels its buttons.
 - Plan titles from parsing stay as written (later emails are matched against
-  them); exam titles and notes have Hindi versions in `examHindi.ts`.
+  them).
 
 **The checks** (part of the test suites):
 - `apps/web/scripts/i18n-check.ts` — every `t()/msg()/rich()` string has
@@ -1105,7 +803,7 @@ The whole of Cue is in English and Hindi, chosen per person
 
 ---
 
-## 12. Push notifications
+## 11. Push notifications
 
 - VAPID keys in `.env`; `/health` reports `push: true` when set.
 - [`push.ts`](../apps/api/src/push.ts) `sendToUser(userId, payload)` sends to
@@ -1123,30 +821,23 @@ The whole of Cue is in English and Hindi, chosen per person
 
 ---
 
-## 13. Android apps
+## 12. The Android app
 
-Both are Trusted Web Activities generated by Bubblewrap, host
-`cue.vitelio.in`:
+A Trusted Web Activity generated by Bubblewrap, host `cue.vitelio.in`:
+package `in.vitelio.cue`, manifest
+[`android/twa-manifest.json`](../android/twa-manifest.json), start URL `/`,
+text shared in through `GET /share`, store listing in `android/store/`.
 
-| | Cue | Cue Exams |
-|---|---|---|
-| Manifest | [`android/twa-manifest.json`](../android/twa-manifest.json) | [`android/exams/twa-manifest.json`](../android/exams/twa-manifest.json) |
-| Package | `in.vitelio.cue` | `in.vitelio.cue.exams` |
-| Start URL | `/` | `/exams?app=exams` |
-| Share target | text (`GET /share`) | PDF (`POST /share-file`) |
-| Store | `android/store/` | `android/exams/store/` (English + Hindi listing, data safety) |
-
-- **Build**: GitHub Actions → "Android app" → choose the app; `release`
-  signs with the upload key from secrets, otherwise a throwaway key.
+- **Build**: GitHub Actions → "Android app"; `release` signs with the upload
+  key from secrets, otherwise a throwaway key.
 - **Digital Asset Links** are served by the API at
-  `/.well-known/assetlinks.json` from `ANDROID_CERT_SHA256` and
-  `ANDROID_EXAMS_CERT_SHA256` — put both the Play app-signing and upload-key
-  fingerprints in `/srv/cue/.env` and restart, or the app shows a browser
-  bar.
+  `/.well-known/assetlinks.json` from `ANDROID_CERT_SHA256` — put both the
+  Play app-signing and upload-key fingerprints in `/srv/cue/.env` and
+  restart, or the app shows a browser bar.
 
 ---
 
-## 14. Testing
+## 13. Testing
 
 | Suite | Command | What |
 |---|---|---|
@@ -1177,7 +868,7 @@ code does. Old `test_*` schemas are swept after two hours.
 
 ---
 
-## 15. Database migrations
+## 14. Database migrations
 
 - Add `apps/api/migrations/NNNN_name.sql` (next number after the latest),
   written to be safe to run twice (`if not exists`), and make the same change
@@ -1191,7 +882,7 @@ code does. Old `test_*` schemas are swept after two hours.
 
 ---
 
-## 16. CI, deploy and production
+## 15. CI, deploy and production
 
 ```mermaid
 flowchart LR
@@ -1213,7 +904,7 @@ flowchart LR
 
 ---
 
-## 17. Security and privacy, as enforced in code
+## 16. Security and privacy, as enforced in code
 
 - **Tenancy**: org and user come from the JWT; every query filters by them;
   undo and delete are scoped to the owner in the same statement.
@@ -1226,18 +917,14 @@ flowchart LR
   PDFs read in memory with limits; **no AI**.
 - **Capture AI**: off without a key; only unsure lines; only the line and
   the date; capped; sanitised; nothing saved without the person's tap.
-- **Exams**: no portal logins, passwords, OTPs or dates of birth; official
-  senders by address domain; human review of every notice; `CueBot` obeys
-  robots.txt and takes no for an answer; result lists are public and roll
-  numbers are matched on Cue's own server.
 - **Uploads** have size caps (avatar 512 KB, receipt 3 MB, voice 5 MB, ICS
-  8 MB, admit card 5 MB, result list 40 MB).
+  8 MB).
 - **Passwords**: bcrypt; reset tokens hashed, one hour, single use; the
   same answer whether or not an address exists.
 
 ---
 
-## 18. Recipes
+## 17. Recipes
 
 **A new notification** — write a `compose…(data, lang)` that returns
 `{title, body, url}` or `null` when there is nothing to say; pass every
@@ -1245,7 +932,7 @@ string through `t(lang, …)` and add the Hindi to `apps/api/src/hi/notify.ts`;
 add a `users` preference and a "last sent on" date in a migration; a `run…`
 that selects due users in their own time zone, marks the date, then sends;
 a `start…Worker` in `index.ts`; a switch and a "send now" in Settings; a
-`*.db.test.ts` with an injected `send`. `services/examWeek.ts` is a small,
+`*.db.test.ts` with an injected `send`. `services/weeklyReview.ts` is a
 complete example.
 
 **A new thing the box understands** — a pure parser in `packages/shared`
@@ -1260,21 +947,14 @@ appear) `FILLABLE` in `shared/uses.ts`, to `filledSections`, to
 **A new web string** — `t('Your words')`, then the Hindi in the right
 `lib/hi/*.ts` area; run `npx tsx apps/web/scripts/i18n-check.ts`.
 
-**A new exam board to watch** — first check robots.txt and that the page
-works without scripts; add a `NOTICE_SOURCES` entry (a `links` reader with a
-pattern often suffices, otherwise a reader function with a fixture test);
-the first run is the baseline; reviewers approve from then on. Add the board
-to `WATCHED_BOARDS` so the exam page says its dates come by themselves.
-
 **A misread email** — [§8.5](#85-reading-email).
 
 ---
 
-## 19. Known gaps and loose ends
+## 18. Known gaps and loose ends
 
-- **Production waits on configuration**: `ADMIN_EMAILS` (no exam notices
-  reach anyone until set and reviewed), `ANTHROPIC_API_KEY` (capture AI),
-  the Android certificate fingerprints, and the Play account.
+- **Production waits on configuration**: `ANTHROPIC_API_KEY` (capture AI),
+  the Android certificate fingerprint, and the Play account.
 - **No global rate limiter or security headers** in the app (no helmet/CSP);
   Fastify `trustProxy` is unset, so behind Caddy `req.ip` is the proxy.
 - **`/health` does not check the database.**
@@ -1284,6 +964,4 @@ to `WATCHED_BOARDS` so the exam page says its dates come by themselves.
 - `schema.ts`'s header mentions a `db/scope.ts` that does not exist; CORS
   still allows `capacitor://` origins from an older Android plan.
 - A shared comment says the nag engine sets status `snoozed`; nothing does.
-- E14's lists attach to dates planned from now on; dates planned before it
-  have no list, and a category set after a date was planned is not added to
-  its list.
+

@@ -65,22 +65,6 @@ const DAY = [
   { at: msg('Friday'), title: msg('The week, in two minutes'), text: msg('What got done, what slipped, who still owes you, and how next week is already filling up.') },
 ]
 
-/** Cue Exams, point by point: what an aspirant gets. */
-const EXAM_POINTS = [
-  { mark: '📢', title: msg('Dates from official notices'), text: msg('Cue reads the boards’ own notice pages. A person checks each notice before anyone is told, and its link is always beside the date.') },
-  { mark: '📅', title: msg('Last dates that are not missed'), text: msg('Reminded before the last date to apply and to pay, and on the day, until the form is filled.') },
-  { mark: '📝', title: msg('A list for every step'), text: msg('What the form asks for — photo sizes, marksheets, your category certificate — and what to carry to document verification, the medical and the interview.') },
-  { mark: '🎫', title: msg('Admit card to exam day'), text: msg('Share the admit card PDF: reporting time, gate closing, the centre, what to carry, and the journey if the centre is in another city.') },
-  { mark: '👨‍👩‍👧', title: msg('The exam day, sent to family'), text: msg('One tap sends the day, the reporting time and the centre with a map link on WhatsApp — never your roll number.') },
-  { mark: '⚠️', title: msg('Clashes caught'), text: msg('Two exams on one day, or on following days in two cities, pointed out the moment a date lands.') },
-  { mark: '🔎', title: msg('Your roll number in the result'), text: msg('When a result list is out, Cue looks for your roll number and shows the cut-offs for your category.') },
-  { mark: '🧮', title: msg('Your expected score'), text: msg('Count your right and wrong answers from the answer key: Cue works out the score by the board’s marking and holds it against the last cut-off.') },
-  { mark: '📚', title: msg('Study plan and mock tests'), text: msg('Subjects across the week until the day before the exam, with a weekly mock test and your scores’ trend.') },
-  { mark: '🗓', title: msg('A Sunday report'), text: msg('Every Sunday evening: sessions done, mock scores against last week, and the dates coming up.') },
-  { mark: '📣', title: msg('Forms open now'), text: msg('New forms with their last dates, marked by whether they fit what you studied — and a heads-up when one opens for an exam like yours.') },
-  { mark: '🪪', title: msg('Certificates on time'), text: msg('EWS, OBC or MBC: a reminder every 1 April to get that year’s certificate, before a form asks for it.') },
-]
-
 /** Everything, area by area, a few lines each. */
 const DETAIL = [
   {
@@ -89,7 +73,7 @@ const DETAIL = [
     points: [
       msg('Type, speak, or share a message in from WhatsApp or SMS'),
       msg('English, Hinglish and Hindi: “kal shaam 6 baje doctor”'),
-      msg('Plans, repeating plans, trips, bills, expenses, parcels, money owed and exams — from the same box'),
+      msg('Plans, repeating plans, trips, bills, expenses, parcels and money owed — from the same box'),
       msg('It shows what it understood before saving, and asks rather than guesses'),
     ],
   },
@@ -107,7 +91,7 @@ const DETAIL = [
     mark: '📬',
     title: msg('Email and calendar'),
     points: [
-      msg('Gmail or Outlook, read-only: tickets, stays, parcels, bills, insurance, PUC, FASTag, challans, exam emails'),
+      msg('Gmail or Outlook, read-only: tickets, stays, parcels, bills, insurance, PUC, FASTag and challans'),
       msg('Google and Microsoft calendars, or any calendar link, mirrored in'),
       msg('No email is stored, and none is sent to any AI'),
       msg('One notification when something new is found'),
@@ -235,12 +219,12 @@ export default function Home() {
     setLang(next)
   }
 
-  async function demo(kind: 'everyday' | 'exams' = 'everyday') {
+  async function demo() {
     setDemoBusy(true)
     setDemoError(null)
     try {
-      await enterDemo(kind)
-      navigate(kind === 'exams' ? '/exams' : '/', { replace: true })
+      await enterDemo()
+      navigate('/', { replace: true })
     } catch {
       setDemoError(t('The demo could not start just now. Try again in a minute, or create a free account.'))
       setDemoBusy(false)
@@ -264,7 +248,6 @@ export default function Home() {
           <nav className="site-nav" aria-label={t('Sections')}>
             <a href="#from-email">{t('From your email')}</a>
             <a href="#day">{t('A day with Cue')}</a>
-            <a href="#exams">{t('Exams')}</a>
             <a href="#features">{t('Features')}</a>
             <Link to="/privacy">{t('Privacy')}</Link>
           </nav>
@@ -418,52 +401,6 @@ export default function Home() {
                 </article>
               ))}
             </div>
-            {/* Its own app, for aspirants: the same Cue, exams first, Hindi first. */}
-            <Link to="/exams-app" className="site-card exams-callout">
-              <img src="/brand/cue-exams-mark.svg" alt="" width={44} height={44} />
-              <span>
-                <strong>{t('Preparing for an exam? Try Cue Exams.')}</strong>
-                <span className="muted"> {t('Every exam from the form to the result — last dates, admit cards, results — in Hindi too. परीक्षा की हर तारीख याद।')}</span>
-              </span>
-            </Link>
-          </div>
-        </section>
-
-        <section className="site-section site-exams" id="exams">
-          <div className="site-wrap">
-            <div className="site-section-head">
-              <span className="site-eyebrow">{t('For aspirants')}</span>
-              <h2>{t('Every exam, from the form to the result')}</h2>
-              <p>
-                {t(
-                  'Built for government and entrance exams — RRB, SSC, UPSC, banks, NEET, JEE, CTET, RPSC, RSSB and 50+ more — in Hindi and English. Cue never signs in to an exam portal and never asks for a password, an OTP or a date of birth.',
-                )}
-              </p>
-            </div>
-            <div className="site-cards">
-              {EXAM_POINTS.map((f) => (
-                <article key={f.title} className="site-card">
-                  <span className="site-mark" aria-hidden>
-                    {f.mark}
-                  </span>
-                  <h3>{t(f.title)}</h3>
-                  <p>{t(f.text)}</p>
-                </article>
-              ))}
-            </div>
-            <div className="site-ctas site-exams-ctas">
-              <button className="site-btn primary-btn is-big" onClick={() => void demo('exams')} disabled={demoBusy}>
-                {demoBusy ? t('Opening the demo…') : t('Try the Cue Exams demo')}
-              </button>
-              <Link to="/exams-app" className="site-btn ghost-btn is-big">
-                {t('Open Cue Exams')}
-              </Link>
-            </div>
-            <p className="site-small">
-              {t(
-                'The exams demo opens an aspirant’s account: SSC CGL in 12 days with its admit card read, a clash with REET, a form still to fill, and document verification — each with its list.',
-              )}
-            </p>
           </div>
         </section>
 

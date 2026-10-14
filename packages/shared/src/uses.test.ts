@@ -33,6 +33,14 @@ test('a section with something in it stays, whatever was picked', () => {
   assert.ok(!sectionsFor(['job_search'], ALL, ['hiring']).includes('deals'))
 })
 
+test('Exams only for those who chose competitive exams, whatever is in it', () => {
+  for (const uses of [[], ['personal'], ['student'], ['job_search', 'student'], ['office']]) {
+    assert.ok(!sectionsFor(uses, ALL, ['exams']).includes('exams'), `not for ${uses.join('+') || 'nothing picked'}, even with an exam in it`)
+  }
+  assert.ok(sectionsFor(['exams'], ALL).includes('exams'))
+  assert.ok(sectionsFor(['student', 'exams'], ALL).includes('exams'))
+})
+
 test('only sections that exist, and everything else under More', () => {
   const { main, more } = tabsFor(['personal'], TODAY)
   assert.deepEqual(main, ['people', 'trips', 'repeating', 'expenses'])

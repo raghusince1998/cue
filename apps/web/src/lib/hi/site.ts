@@ -40,9 +40,6 @@ export const site: Record<string, string> = {
   'One app, whoever you are': 'आप जो भी हों, एक ही ऐप',
   'Pick what you use Cue for and it shapes itself around you. Everything else stays one tap away.':
     'चुनें कि आप Cue किस काम के लिए इस्तेमाल करेंगे, और यह आपके हिसाब से ढल जाता है। बाकी सब एक टैप दूर रहता है।',
-  'Preparing for an exam? Try Cue Exams.': 'परीक्षा की तैयारी कर रहे हैं? Cue Exams आज़माएँ।',
-  'Every exam from the form to the result — last dates, admit cards, results — in Hindi too. परीक्षा की हर तारीख याद।':
-    'हर परीक्षा, फॉर्म से परिणाम तक — अंतिम तिथि, प्रवेश पत्र, परिणाम — हर तारीख याद, पूरी तरह हिन्दी में।',
   'Everything in one place': 'सब एक जगह',
   'Less to remember. Nothing that slips.': 'याद कम रखना पड़े। कुछ न छूटे।',
   'Your email stays yours': 'आपका ईमेल आपका ही रहता है',
@@ -137,7 +134,7 @@ export const site: Record<string, string> = {
   // Everything else
   'Reminders that follow up': 'रिमाइंडर जो पीछा न छोड़ें',
 
-  // A day with Cue, Cue Exams in detail, every feature (E15)
+  // A day with Cue, and every feature in detail
   'A day with Cue': 'Cue के साथ एक दिन',
   'It speaks up at the right moments': 'सही समय पर खुद बताता है',
   'You do not open Cue to check on things; it tells you, on your phone, when it matters.':
@@ -160,57 +157,13 @@ export const site: Record<string, string> = {
   'The week, in two minutes': 'पूरा हफ़्ता, दो मिनट में',
   'What got done, what slipped, who still owes you, and how next week is already filling up.':
     'क्या हुआ, क्या छूटा, किस पर अब भी आपका बकाया है, और अगला हफ़्ता अभी से कितना भर रहा है।',
-  'For aspirants': 'परीक्षा की तैयारी करने वालों के लिए',
-  'Every exam, from the form to the result': 'हर परीक्षा, फॉर्म से परिणाम तक',
-  'Built for government and entrance exams — RRB, SSC, UPSC, banks, NEET, JEE, CTET, RPSC, RSSB and 50+ more — in Hindi and English. Cue never signs in to an exam portal and never asks for a password, an OTP or a date of birth.':
-    'सरकारी और प्रवेश परीक्षाओं के लिए बना — RRB, SSC, UPSC, बैंक, NEET, JEE, CTET, RPSC, RSSB और 50 से ज़्यादा — हिन्दी और अंग्रेज़ी में। Cue कभी किसी परीक्षा पोर्टल पर लॉग इन नहीं करता और कभी पासवर्ड, OTP या जन्मतिथि नहीं माँगता।',
-  'Dates from official notices': 'आधिकारिक सूचनाओं से तारीखें',
-  'Cue reads the boards’ own notice pages. A person checks each notice before anyone is told, and its link is always beside the date.':
-    'Cue बोर्ड के अपने सूचना-पृष्ठ पढ़ता है। किसी को बताने से पहले एक व्यक्ति हर सूचना जाँचता है, और उसका लिंक हमेशा तारीख के साथ रहता है।',
-  'Last dates that are not missed': 'अंतिम तिथि छूटे नहीं',
-  'Reminded before the last date to apply and to pay, and on the day, until the form is filled.':
-    'आवेदन और शुल्क की अंतिम तिथि से पहले और उसी दिन रिमाइंडर, जब तक फॉर्म भर न जाए।',
-  'A list for every step': 'हर चरण की सूची',
-  'What the form asks for — photo sizes, marksheets, your category certificate — and what to carry to document verification, the medical and the interview.':
-    'फॉर्म में क्या लगेगा — फोटो का माप, अंकतालिकाएँ, आपका वर्ग प्रमाण पत्र — और दस्तावेज़ सत्यापन, मेडिकल और इंटरव्यू में क्या ले जाना है।',
-  'Admit card to exam day': 'प्रवेश पत्र से परीक्षा का दिन',
-  'Share the admit card PDF: reporting time, gate closing, the centre, what to carry, and the journey if the centre is in another city.':
-    'प्रवेश पत्र का PDF शेयर करें: रिपोर्टिंग का समय, गेट बंद होने का समय, केंद्र, साथ ले जाने की सूची, और केंद्र दूसरे शहर में हो तो सफ़र।',
-  'The exam day, sent to family': 'परीक्षा का दिन, परिवार को',
-  'One tap sends the day, the reporting time and the centre with a map link on WhatsApp — never your roll number.':
-    'एक टैप में दिन, रिपोर्टिंग का समय और केंद्र, नक्शे के लिंक के साथ, WhatsApp पर — रोल नंबर कभी नहीं।',
-  'Clashes caught': 'टकराती तारीखें पकड़ी जाती हैं',
-  'Two exams on one day, or on following days in two cities, pointed out the moment a date lands.':
-    'एक दिन दो परीक्षाएँ, या लगातार दिनों में दो शहरों में — तारीख आते ही बताया जाता है।',
-  'Your roll number in the result': 'परिणाम में आपका रोल नंबर',
-  'When a result list is out, Cue looks for your roll number and shows the cut-offs for your category.':
-    'परिणाम सूची आते ही Cue उसमें आपका रोल नंबर ढूँढता है और आपके वर्ग का कट-ऑफ दिखाता है।',
-  'Your expected score': 'आपके संभावित अंक',
-  'Count your right and wrong answers from the answer key: Cue works out the score by the board’s marking and holds it against the last cut-off.':
-    'उत्तर कुंजी से अपने सही और गलत उत्तर गिनें: Cue बोर्ड के तरीके से अंक निकालता है और पिछले कट-ऑफ से मिलाता है।',
-  'Study plan and mock tests': 'पढ़ाई की योजना और मॉक टेस्ट',
-  'Subjects across the week until the day before the exam, with a weekly mock test and your scores’ trend.':
-    'परीक्षा से एक दिन पहले तक पूरे हफ़्ते में विषय, हर हफ़्ते मॉक टेस्ट, और आपके अंकों की प्रगति।',
-  'A Sunday report': 'रविवार की रिपोर्ट',
-  'Every Sunday evening: sessions done, mock scores against last week, and the dates coming up.':
-    'हर रविवार शाम: पढ़ाई के पूरे सत्र, पिछले हफ़्ते के मुकाबले मॉक टेस्ट के अंक, और आगे की तारीखें।',
-  'Forms open now': 'अभी खुले फॉर्म',
-  'New forms with their last dates, marked by whether they fit what you studied — and a heads-up when one opens for an exam like yours.':
-    'नए फॉर्म अपनी अंतिम तिथि के साथ, आपकी पढ़ाई के हिसाब से चिह्नित — और आपकी जैसी परीक्षा का फॉर्म खुलते ही सूचना।',
-  'Certificates on time': 'प्रमाण पत्र समय पर',
-  'EWS, OBC or MBC: a reminder every 1 April to get that year’s certificate, before a form asks for it.':
-    'EWS, OBC या MBC: हर 1 अप्रैल को उस साल का प्रमाण पत्र बनवाने का रिमाइंडर, फॉर्म में माँगे जाने से पहले।',
-  'Try the Cue Exams demo': 'Cue Exams का डेमो देखें',
-  'Open Cue Exams': 'Cue Exams खोलें',
-  'The exams demo opens an aspirant’s account: SSC CGL in 12 days with its admit card read, a clash with REET, a form still to fill, and document verification — each with its list.':
-    'परीक्षा डेमो में एक अभ्यर्थी का खाता खुलता है: 12 दिन बाद SSC CGL और उसका पढ़ा हुआ प्रवेश पत्र, REET से टकराती तारीख, भरने को बाकी एक फॉर्म, और दस्तावेज़ सत्यापन — हर एक अपनी सूची के साथ।',
   'Every feature, in a few lines each. All of it is open to everyone; what you pick only decides what comes first.':
     'हर खूबी, कुछ लाइनों में। सब कुछ सबके लिए खुला है; आप जो चुनते हैं, उससे बस यह तय होता है कि पहले क्या दिखे।',
   'Capture in one line': 'एक लाइन में दर्ज',
   'Type, speak, or share a message in from WhatsApp or SMS': 'लिखें, बोलें, या WhatsApp या SMS से मैसेज शेयर करें',
   'English, Hinglish and Hindi: “kal shaam 6 baje doctor”': 'अंग्रेज़ी, हिंग्लिश और हिन्दी: “kal shaam 6 baje doctor”',
-  'Plans, repeating plans, trips, bills, expenses, parcels, money owed and exams — from the same box':
-    'प्लान, दोहराने वाले प्लान, यात्राएँ, बिल, खर्च, पार्सल, उधार और परीक्षाएँ — एक ही बॉक्स से',
+  'Plans, repeating plans, trips, bills, expenses, parcels and money owed — from the same box':
+    'प्लान, दोहराने वाले प्लान, यात्राएँ, बिल, खर्च, पार्सल और उधार — एक ही बॉक्स से',
   'It shows what it understood before saving, and asks rather than guesses': 'सहेजने से पहले दिखाता है कि क्या समझा, और अंदाज़ा लगाने के बजाय पूछ लेता है',
   'Plans and reminders': 'प्लान और रिमाइंडर',
   'Reminders that repeat until a thing is done, snoozed or moved': 'रिमाइंडर, जो तब तक दोहराते हैं जब तक काम हो न जाए, टल न जाए या खिसक न जाए',
@@ -218,8 +171,8 @@ export const site: Record<string, string> = {
   'Overdue items moved to a real free slot, or cleared in one sitting': 'छूटे काम सच में खाली समय पर खिसकाएँ, या एक बार में निपटाएँ',
   'Work and personal kept apart, and focus time kept quiet': 'काम और निजी अलग-अलग, और फ़ोकस के समय शांति',
   'Email and calendar': 'ईमेल और कैलेंडर',
-  'Gmail or Outlook, read-only: tickets, stays, parcels, bills, insurance, PUC, FASTag, challans, exam emails':
-    'Gmail या Outlook, सिर्फ़ पढ़ने के लिए: टिकट, होटल, पार्सल, बिल, बीमा, PUC, FASTag, चालान, परीक्षा के ईमेल',
+  'Gmail or Outlook, read-only: tickets, stays, parcels, bills, insurance, PUC, FASTag and challans':
+    'Gmail या Outlook, सिर्फ़ पढ़ने के लिए: टिकट, होटल, पार्सल, बिल, बीमा, PUC, FASTag और चालान',
   'Google and Microsoft calendars, or any calendar link, mirrored in': 'Google और Microsoft कैलेंडर, या कोई भी कैलेंडर लिंक, सब यहीं दिखता है',
   'No email is stored, and none is sent to any AI': 'कोई ईमेल सहेजा नहीं जाता, और कोई भी AI को नहीं भेजा जाता',
   'One notification when something new is found': 'कुछ नया मिलने पर एक नोटिफ़िकेशन',

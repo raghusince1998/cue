@@ -5,8 +5,8 @@ import { createTestDb, seedUser, type Harness, type Seeded } from '../testing/ha
 
 /**
  * Exam days that collide, found from the dates Cue holds; a new one told at
- * once. And the Exams section kept to those who picked it or have an exam
- * still going — not for having tried one once.
+ * once. And the Exams section kept to those who chose it — not for having an
+ * exam in it.
  */
 
 let h: Harness
@@ -69,8 +69,8 @@ test('a new day that lands on another exam’s is told at once; others are not',
   assert.equal(await svc.tellOfClashes(asha.userId, chsl, ['2027-04-02'], now, send), 0, 'a day with no clash says nothing')
 })
 
-test('a finished exam clashes with nothing, and keeps no Exams section', async () => {
-  assert.ok((await sections.filledSections(asha.userId)).includes('exams'))
+test('a finished exam clashes with nothing, and no exam keeps an Exams section', async () => {
+  assert.ok(!(await sections.filledSections(asha.userId)).includes('exams'), 'an exam going is not choosing Exams')
   await call('PATCH', `/exams/${ntpc}`, { stage: 'not_selected' })
   assert.deepEqual((await call('GET', '/exams/clashes')).body, [])
 

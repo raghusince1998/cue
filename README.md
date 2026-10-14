@@ -26,7 +26,7 @@ next week.
 
 > **Developers: start with [docs/DEVELOPER.md](docs/DEVELOPER.md).** It covers
 > every feature and how it flows, the architecture, data model, background
-> jobs, the exams module, testing and deploy, as the code is today. This
+> jobs, testing and deploy, as the code is today. This
 > README tells the story of how the early parts came to be, and parts of it
 > (deploy, tests) describe an older set-up.
 

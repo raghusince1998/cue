@@ -6938,7 +6938,7 @@ a.link-btn:hover {
   gap: 6px;
 }
 
-/* The website: a day with Cue, Cue Exams in detail, every feature. */
+/* The website: a day with Cue, and every feature in detail. */
 .site-day {
   list-style: none;
   margin: 0;
@@ -6971,14 +6971,6 @@ a.link-btn:hover {
   color: var(--accent);
   font-size: 12.5px;
   font-weight: 650;
-}
-
-.site-exams .site-mark {
-  background: color-mix(in srgb, #ea580c 14%, var(--surface));
-}
-
-.site-exams-ctas {
-  margin-top: 28px;
 }
 
 .site-detail h3 {

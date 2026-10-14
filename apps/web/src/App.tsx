@@ -331,7 +331,11 @@ export default function App() {
     <div className="app" key={language()}>
       {me.isDemo && (
         <div className="demo-banner">
-          <span>{t('You’re trying Cue with a sample week. It’s deleted after a day.')}</span>
+          <span>
+            {me.uses.includes('exams')
+              ? t('You’re trying Cue Exams with a sample aspirant’s account. It’s deleted after a day.')
+              : t('You’re trying Cue with a sample week. It’s deleted after a day.')}
+          </span>
           <button
             className="primary small-btn"
             onClick={() => {

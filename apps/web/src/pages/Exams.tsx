@@ -28,6 +28,7 @@ import {
 import { ApiError, api, apiSendFile } from '../lib/api.ts'
 import { announceChange, useOnChange } from '../lib/changes.ts'
 import { takeSharedFile } from '../lib/sharedFile.ts'
+import { useAuth } from '../lib/auth.tsx'
 import { useExamWords, type ExamWords } from '../lib/examWords.ts'
 import { Checklist } from '../components/Checklist.tsx'
 import { Modal } from '../components/Modal.tsx'
@@ -95,6 +96,8 @@ const BLANK_CARD: CardDraft = {
  */
 export default function Exams() {
   const w = useExamWords()
+  const { me, saveUses } = useAuth()
+  const [pinning, setPinning] = useState(false)
   const [params, setParams] = useSearchParams()
   const [exams, setExams] = useState<ExamDTO[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -155,6 +158,23 @@ export default function Exams() {
         )}
       </div>
       <p className="muted small">{w.intro}</p>
+      {/* Reached from a saved line or a link, by someone who did not choose
+          Competitive exams: the page works, and one tap puts it in the menu. */}
+      {me && !me.uses.includes('exams') && (
+        <p className="card small exam-pin" role="note">
+          {w.notInMenu}{' '}
+          <button
+            className="link small"
+            disabled={pinning}
+            onClick={() => {
+              setPinning(true)
+              void saveUses([...me.uses, 'exams']).finally(() => setPinning(false))
+            }}
+          >
+            {w.addToMenu}
+          </button>
+        </p>
+      )}
 
       {exams && exams.length === 0 && !adding && (
         <ExamsPicker

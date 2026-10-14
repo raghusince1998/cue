@@ -124,6 +124,9 @@ const EN = {
   next: 'Next',
   centre: 'Centre',
   daysToGo: (n: number) => (n <= 0 ? 'Exam today' : n === 1 ? 'Exam tomorrow' : `${n} days to the exam`),
+  // Not chosen: the page, one tap from the menu
+  notInMenu: 'Exams is not in your menu: it is there for those who choose Competitive exams. Your exams’ dates are on Today either way.',
+  addToMenu: 'Add Exams to my menu',
   // Each step's list
   readyCount: (done: number, total: number) => (done === total ? `All ${total} ready` : `${done} of ${total} ready`),
   hideList: 'Hide the list',
@@ -330,6 +333,8 @@ const HI: Words = {
   next: 'अगला',
   centre: 'केंद्र',
   daysToGo: (n) => (n <= 0 ? 'आज परीक्षा है' : n === 1 ? 'कल परीक्षा है' : `परीक्षा में ${n} दिन`),
+  notInMenu: 'परीक्षाएँ आपके मेन्यू में नहीं हैं: यह उनके लिए है जो “प्रतियोगी परीक्षाएँ” चुनते हैं। आपकी परीक्षाओं की तारीखें “आज” पर तो दिखती ही हैं।',
+  addToMenu: 'परीक्षाएँ मेरे मेन्यू में जोड़ें',
   readyCount: (done, total) => (done === total ? `सभी ${total} तैयार` : `${total} में से ${done} तैयार`),
   hideList: 'सूची छिपाएँ',
   allExams: 'सभी परीक्षाएँ',

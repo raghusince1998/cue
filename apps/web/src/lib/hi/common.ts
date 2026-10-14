@@ -43,6 +43,8 @@ export const common: Record<string, string> = {
   'Review exam notices': 'परीक्षा सूचनाएँ जाँचें',
   'You’re trying Cue with a sample week. It’s deleted after a day.':
     'आप एक नमूना हफ़्ते के साथ Cue आज़मा रहे हैं। यह एक दिन बाद हट जाएगा।',
+  'You’re trying Cue Exams with a sample aspirant’s account. It’s deleted after a day.':
+    'आप एक नमूना अभ्यर्थी के खाते के साथ Cue Exams आज़मा रहे हैं। यह एक दिन बाद हट जाएगा।',
   'Create your free account': 'अपना मुफ़्त खाता बनाएँ',
 
   // The menu's groups (SECTION_GROUPS in @cue/shared)

@@ -81,7 +81,7 @@ test('typed once, then a date added to the same exam', async () => {
     [list[0]!.examKey, list[0]!.cycle, list[0]!.region, list[0]!.registrationNo, list[0]!.stage],
     ['rrb-ntpc', '2026', 'RRB Ajmer', '241051234567', 'applied'],
   )
-  assert.ok(((await call('GET', '/me/filled')).body.filled as string[]).includes('exams'))
+  assert.ok(!((await call('GET', '/me/filled')).body.filled as string[]).includes('exams'), 'Exams is for those who chose it, not for an exam typed in')
 
   const day = ahead(36)
   const preview2 = (await call('POST', '/quick/preview', { text: `RRB NTPC CBT 1 exam on ${day.said}` })).body
