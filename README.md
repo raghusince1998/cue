@@ -24,6 +24,12 @@ part that matters most, able to show you exactly which words produced which
 field, so a wrong reading is visible before it is saved rather than discovered
 next week.
 
+> **Developers: start with [docs/DEVELOPER.md](docs/DEVELOPER.md).** It covers
+> every feature and how it flows, the architecture, data model, background
+> jobs, the exams module, testing and deploy, as the code is today. This
+> README tells the story of how the early parts came to be, and parts of it
+> (deploy, tests) describe an older set-up.
+
 ## Running it
 
 Uses your locally installed PostgreSQL — no Docker. Tested against PostgreSQL 18
