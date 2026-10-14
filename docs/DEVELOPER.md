@@ -96,34 +96,36 @@ the language the visitor was reading.
 ## 2. Architecture at a glance
 
 ```mermaid
-flowchart LR
-  subgraph Phone["Phone / browser"]
+flowchart TB
+  subgraph Phone["Phone or browser"]
+    TWA1["Android app<br/>in.vitelio.cue"]
+    TWA2["Android app<br/>in.vitelio.cue.exams"]
     PWA["React PWA<br/>apps/web"]
     SW["Service worker<br/>sw.ts"]
-    TWA1["Android TWA<br/>in.vitelio.cue"]
-    TWA2["Android TWA<br/>in.vitelio.cue.exams"]
   end
-  subgraph Server["One Node process (systemd 'cue')"]
+  subgraph Server["One Node process on the server (systemd 'cue')"]
+    STATIC["Web build<br/>+ SPA fallback"]
     API["Fastify API<br/>/api/*"]
-    STATIC["Static web build<br/>+ SPA fallback"]
-    W["In-process workers<br/>reminders, briefs, mail, notices…"]
+    W["Background workers<br/>reminders, briefs, mail, notices"]
   end
   DB[("PostgreSQL")]
-  G["Google / Microsoft<br/>OAuth, Calendar, Gmail, Graph"]
-  B["Exam boards'<br/>public pages"]
-  P["Web Push<br/>(FCM, Mozilla…)"]
-  AI["Anthropic API<br/>(optional, capture only)"]
-
+  subgraph Outside["Outside services"]
+    G["Google / Microsoft<br/>sign-in, calendar, mail"]
+    B["Exam boards'<br/>public pages"]
+    P["Web Push services"]
+    AI["Anthropic API<br/>optional, capture only"]
+  end
   TWA1 --> PWA
   TWA2 --> PWA
-  PWA -- "JSON over HTTPS, Bearer JWT" --> API
-  PWA --> STATIC
+  PWA -->|loads| STATIC
+  PWA -->|"HTTPS + JWT"| API
   API --> DB
   W --> DB
-  W -- "read-only" --> G
-  W -- "CueBot, robots.txt" --> B
-  W --> P --> SW
-  API -. "unsure lines only" .-> AI
+  W -->|read-only| G
+  W -->|"CueBot, robots.txt"| B
+  W -->|notifications| P
+  P --> SW
+  API -.->|unsure lines only| AI
 ```
 
 **Monorepo** (npm workspaces, Node ≥ 22, ES modules, TypeScript everywhere):
@@ -405,7 +407,8 @@ date it last sent, so a restart cannot send twice.
 
 The types live in [`apps/api/src/db/schema.ts`](../apps/api/src/db/schema.ts)
 (Drizzle); the truth is the SQL in
-[`apps/api/migrations`](../apps/api/migrations). 37 tables.
+[`apps/api/migrations`](../apps/api/migrations). 37 tables. The diagram
+shows how plans hang together; the table after it lists every table.
 
 ```mermaid
 erDiagram
@@ -424,10 +427,6 @@ erDiagram
   exams ||--o{ recurrences : "study plan"
   exams ||--o{ exam_mocks : scores
   exams ||--o{ exam_list_checks : "roll no. looked up"
-  notices ||--o{ notice_lists : "pages of roll nos."
-  bills ||--o{ bill_payments : paid
-  tracker_items ||--o{ tracker_events : moves
-  users ||--o{ push_subscriptions : devices
 ```
 
 | Group | Tables |
@@ -807,7 +806,7 @@ sequenceDiagram
   participant DB as notices
   participant R as Reviewer (ADMIN_EMAILS)
   participant E as Aspirants
-  W->>B: GET as CueBot (robots.txt obeyed; refusals respected)
+  W->>B: GET as CueBot (robots.txt obeyed, refusals respected)
   B-->>W: page / JSON / PDF links
   W->>DB: new items only (first visit = baseline)<br/>proposals: exam, cycle, kind, dates, list, cut-offs
   W->>R: push: N notices to review
