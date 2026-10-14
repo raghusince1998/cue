@@ -115,8 +115,13 @@ export const SECTION_GROUPS: readonly { label: string; sections: readonly Sectio
   { label: 'Career & studies', sections: ['exams', 'jobs'] },
 ]
 
-/** What everybody has, whatever they picked: the people in their life, what repeats, what is done. */
-const EVERYONE: readonly Section[] = ['people', 'repeating', 'history']
+/**
+ * What everybody has, whatever they picked — the basics of a planner: the
+ * people in their life, journeys, what repeats, what is done. Everything
+ * else (bills, deals, exams…) only for those who picked it, or who already
+ * have something in it.
+ */
+const EVERYONE: readonly Section[] = ['people', 'trips', 'repeating', 'history']
 
 /** Each use's sections, most useful first: what it adds, and what its tabs lead with. */
 const LEADS: Record<Use, readonly Section[]> = {
@@ -126,7 +131,7 @@ const LEADS: Record<Use, readonly Section[]> = {
   hiring: ['hiring', 'people', 'repeating', 'history'],
   freelance: ['deals', 'bills', 'expenses', 'people'],
   job_search: ['jobs', 'people', 'history', 'repeating'],
-  student: ['repeating', 'exams', 'history', 'people', 'trips'],
+  student: ['repeating', 'history', 'people', 'trips'],
   exams: ['exams', 'trips', 'repeating', 'people'],
 }
 

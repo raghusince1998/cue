@@ -52,6 +52,14 @@ const EN = {
   tentative: 'tentative',
   addThis: 'Add',
   theNoticeLink: 'Notice',
+  clashTitle: 'Dates that clash',
+  clashSameDay: (a: string, b: string, day: string) =>
+    `${a} and ${b} are both on ${day}. If the shifts overlap you can sit only one — check both admit cards for the time.`,
+  clashShifts: (a: string, b: string, day: string) =>
+    `${a} and ${b} are both on ${day}, at different times in one city: both can be sat if the centres are close.`,
+  clashTravel: (a: string, b: string, day: string, from: string, to: string) =>
+    `${a} on ${day} in ${from}, then ${b} the next day in ${to}: plan the journey in between.`,
+  clashBadge: 'clash',
   studiesTitle: 'What have you studied?',
   studiesHow:
     'Said once, so the forms that fit you come first, and you hear when one opens for an exam like yours. Final year counts. Cue never asks for your date of birth.',
@@ -219,6 +227,11 @@ const HI: Words = {
   tentative: 'संभावित',
   addThis: 'जोड़ें',
   theNoticeLink: 'सूचना',
+  clashTitle: 'टकराती तारीखें',
+  clashSameDay: (a, b, day) => `${a} और ${b} दोनों ${day} को हैं। अगर शिफ्ट एक ही समय की है तो एक ही दे पाएँगे — दोनों प्रवेश पत्र में समय देखें।`,
+  clashShifts: (a, b, day) => `${a} और ${b} दोनों ${day} को हैं, एक ही शहर में अलग-अलग समय पर: केंद्र पास हों तो दोनों दे सकते हैं।`,
+  clashTravel: (a, b, day, from, to) => `${day} को ${from} में ${a}, फिर अगले दिन ${to} में ${b}: बीच की यात्रा पहले से तय करें।`,
+  clashBadge: 'टकराव',
   studiesTitle: 'आपने कहाँ तक पढ़ाई की है?',
   studiesHow:
     'एक बार बताएँ, ताकि आपके लायक फॉर्म पहले दिखें, और आपकी जैसी परीक्षा का फॉर्म खुलने पर आपको बताया जाए। अंतिम वर्ष भी गिना जाता है। Cue कभी आपकी जन्मतिथि नहीं माँगता।',

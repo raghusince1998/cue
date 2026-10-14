@@ -7,6 +7,7 @@ import {
   addExamDate,
   addMock,
   createExam,
+  clashesFor,
   openForms,
   deleteExam,
   deleteMock,
@@ -41,6 +42,8 @@ export async function examRoutes(app: FastifyInstance) {
   })
 
   app.get('/exams/open-forms', async (req) => openForms(scope(req).sub))
+
+  app.get('/exams/clashes', async (req) => clashesFor(scope(req).sub))
 
   app.get('/exams/:id', async (req, reply) => {
     const { id } = idParam.parse(req.params)

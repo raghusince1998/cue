@@ -1,5 +1,10 @@
 /** Hindi for what Cue sends and shows on its own: reminders, the morning brief, nudges, the daily report and weekly review, bills, parcels, bookings, emails read, insights. Same rules as the web app's apps/web/src/lib/hi/common.ts. */
 export const notify: Record<string, string> = {
+  // Two exams on one day (services/exams.ts)
+  'Two exams on {day}': '{day} को दो परीक्षाएँ',
+  '{a} and {b} are both on {day}. Check both admit cards for the shift: if they overlap, you can sit only one.':
+    '{a} और {b} दोनों {day} को हैं। दोनों प्रवेश पत्र में शिफ्ट देखें: एक ही समय हो तो एक ही परीक्षा दे पाएँगे।',
+
   // A form opening, told to those tracking an exam like it (services/noticeWatch.ts)
   '{exam}: forms open': '{exam}: फॉर्म खुले',
   'Last date {day}. Add it, and its dates and reminders come with it.': 'अंतिम तिथि {day}। जोड़ें, तो उसकी तारीखें और रिमाइंडर साथ आएँगे।',

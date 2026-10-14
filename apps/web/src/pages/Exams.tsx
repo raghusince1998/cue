@@ -15,6 +15,7 @@ import {
   isOpenExamStage,
   subjectsFor,
   type AdmitCard,
+  type ExamClash,
   type ExamDTO,
   type ExamLevel,
   type ExamStep,
@@ -111,9 +112,11 @@ export default function Exams() {
     }
   }, [params, setParams])
 
+  const [clashes, setClashes] = useState<ExamClash[]>([])
   const load = useCallback(async () => {
     try {
       setExams(await api<ExamDTO[]>('/exams'))
+      setClashes(await api<ExamClash[]>('/exams/clashes').catch(() => []))
     } catch (err) {
       setError((err as Error).message)
     }
@@ -202,9 +205,15 @@ export default function Exams() {
         </>
       ) : (
         <>
+          <Clashes clashes={clashes} />
           <div className="exam-list">
             {open.map((x) => (
-              <ExamCard key={x.id} exam={x} onOpen={() => show(x.id)} />
+              <ExamCard
+                key={x.id}
+                exam={x}
+                clash={clashes.some((k) => k.kind !== 'same-day-shifts' && (k.a.examId === x.id || k.b.examId === x.id))}
+                onOpen={() => show(x.id)}
+              />
             ))}
           </div>
           <OpenForms
@@ -503,7 +512,32 @@ function Studies({ onChanged }: { onChanged: () => void }) {
   )
 }
 
-function ExamCard({ exam, onOpen }: { exam: ExamDTO; onOpen: () => void }) {
+/** Exam days that collide, found from the dates Cue holds — so nobody has to notice it themselves. */
+function Clashes({ clashes }: { clashes: ExamClash[] }) {
+  const w = useExamWords()
+  if (clashes.length === 0) return null
+  return (
+    <section className="card stack tight exam-clashes" lang={w.lang} role="status">
+      <h2 className="section-title">⚠ {w.clashTitle}</h2>
+      <ul className="plain stack tight">
+        {clashes.map((k) => {
+          const day = w.day(k.on)
+          return (
+            <li key={`${k.kind}-${k.on}-${k.a.examId}-${k.b.examId}`} className="small">
+              {k.kind === 'same-day'
+                ? w.clashSameDay(k.a.label, k.b.label, day)
+                : k.kind === 'same-day-shifts'
+                  ? w.clashShifts(k.a.label, k.b.label, day)
+                  : w.clashTravel(k.a.label, k.b.label, day, k.a.city ?? '', k.b.city ?? '')}
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+function ExamCard({ exam, clash = false, onOpen }: { exam: ExamDTO; clash?: boolean; onOpen: () => void }) {
   const w = useExamWords()
   const next = nextDate(exam)
   const stage = examStages(exam.examKey).find((s) => s.key === exam.stage)
@@ -513,6 +547,7 @@ function ExamCard({ exam, onOpen }: { exam: ExamDTO; onOpen: () => void }) {
       <button className="tracker-card-main" onClick={onOpen}>
         <span className="tracker-card-title">{examLabel(exam)}</span>
         {days !== null && <span className={`exam-countdown${days <= 7 ? ' is-near' : ''}`}>{w.daysToGo(days)}</span>}
+        {clash && <span className="exam-clash-badge">⚠ {w.clashBadge}</span>}
         {(exam.region || exam.centreCity) && (
           <span className="tracker-card-detail">
             {[exam.region, exam.centreCity ? `${w.centre}: ${exam.centreName ?? exam.centreCity}` : null].filter(Boolean).join(' · ')}

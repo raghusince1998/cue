@@ -31,7 +31,7 @@ import { db, schema } from '../db/index.ts'
 import { env } from '../env.ts'
 import { sendToUser } from '../push.ts'
 import { localeOf, t } from '../i18n.ts'
-import { addNoticeToExam, examsForNotice, langOf, updateExam, type ExamRow } from './exams.ts'
+import { addNoticeToExam, examsForNotice, langOf, tellOfClashes, updateExam, type ExamRow } from './exams.ts'
 import { pdfPages, pdfText } from './pdfText.ts'
 
 /**
@@ -782,9 +782,13 @@ export async function approveNotice(
           body = `${mask(number)} was not found in this list. Lists are often split by region, category or post, so check the notice to be sure.`
         }
         // Dates still go on; a "go and look" plan is not needed once it has been looked for.
-        if (p.dates.length > 0) await addNoticeToExam(exam, { url: row.url, kind: p.kind, summary, summaryHi, dates: p.dates }, now)
+        if (p.dates.length > 0 && (await addNoticeToExam(exam, { url: row.url, kind: p.kind, summary, summaryHi, dates: p.dates }, now)) > 0) {
+          await tellOfClashes(exam.userId, exam.id, p.dates.filter((d) => d.step === 'exam').map((d) => d.on), now)
+        }
       } else {
         const added = await addNoticeToExam(exam, { url: row.url, kind: p.kind, summary, summaryHi, dates: p.dates }, now)
+        // A day that lands on another exam's: said straight away, on its own.
+        if (added > 0) await tellOfClashes(exam.userId, exam.id, p.dates.filter((d) => d.step === 'exam').map((d) => d.on), now)
         if (added > 0) {
           body = hi
             ? `${summaryHi}। आधिकारिक सूचना से — देखने के लिए टैप करें।`

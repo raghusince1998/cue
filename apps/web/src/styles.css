@@ -6121,6 +6121,18 @@ a.link-btn:hover {
   gap: 14px;
 }
 
+/* Exam days that collide: said before the list, and on each card involved. */
+.exam-clashes {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.exam-clash-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warn);
+}
+
 /* Forms open now: an exam, its last day, and Add, a line each. */
 .open-forms-list {
   display: grid;

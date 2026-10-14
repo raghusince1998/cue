@@ -1402,6 +1402,7 @@ export interface OpenFormDTO {
   fit: 'fits' | 'needs' | null
 }
 export { isExamBody, parseExamEmail, type ExamMail, type ExamMailKind } from './examMail.ts'
+export { examClashes, type ExamClash, type ExamDayItem } from './examClash.ts'
 export {
   NOTICE_KINDS,
   datesInNotice,

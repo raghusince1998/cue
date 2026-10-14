@@ -7,6 +7,8 @@ import {
   examStepTitle,
   isLaterExamStage,
   isOpenExamStage,
+  STAGE_HI,
+  examClashes,
   examFit,
   noticeSummary,
   sameCity,
@@ -26,13 +28,16 @@ import {
   type ExamMail,
   type ExamDayInput,
   type ExamStep,
+  type ExamClash,
+  type ExamDayItem,
   type NoticeProposal,
   type OpenFormDTO,
   type ParsedExamLine,
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import type { Executor } from '../db/util.ts'
-import { langOf } from '../i18n.ts'
+import { langOf, localeOf, t } from '../i18n.ts'
+import { sendToUser } from '../push.ts'
 import { cancelPendingReminders, scheduleFirstReminder } from './reminders.ts'
 import { materialise, stopSeries } from './recurrence.ts'
 import { tripForBooking } from './tripAssembly.ts'
@@ -398,6 +403,83 @@ export async function openForms(userId: string, now = new Date()): Promise<OpenF
     .map((f) => ({ ...f, fit: examFit(examByKey(f.examKey), { level: studied?.level ?? null, training: studied?.training ?? [] }) }))
     .sort((a, b) => rank(a) - rank(b) || a.applyBy.localeCompare(b.applyBy))
     .slice(0, 12)
+}
+
+/**
+ * Every exam day this person holds from today, as clashes are found from:
+ * the round named in their language, and the time and city only once an
+ * admit card has given them (a notice's day has neither).
+ */
+async function examDaysOf(userId: string, now: Date): Promise<ExamDayItem[]> {
+  const lang = await langOf(userId)
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const rows = await db
+    .select({
+      examId: e.id,
+      name: e.name,
+      cycle: e.cycle,
+      examKey: e.examKey,
+      centreCity: e.centreCity,
+      step: c.examStep,
+      dueAt: c.dueAt,
+      place: c.placeLabel,
+    })
+    .from(c)
+    .innerJoin(e, eq(e.id, c.examId))
+    .where(and(eq(c.userId, userId), eq(c.status, 'pending'), like(c.examStep, 'exam%'), isNull(e.closedAt), gt(c.dueAt, start)))
+  return rows.map((r) => {
+    const round = r.step?.includes(':') ? r.step.split(':')[1]! : null
+    const roundLabel = round ? ((lang === 'hi' ? STAGE_HI[round] : undefined) ?? examStage(r.examKey, round)?.label ?? null) : null
+    const fromCard = Boolean(r.place)
+    return {
+      examId: r.examId,
+      label: roundLabel ? `${examLabel(r)} — ${roundLabel}` : examLabel(r),
+      on: ymd(r.dueAt),
+      at: fromCard ? `${pad(r.dueAt.getHours())}:${pad(r.dueAt.getMinutes())}` : null,
+      city: fromCard ? r.centreCity : null,
+    }
+  })
+}
+
+/** Exam days that collide: two on one day, or following days in two cities. */
+export async function clashesFor(userId: string, now = new Date()): Promise<ExamClash[]> {
+  return examClashes(await examDaysOf(userId, now))
+}
+
+/**
+ * A new exam day — from an official notice, or the board's own email — that
+ * lands on another exam's day, told at once: the person may have to choose,
+ * and the sooner the better. Only a plain clash; shifts far apart and a
+ * journey between cities are shown on the exams page without a push.
+ */
+export async function tellOfClashes(
+  userId: string,
+  examId: string,
+  days: readonly string[],
+  now = new Date(),
+  send: typeof sendToUser = sendToUser,
+): Promise<number> {
+  if (days.length === 0) return 0
+  const found = (await clashesFor(userId, now)).filter(
+    (k) => k.kind === 'same-day' && days.includes(k.on) && (k.a.examId === examId || k.b.examId === examId),
+  )
+  if (found.length === 0) return 0
+  const lang = await langOf(userId)
+  let sent = 0
+  for (const k of found) {
+    const day = new Date(`${k.on}T00:00:00`).toLocaleDateString(localeOf(lang), { weekday: 'short', day: 'numeric', month: 'short' })
+    sent += await send(userId, {
+      title: t(lang, 'Two exams on {day}', { day }),
+      body: t(lang, '{a} and {b} are both on {day}. Check both admit cards for the shift: if they overlap, you can sit only one.', {
+        a: k.a.label,
+        b: k.b.label,
+        day,
+      }),
+      tag: `clash-${k.on}-${[k.a.examId, k.b.examId].sort().join('-')}`,
+      url: '/exams',
+    }).catch(() => 0)
+  }
+  return sent
 }
 
 /**
@@ -891,6 +973,8 @@ export async function examFromEmail(
   await db.transaction(async (tx) => {
     for (const [i, d] of dates.entries()) if (await addDate(tx, row, d, now, undefined, i < fromBoard)) added.push(d)
   })
+  // A day a board's own email gives may land on another exam's.
+  await tellOfClashes(exam.userId, exam.id, added.filter((d) => d.step === 'exam').map((d) => d.on), now)
   if (!changed && added.length === 0) return null
 
   const examDay = added.find((d) => d.step === 'exam') ?? m.dates.find((d) => d.step === 'exam')
