@@ -7,6 +7,7 @@ import {
   examStepTitle,
   isLaterExamStage,
   isOpenExamStage,
+  examFit,
   noticeSummary,
   sameCity,
   splitExamStep,
@@ -381,14 +382,21 @@ export async function openForms(userId: string, now = new Date()): Promise<OpenF
         tentative: /tentative/i.test(by.note ?? ''),
         url: r.url,
         title: r.title,
+        fit: null,
       })
     }
   }
   const mine = await db.select({ examKey: e.examKey, cycle: e.cycle }).from(e).where(eq(e.userId, userId))
+  const [studied] = await db
+    .select({ level: schema.users.examLevel, training: schema.users.examTraining })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+  const rank = (f: OpenFormDTO) => (f.fit === 'needs' ? 1 : 0)
   return [...latest.values()]
     .filter((f) => f.applyBy >= today)
     .filter((f) => !mine.some((m) => m.examKey === f.examKey && (!m.cycle || !f.cycle || m.cycle === f.cycle)))
-    .sort((a, b) => a.applyBy.localeCompare(b.applyBy))
+    .map((f) => ({ ...f, fit: examFit(examByKey(f.examKey), { level: studied?.level ?? null, training: studied?.training ?? [] }) }))
+    .sort((a, b) => rank(a) - rank(b) || a.applyBy.localeCompare(b.applyBy))
     .slice(0, 12)
 }
 

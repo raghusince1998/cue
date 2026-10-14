@@ -21,7 +21,7 @@ is when you submit — Google holds the developer to these answers.
 | Personal info → Name | Yes | Required | Account management |
 | Personal info → Email address | Yes | Required | Account management |
 | Personal info → User IDs | Yes (account ID) | Required | Account management |
-| Personal info → Other info | Yes: exam registration and roll numbers, reservation category, exam centre — only as entered or confirmed | Optional | App functionality |
+| Personal info → Other info | Yes: exam registration and roll numbers, reservation category, exam centre, and how far they have studied (10th / 12th / graduate / postgraduate, ITI / engineering / teacher training) — only as entered or confirmed; never a date of birth | Optional | App functionality |
 | Messages → Emails | Yes, if Gmail or Outlook is connected; read on the server, not stored — only a short description of what was found | Optional | App functionality |
 | Calendar → Calendar events | Yes, if a calendar is connected (read-only) | Optional | App functionality |
 | Files and docs | Admit card and result list PDFs you choose to read are processed on the server and **not stored** — declare as collected, processed ephemerally | Optional | App functionality |

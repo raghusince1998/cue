@@ -1,5 +1,9 @@
 /** Hindi for what Cue sends and shows on its own: reminders, the morning brief, nudges, the daily report and weekly review, bills, parcels, bookings, emails read, insights. Same rules as the web app's apps/web/src/lib/hi/common.ts. */
 export const notify: Record<string, string> = {
+  // A form opening, told to those tracking an exam like it (services/noticeWatch.ts)
+  '{exam}: forms open': '{exam}: फॉर्म खुले',
+  'Last date {day}. Add it, and its dates and reminders come with it.': 'अंतिम तिथि {day}। जोड़ें, तो उसकी तारीखें और रिमाइंडर साथ आएँगे।',
+
   // FASTag and traffic challans, from their messages (services/vehicles.ts)
   '{name}: recharged, balance {balance}': '{name}: रिचार्ज हो गया, बैलेंस {balance}',
   '{name}: recharged': '{name}: रिचार्ज हो गया',

@@ -1,4 +1,4 @@
-import { EXAM_STEPS, STAGE_HI, STEP_HI, examStage, type ExamStep, type Lang } from '@cue/shared'
+import { EXAM_STEPS, STAGE_HI, STEP_HI, examStage, type ExamLevel, type ExamStep, type ExamTraining, type Lang } from '@cue/shared'
 import { useAuth } from './auth.tsx'
 
 /**
@@ -52,6 +52,23 @@ const EN = {
   tentative: 'tentative',
   addThis: 'Add',
   theNoticeLink: 'Notice',
+  studiesTitle: 'What have you studied?',
+  studiesHow:
+    'Said once, so the forms that fit you come first, and you hear when one opens for an exam like yours. Final year counts. Cue never asks for your date of birth.',
+  level: (key: ExamLevel) =>
+    ({ '10th': '10th pass', '12th': '12th (or in 12th)', graduate: 'Graduate (or final year)', postgraduate: 'Postgraduate (or final year)' })[key],
+  training: (key: ExamTraining) => ({ iti: 'ITI', engineering: 'Engineering diploma or degree', teaching: 'Teacher training (D.El.Ed / B.Ed)' })[key],
+  alsoHave: 'Also',
+  formAlerts: 'Tell me when a form opens for an exam like mine',
+  studiedAs: (said: string) => `You: ${said}`,
+  change: 'Change',
+  fitsYou: 'fits what you studied',
+  usuallyNeeds: (level: ExamLevel, training: readonly ExamTraining[]) =>
+    `usually needs ${({ '10th': '10th', '12th': '12th', graduate: 'graduation', postgraduate: 'a postgraduate degree' })[level]}${
+      training.length
+        ? ` and ${training.map((t) => ({ iti: 'ITI', engineering: 'an engineering diploma or degree', teaching: 'teacher training' })[t]).join(' or ')}`
+        : ''
+    }`,
   sharedNotPdf: 'Cue reads an admit card from its PDF. For a photo or screenshot, copy its text into the box below, or fill in the details yourself.',
   datesFromNotices: 'Dates come from the official notices. Add one here only if you already know it.',
   whichRound: 'Which round?',
@@ -202,6 +219,23 @@ const HI: Words = {
   tentative: 'संभावित',
   addThis: 'जोड़ें',
   theNoticeLink: 'सूचना',
+  studiesTitle: 'आपने कहाँ तक पढ़ाई की है?',
+  studiesHow:
+    'एक बार बताएँ, ताकि आपके लायक फॉर्म पहले दिखें, और आपकी जैसी परीक्षा का फॉर्म खुलने पर आपको बताया जाए। अंतिम वर्ष भी गिना जाता है। Cue कभी आपकी जन्मतिथि नहीं माँगता।',
+  level: (key) =>
+    ({ '10th': '10वीं पास', '12th': '12वीं (या 12वीं में)', graduate: 'स्नातक (या अंतिम वर्ष)', postgraduate: 'स्नातकोत्तर (या अंतिम वर्ष)' })[key],
+  training: (key) => ({ iti: 'ITI', engineering: 'इंजीनियरिंग डिप्लोमा या डिग्री', teaching: 'शिक्षक प्रशिक्षण (D.El.Ed / B.Ed)' })[key],
+  alsoHave: 'इसके अलावा',
+  formAlerts: 'मेरी जैसी परीक्षा का फॉर्म खुले तो बताएँ',
+  studiedAs: (said) => `आप: ${said}`,
+  change: 'बदलें',
+  fitsYou: 'आपकी पढ़ाई के लायक',
+  usuallyNeeds: (level, training) =>
+    `आमतौर पर चाहिए: ${({ '10th': '10वीं', '12th': '12वीं', graduate: 'स्नातक', postgraduate: 'स्नातकोत्तर' })[level]}${
+      training.length
+        ? ` और ${training.map((t) => ({ iti: 'ITI', engineering: 'इंजीनियरिंग डिप्लोमा/डिग्री', teaching: 'शिक्षक प्रशिक्षण' })[t]).join(' या ')}`
+        : ''
+    }`,
   sharedNotPdf: 'Cue प्रवेश पत्र उसके PDF से पढ़ता है। फोटो या स्क्रीनशॉट हो तो उसका टेक्स्ट नीचे चिपकाएँ, या विवरण खुद भरें।',
   datesFromNotices: 'तारीखें आधिकारिक सूचनाओं से आती हैं। पहले से पता हो तभी यहाँ जोड़ें।',
   whichRound: 'कौन-सा चरण?',

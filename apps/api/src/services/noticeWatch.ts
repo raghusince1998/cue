@@ -2,8 +2,12 @@ import https from 'node:https'
 import { constants as cryptoConstants } from 'node:crypto'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import {
+  EXAMS,
   cutOffsIn,
   datesInNotice,
+  examByKey,
+  examFit,
+  examGroup,
   datesMentioned,
   dateIn,
   examLabel,
@@ -26,6 +30,7 @@ import {
 import { db, schema } from '../db/index.ts'
 import { env } from '../env.ts'
 import { sendToUser } from '../push.ts'
+import { localeOf, t } from '../i18n.ts'
 import { addNoticeToExam, examsForNotice, langOf, updateExam, type ExamRow } from './exams.ts'
 import { pdfPages, pdfText } from './pdfText.ts'
 
@@ -724,7 +729,7 @@ export async function approveNotice(
   proposals: NoticeProposal[],
   now = new Date(),
   fetcher: Fetcher = watchFetch,
-): Promise<{ told: number; checked: number; found: number; listNumbers: number | null; listProblem: string | null } | 'not_found' | 'already'> {
+): Promise<{ told: number; checked: number; found: number; listNumbers: number | null; listProblem: string | null; alerted: number } | 'not_found' | 'already'> {
   const [row] = await db.select().from(schema.notices).where(eq(schema.notices.id, id))
   if (!row) return 'not_found'
   if (row.status === 'approved' || row.status === 'dismissed') return 'already'
@@ -791,8 +796,71 @@ export async function approveNotice(
       await sendToUser(exam.userId, { title: examLabel(exam), body, tag: `notice-${id}-${exam.id}`, url: `/exams?exam=${exam.id}` }).catch(() => 0)
     }
   }
+  let alerted = 0
+  for (const p of proposals) alerted += await tellOfOpenForm(p, id, told, now)
   await db.update(schema.notices).set({ told: told.size }).where(eq(schema.notices.id, id))
-  return { told: told.size, checked, found, listNumbers, listProblem }
+  return { told: told.size, checked, found, listNumbers, listProblem, alerted }
+}
+
+/**
+ * A form that has opened, told to those it may matter to: anyone tracking an
+ * exam of the same family (SSC, railways, banks…) who is not tracking this
+ * one, has not said no to these, and has not said they studied less than it
+ * plainly asks for. Once per form: a later notice for the same exam and round
+ * (a corrigendum, an extension) is not news. A board's calendar is a plan,
+ * not an opening, and tells nobody.
+ */
+export async function formOpenedFor(p: NoticeProposal, noticeId: string, now: Date): Promise<{ userIds: string[]; applyBy: string } | null> {
+  const today = ymd(now)
+  const by = p.dates.find((d) => d.step === 'apply_by' && d.on >= today && !/tentative/i.test(d.note ?? ''))
+  const exam = examByKey(p.examKey)
+  if (!by || !exam) return null
+  const before = await db
+    .select({ id: schema.notices.id, proposals: schema.notices.proposals })
+    .from(schema.notices)
+    .where(and(eq(schema.notices.status, 'approved'), sql`${schema.notices.proposals} @> ${JSON.stringify([{ examKey: p.examKey, dates: [{ step: 'apply_by' }] }])}::jsonb`))
+  const announced = before.some(
+    (r) =>
+      r.id !== noticeId &&
+      r.proposals.some((x) => x.examKey === p.examKey && x.cycle === p.cycle && x.dates.some((d) => d.step === 'apply_by' && !/tentative/i.test(d.note ?? ''))),
+  )
+  if (announced) return null
+
+  const family = EXAMS.filter((x) => examGroup(x) === examGroup(exam)).map((x) => x.key)
+  const rows = await db
+    .select({ userId: schema.exams.userId, examKey: schema.exams.examKey, cycle: schema.exams.cycle, closedAt: schema.exams.closedAt })
+    .from(schema.exams)
+    .where(inArray(schema.exams.examKey, family))
+  const tracking = new Set(rows.filter((r) => r.examKey === p.examKey && (!r.cycle || !p.cycle || r.cycle === p.cycle)).map((r) => r.userId))
+  const candidates = [...new Set(rows.filter((r) => !r.closedAt).map((r) => r.userId))].filter((u) => !tracking.has(u))
+  if (candidates.length === 0) return { userIds: [], applyBy: by.on }
+  const people = await db
+    .select({ id: schema.users.id, level: schema.users.examLevel, training: schema.users.examTraining, alerts: schema.users.examFormAlerts })
+    .from(schema.users)
+    .where(inArray(schema.users.id, candidates))
+  return {
+    userIds: people.filter((x) => x.alerts && examFit(exam, { level: x.level, training: x.training }) !== 'needs').map((x) => x.id),
+    applyBy: by.on,
+  }
+}
+
+async function tellOfOpenForm(p: NoticeProposal, noticeId: string, already: Set<string>, now: Date): Promise<number> {
+  const opened = await formOpenedFor(p, noticeId, now)
+  const exam = examByKey(p.examKey)
+  if (!opened || !exam) return 0
+  const label = examLabel({ name: exam.name, cycle: p.cycle })
+  let sent = 0
+  for (const userId of opened.userIds.filter((u) => !already.has(u))) {
+    const lang = await langOf(userId)
+    const day = new Date(`${opened.applyBy}T00:00:00`).toLocaleDateString(localeOf(lang), { weekday: 'short', day: 'numeric', month: 'short' })
+    sent += await sendToUser(userId, {
+      title: t(lang, '{exam}: forms open', { exam: label }),
+      body: t(lang, 'Last date {day}. Add it, and its dates and reminders come with it.', { day }),
+      tag: `form-${noticeId}`,
+      url: '/exams',
+    }).catch(() => 0)
+  }
+  return sent
 }
 
 /**

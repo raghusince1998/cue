@@ -1270,6 +1270,11 @@ export {
   timesIn,
   WATCHED_BOARDS,
   watchedBoard,
+  EXAM_LEVELS,
+  EXAM_TRAINING,
+  examFit,
+  type ExamLevel,
+  type ExamTraining,
   type AdmitCard,
   type CatalogExam,
   type ExamDateSaid,
@@ -1393,6 +1398,8 @@ export interface OpenFormDTO {
   tentative: boolean
   url: string
   title: string
+  /** Against what the person has studied: null when either is not known. */
+  fit: 'fits' | 'needs' | null
 }
 export { isExamBody, parseExamEmail, type ExamMail, type ExamMailKind } from './examMail.ts'
 export {

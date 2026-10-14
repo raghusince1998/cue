@@ -98,6 +98,12 @@ export const users = pgTable(
     homeCity: text('home_city'),
     /** The language Cue speaks in: 'en' or 'hi' (the exam module first). */
     language: text('language').$type<'en' | 'hi'>().notNull().default('en'),
+    /** How far an aspirant has studied (EXAM_LEVELS): which open forms fit them. Never a date of birth. */
+    examLevel: text('exam_level').$type<import('@cue/shared').ExamLevel>(),
+    /** ITI, engineering, teacher training (EXAM_TRAINING). */
+    examTraining: text('exam_training').array().notNull().default(sql`'{}'::text[]`),
+    /** Told when a form opens for an exam like the ones they track. */
+    examFormAlerts: boolean('exam_form_alerts').notNull().default(true),
     /**
      * Work and personal kept apart: nagging reminders for one wait while it is
      * the other's time. Only for someone with a working life (see hasWork).

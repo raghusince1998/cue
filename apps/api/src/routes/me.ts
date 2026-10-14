@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { USE_KEYS } from '@cue/shared'
+import { EXAM_LEVELS, EXAM_TRAINING, USE_KEYS } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { takeFirst } from '../db/util.ts'
 import { scope } from '../auth.ts'
@@ -61,6 +61,15 @@ const preferencesInput = z.object({
   workEndHour: z.number().int().min(1).max(24).optional(),
   /** The language Cue speaks in: English, or Hindi. */
   language: z.enum(['en', 'hi']).optional(),
+  /** How far they have studied, for which exam forms fit them. */
+  examLevel: z.enum(EXAM_LEVELS).nullable().optional(),
+  examTraining: z
+    .array(z.enum(EXAM_TRAINING))
+    .max(EXAM_TRAINING.length)
+    .transform((v) => [...new Set(v)])
+    .optional(),
+  /** Told when a form opens for an exam like theirs. */
+  examFormAlerts: z.boolean().optional(),
 })
 
 const selection = {
@@ -81,6 +90,9 @@ const selection = {
   reportToPhone: schema.users.reportToPhone,
   homeCity: schema.users.homeCity,
   language: schema.users.language,
+  examLevel: schema.users.examLevel,
+  examTraining: schema.users.examTraining,
+  examFormAlerts: schema.users.examFormAlerts,
   upiId: schema.users.upiId,
   uses: schema.users.uses,
   keepApart: schema.users.keepApart,
@@ -158,6 +170,9 @@ export async function meRoutes(app: FastifyInstance) {
         ...(body.workStartHour !== undefined ? { workStartHour: body.workStartHour } : {}),
         ...(body.workEndHour !== undefined ? { workEndHour: body.workEndHour } : {}),
         ...(body.language !== undefined ? { language: body.language } : {}),
+        ...(body.examLevel !== undefined ? { examLevel: body.examLevel } : {}),
+        ...(body.examTraining !== undefined ? { examTraining: body.examTraining } : {}),
+        ...(body.examFormAlerts !== undefined ? { examFormAlerts: body.examFormAlerts } : {}),
       })
       .where(eq(schema.users.id, sub))
 

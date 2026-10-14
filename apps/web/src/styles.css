@@ -6138,6 +6138,14 @@ a.link-btn:hover {
   min-width: 0;
 }
 
+.open-form.is-unfit strong {
+  color: var(--muted);
+}
+
+.open-form-fit {
+  color: var(--good);
+}
+
 /* English / हिन्दी, on every width: the one control a visitor may need first. */
 .site .site-lang {
   border: 1px solid var(--border);

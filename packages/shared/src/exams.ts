@@ -18,6 +18,13 @@ export interface ExamRound {
   label: string
 }
 
+/** How far someone has studied — final year counting as done, as most forms allow. */
+export const EXAM_LEVELS = ['10th', '12th', 'graduate', 'postgraduate'] as const
+export type ExamLevel = (typeof EXAM_LEVELS)[number]
+/** Training a form may ask for besides a level: ITI, an engineering diploma or degree, teacher training. */
+export const EXAM_TRAINING = ['iti', 'engineering', 'teaching'] as const
+export type ExamTraining = (typeof EXAM_TRAINING)[number]
+
 export interface CatalogExam {
   key: string
   name: string
@@ -37,6 +44,13 @@ export interface CatalogExam {
   regions?: readonly string[]
   /** Carried on the day besides what every exam asks for. */
   carry?: string[]
+  /**
+   * What its form usually asks for, at the least: a level of study and, if
+   * any, one of these trainings. Only where that is plain from the board's
+   * notifications; left out where posts differ too much to say. It orders
+   * and marks what is offered, and never hides an exam.
+   */
+  needs?: { level: ExamLevel; training?: ExamTraining[] }
 }
 
 const R = {
@@ -92,70 +106,70 @@ const NTA_CARRY = ['The self-declaration (undertaking) on the admit card, filled
  */
 export const EXAMS: CatalogExam[] = [
   // Railways
-  { key: 'rrb-ntpc', name: 'RRB NTPC', ...RRB, aliases: ['rrb\\s*ntpc', 'railway\\s*ntpc', 'ntpc\\s+(?:cbt|graduate|under\\s*graduate|ug)'], rounds: [R.cbt1, R.cbt2, as(R.skill, 'Typing / skill test'), R.dv, R.medical] },
-  { key: 'rrb-group-d', name: 'RRB Group D', ...RRB, aliases: ['(?:rrb|rrc|railway)\\s*group[\\s-]*d', 'group[\\s-]*d\\s+(?:railway|rrb)', 'level[\\s-]*1\\s+posts'], rounds: [R.cbt, R.pet, R.dv, R.medical] },
-  { key: 'rrb-alp', name: 'RRB ALP (Assistant Loco Pilot)', ...RRB, aliases: ['(?:rrb|railway)\\s*alp', 'assistant\\s+loco\\s+pilot'], rounds: [R.cbt1, R.cbt2, as(R.skill, 'CBAT (aptitude test)'), R.dv, R.medical] },
-  { key: 'rrb-je', name: 'RRB JE', ...RRB, aliases: ['(?:rrb|railway)\\s*je', 'rrb\\s+junior\\s+engineer'], rounds: [R.cbt1, R.cbt2, R.dv, R.medical] },
-  { key: 'rrb-technician', name: 'RRB Technician', ...RRB, aliases: ['(?:rrb|railway)\\s*technician'], rounds: [R.cbt, R.dv, R.medical] },
-  { key: 'rpf', name: 'RPF Constable / SI', ...RRB, aliases: ['rpf(?:\\s+(?:constable|si|sub[\\s-]*inspector))?', 'railway\\s+protection\\s+force'], rounds: [R.cbt, as(R.pet, 'PET & PMT'), R.dv] },
+  { key: 'rrb-ntpc', name: 'RRB NTPC', ...RRB, aliases: ['rrb\\s*ntpc', 'railway\\s*ntpc', 'ntpc\\s+(?:cbt|graduate|under\\s*graduate|ug)'], rounds: [R.cbt1, R.cbt2, as(R.skill, 'Typing / skill test'), R.dv, R.medical], needs: { level: '12th' } },
+  { key: 'rrb-group-d', name: 'RRB Group D', ...RRB, aliases: ['(?:rrb|rrc|railway)\\s*group[\\s-]*d', 'group[\\s-]*d\\s+(?:railway|rrb)', 'level[\\s-]*1\\s+posts'], rounds: [R.cbt, R.pet, R.dv, R.medical], needs: { level: '10th' } },
+  { key: 'rrb-alp', name: 'RRB ALP (Assistant Loco Pilot)', ...RRB, aliases: ['(?:rrb|railway)\\s*alp', 'assistant\\s+loco\\s+pilot'], rounds: [R.cbt1, R.cbt2, as(R.skill, 'CBAT (aptitude test)'), R.dv, R.medical], needs: { level: '10th', training: ['iti', 'engineering'] } },
+  { key: 'rrb-je', name: 'RRB JE', ...RRB, aliases: ['(?:rrb|railway)\\s*je', 'rrb\\s+junior\\s+engineer'], rounds: [R.cbt1, R.cbt2, R.dv, R.medical], needs: { level: '10th', training: ['engineering'] } },
+  { key: 'rrb-technician', name: 'RRB Technician', ...RRB, aliases: ['(?:rrb|railway)\\s*technician'], rounds: [R.cbt, R.dv, R.medical], needs: { level: '10th', training: ['iti', 'engineering'] } },
+  { key: 'rpf', name: 'RPF Constable / SI', ...RRB, aliases: ['rpf(?:\\s+(?:constable|si|sub[\\s-]*inspector))?', 'railway\\s+protection\\s+force'], rounds: [R.cbt, as(R.pet, 'PET & PMT'), R.dv], needs: { level: '10th' } },
 
   // Staff Selection Commission
-  { key: 'ssc-cgl', name: 'SSC CGL', ...SSC, aliases: ['ssc\\s*cgl', 'cgl', 'combined\\s+graduate\\s+level'], rounds: [R.tier1, R.tier2, R.dv] },
-  { key: 'ssc-chsl', name: 'SSC CHSL', ...SSC, aliases: ['ssc\\s*chsl', 'chsl', 'combined\\s+higher\\s+secondary'], rounds: [R.tier1, as(R.tier2, 'Tier 2 (with skill test)'), R.dv] },
-  { key: 'ssc-mts', name: 'SSC MTS & Havaldar', ...SSC, aliases: ['ssc\\s*mts', 'multi[\\s-]tasking\\s+staff', 'multi[\\s-]tasking\\s*\\(\\s*non[\\s-]*technical\\s*\\)\\s*staff'], rounds: [R.cbt, as(R.pet, 'PET/PST (Havaldar)'), R.dv] },
-  { key: 'ssc-gd', name: 'SSC GD Constable', ...SSC, aliases: ['ssc\\s*gd', 'gd\\s+constable', 'constable\\s*\\(\\s*gd\\s*\\)'], rounds: [R.cbt, as(R.pet, 'PET/PST'), R.medical, R.dv] },
-  { key: 'ssc-cpo', name: 'SSC CPO (SI in Delhi Police & CAPFs)', ...SSC, aliases: ['ssc\\s*cpo', 'delhi\\s+police\\s+si', 'sub[\\s-]*inspector\\s+in\\s+delhi\\s+police'], rounds: [R.paper1, as(R.pet, 'PET/PST'), R.paper2, R.medical] },
-  { key: 'ssc-je', name: 'SSC JE', ...SSC, aliases: ['ssc\\s*je', 'ssc\\s+junior\\s+engineer'], rounds: [R.paper1, R.paper2, R.dv] },
-  { key: 'ssc-steno', name: 'SSC Stenographer', ...SSC, aliases: ['ssc\\s*steno(?:grapher)?'], rounds: [R.cbt, R.skill, R.dv] },
-  { key: 'ssc-selection-post', name: 'SSC Selection Post', ...SSC, aliases: ['ssc\\s+selection\\s+posts?', 'ssc\\s+phase[\\s-]*(?:[ivx]+|\\d+)'], rounds: [R.cbt, R.dv] },
+  { key: 'ssc-cgl', name: 'SSC CGL', ...SSC, aliases: ['ssc\\s*cgl', 'cgl', 'combined\\s+graduate\\s+level'], rounds: [R.tier1, R.tier2, R.dv], needs: { level: 'graduate' } },
+  { key: 'ssc-chsl', name: 'SSC CHSL', ...SSC, aliases: ['ssc\\s*chsl', 'chsl', 'combined\\s+higher\\s+secondary'], rounds: [R.tier1, as(R.tier2, 'Tier 2 (with skill test)'), R.dv], needs: { level: '12th' } },
+  { key: 'ssc-mts', name: 'SSC MTS & Havaldar', ...SSC, aliases: ['ssc\\s*mts', 'multi[\\s-]tasking\\s+staff', 'multi[\\s-]tasking\\s*\\(\\s*non[\\s-]*technical\\s*\\)\\s*staff'], rounds: [R.cbt, as(R.pet, 'PET/PST (Havaldar)'), R.dv], needs: { level: '10th' } },
+  { key: 'ssc-gd', name: 'SSC GD Constable', ...SSC, aliases: ['ssc\\s*gd', 'gd\\s+constable', 'constable\\s*\\(\\s*gd\\s*\\)'], rounds: [R.cbt, as(R.pet, 'PET/PST'), R.medical, R.dv], needs: { level: '10th' } },
+  { key: 'ssc-cpo', name: 'SSC CPO (SI in Delhi Police & CAPFs)', ...SSC, aliases: ['ssc\\s*cpo', 'delhi\\s+police\\s+si', 'sub[\\s-]*inspector\\s+in\\s+delhi\\s+police'], rounds: [R.paper1, as(R.pet, 'PET/PST'), R.paper2, R.medical], needs: { level: 'graduate' } },
+  { key: 'ssc-je', name: 'SSC JE', ...SSC, aliases: ['ssc\\s*je', 'ssc\\s+junior\\s+engineer'], rounds: [R.paper1, R.paper2, R.dv], needs: { level: '10th', training: ['engineering'] } },
+  { key: 'ssc-steno', name: 'SSC Stenographer', ...SSC, aliases: ['ssc\\s*steno(?:grapher)?'], rounds: [R.cbt, R.skill, R.dv], needs: { level: '12th' } },
+  { key: 'ssc-selection-post', name: 'SSC Selection Post', ...SSC, aliases: ['ssc\\s+selection\\s+posts?', 'ssc\\s+phase[\\s-]*(?:[ivx]+|\\d+)'], rounds: [R.cbt, R.dv], needs: { level: '10th' } },
 
   // Union Public Service Commission
-  { key: 'upsc-cse', name: 'UPSC Civil Services', ...UPSC, aliases: ['upsc\\s*cse', 'upsc\\s+civil\\s+services?', 'civil\\s+services?\\s+(?:exam|prelims|mains)', 'civil\\s+services\\s*\\(\\s*(?:preliminary|main)\\s*\\)', 'civil\\s+services\\s+examination', 'ias\\s+(?:exam|prelims|mains)', 'upsc'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview (personality test)')] },
-  { key: 'upsc-nda', name: 'UPSC NDA & NA', ...UPSC, aliases: ['upsc\\s+nda', 'nda\\s*(?:&|and)\\s*na', 'nda\\s+(?:exam|[12]|i{1,2}|20\\d\\d)'], rounds: [R.written, R.ssb, R.medical] },
-  { key: 'upsc-cds', name: 'UPSC CDS', ...UPSC, aliases: ['upsc\\s+cds', 'cds\\s+(?:exam|[12]|i{1,2}|20\\d\\d)'], rounds: [R.written, R.ssb, R.medical] },
-  { key: 'upsc-capf', name: 'UPSC CAPF (Assistant Commandant)', ...UPSC, aliases: ['upsc\\s+capf', 'capf\\s*\\(?ac\\)?', 'capf\\s+assistant\\s+commandant'], rounds: [R.written, as(R.pet, 'Physical & medical tests'), R.interview] },
-  { key: 'upsc-ese', name: 'UPSC Engineering Services (ESE)', ...UPSC, aliases: ['upsc\\s+ese', 'ies\\s*/\\s*ese', '(?:upsc\\s+)?engineering\\s+services(?:\\s+exam)?'], rounds: [R.prelims, R.mains, R.interview] },
+  { key: 'upsc-cse', name: 'UPSC Civil Services', ...UPSC, aliases: ['upsc\\s*cse', 'upsc\\s+civil\\s+services?', 'civil\\s+services?\\s+(?:exam|prelims|mains)', 'civil\\s+services\\s*\\(\\s*(?:preliminary|main)\\s*\\)', 'civil\\s+services\\s+examination', 'ias\\s+(?:exam|prelims|mains)', 'upsc'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview (personality test)')], needs: { level: 'graduate' } },
+  { key: 'upsc-nda', name: 'UPSC NDA & NA', ...UPSC, aliases: ['upsc\\s+nda', 'nda\\s*(?:&|and)\\s*na', 'nda\\s+(?:exam|[12]|i{1,2}|20\\d\\d)'], rounds: [R.written, R.ssb, R.medical], needs: { level: '12th' } },
+  { key: 'upsc-cds', name: 'UPSC CDS', ...UPSC, aliases: ['upsc\\s+cds', 'cds\\s+(?:exam|[12]|i{1,2}|20\\d\\d)'], rounds: [R.written, R.ssb, R.medical], needs: { level: 'graduate' } },
+  { key: 'upsc-capf', name: 'UPSC CAPF (Assistant Commandant)', ...UPSC, aliases: ['upsc\\s+capf', 'capf\\s*\\(?ac\\)?', 'capf\\s+assistant\\s+commandant'], rounds: [R.written, as(R.pet, 'Physical & medical tests'), R.interview], needs: { level: 'graduate' } },
+  { key: 'upsc-ese', name: 'UPSC Engineering Services (ESE)', ...UPSC, aliases: ['upsc\\s+ese', 'ies\\s*/\\s*ese', '(?:upsc\\s+)?engineering\\s+services(?:\\s+exam)?'], rounds: [R.prelims, R.mains, R.interview], needs: { level: 'graduate', training: ['engineering'] } },
 
   // Banks and insurers
-  { key: 'ibps-po', name: 'IBPS PO', ...IBPS, aliases: ['ibps\\s*po', 'crp[\\s-]*po(?:\\s*/\\s*mt)?'], rounds: [R.prelims, R.mains, R.interview] },
-  { key: 'ibps-clerk', name: 'IBPS Clerk', ...IBPS, aliases: ['ibps\\s*clerk', 'crp[\\s-]*clerks?'], rounds: [R.prelims, R.mains] },
-  { key: 'ibps-rrb', name: 'IBPS RRB (Gramin Bank)', ...IBPS, aliases: ['ibps\\s*rrb', 'crp[\\s-]*rrbs?','rrb\\s*(?:po|clerk|officer\\s+scale|office\\s+assistant)', 'gramin\\s+bank'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview (officers)')] },
-  { key: 'ibps-so', name: 'IBPS SO', ...IBPS, aliases: ['ibps\\s*so', 'crp[\\s-]*spl'], rounds: [R.prelims, R.mains, R.interview] },
-  { key: 'sbi-po', name: 'SBI PO', ...SBI, aliases: ['sbi\\s*po', 'sbi\\s+probationary\\s+officers?', 'sbi\\s+recruitment\\s+of\\s+probationary\\s+officers?'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview & group exercise')] },
-  { key: 'sbi-clerk', name: 'SBI Clerk (Junior Associate)', ...SBI, aliases: ['sbi\\s*clerk', 'sbi\\s+junior\\s+associates?', 'junior\\s+associates?'], rounds: [R.prelims, R.mains, { key: 'language', label: 'Language test' }] },
-  { key: 'rbi-grade-b', name: 'RBI Grade B', ...RBI, aliases: ['rbi\\s*grade[\\s-]*b'], rounds: [R.phase1, R.phase2, R.interview] },
-  { key: 'rbi-assistant', name: 'RBI Assistant', ...RBI, aliases: ['rbi\\s*assistant'], rounds: [R.prelims, R.mains, { key: 'language', label: 'Language test (LPT)' }] },
-  { key: 'lic-aao', name: 'LIC AAO', body: 'Life Insurance Corporation', site: 'https://licindia.in', scope: 'national', aliases: ['lic\\s*aao', 'lic\\s+recruitment\\s+of\\s+aao', 'aao\\s+generalists?'], rounds: [R.prelims, R.mains, R.interview] },
+  { key: 'ibps-po', name: 'IBPS PO', ...IBPS, aliases: ['ibps\\s*po', 'crp[\\s-]*po(?:\\s*/\\s*mt)?'], rounds: [R.prelims, R.mains, R.interview], needs: { level: 'graduate' } },
+  { key: 'ibps-clerk', name: 'IBPS Clerk', ...IBPS, aliases: ['ibps\\s*clerk', 'crp[\\s-]*clerks?'], rounds: [R.prelims, R.mains], needs: { level: 'graduate' } },
+  { key: 'ibps-rrb', name: 'IBPS RRB (Gramin Bank)', ...IBPS, aliases: ['ibps\\s*rrb', 'crp[\\s-]*rrbs?','rrb\\s*(?:po|clerk|officer\\s+scale|office\\s+assistant)', 'gramin\\s+bank'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview (officers)')], needs: { level: 'graduate' } },
+  { key: 'ibps-so', name: 'IBPS SO', ...IBPS, aliases: ['ibps\\s*so', 'crp[\\s-]*spl'], rounds: [R.prelims, R.mains, R.interview], needs: { level: 'graduate' } },
+  { key: 'sbi-po', name: 'SBI PO', ...SBI, aliases: ['sbi\\s*po', 'sbi\\s+probationary\\s+officers?', 'sbi\\s+recruitment\\s+of\\s+probationary\\s+officers?'], rounds: [R.prelims, R.mains, as(R.interview, 'Interview & group exercise')], needs: { level: 'graduate' } },
+  { key: 'sbi-clerk', name: 'SBI Clerk (Junior Associate)', ...SBI, aliases: ['sbi\\s*clerk', 'sbi\\s+junior\\s+associates?', 'junior\\s+associates?'], rounds: [R.prelims, R.mains, { key: 'language', label: 'Language test' }], needs: { level: 'graduate' } },
+  { key: 'rbi-grade-b', name: 'RBI Grade B', ...RBI, aliases: ['rbi\\s*grade[\\s-]*b'], rounds: [R.phase1, R.phase2, R.interview], needs: { level: 'graduate' } },
+  { key: 'rbi-assistant', name: 'RBI Assistant', ...RBI, aliases: ['rbi\\s*assistant'], rounds: [R.prelims, R.mains, { key: 'language', label: 'Language test (LPT)' }], needs: { level: 'graduate' } },
+  { key: 'lic-aao', name: 'LIC AAO', body: 'Life Insurance Corporation', site: 'https://licindia.in', scope: 'national', aliases: ['lic\\s*aao', 'lic\\s+recruitment\\s+of\\s+aao', 'aao\\s+generalists?'], rounds: [R.prelims, R.mains, R.interview], needs: { level: 'graduate' } },
 
   // Entrance and eligibility tests
-  { key: 'jee-main', name: 'JEE Main', ...NTA, site: 'https://jeemain.nta.nic.in', aliases: ['jee\\s*mains?', 'jee\\s*\\(\\s*main\\s*\\)'], rounds: [R.session1, R.session2], carry: NTA_CARRY },
-  { key: 'jee-advanced', name: 'JEE Advanced', body: 'IITs', site: 'https://jeeadv.ac.in', scope: 'national', aliases: ['jee\\s*adv(?:anced)?'], rounds: [R.exam] },
-  { key: 'neet-ug', name: 'NEET UG', ...NTA, site: 'https://neet.nta.nic.in', aliases: ['neet(?!\\s*pg)(?:\\s*ug)?'], rounds: [R.exam, R.counselling], carry: [...NTA_CARRY, 'A postcard-size photo (4" × 6"), as the admit card asks'] },
-  { key: 'cuet-ug', name: 'CUET UG', ...NTA, site: 'https://cuet.nta.nic.in', aliases: ['cuet(?:\\s*ug)?'], rounds: [R.exam], carry: NTA_CARRY },
-  { key: 'ugc-net', name: 'UGC NET', ...NTA, site: 'https://ugcnet.nta.ac.in', aliases: ['ugc[\\s-]*net'], rounds: [R.exam], carry: NTA_CARRY },
-  { key: 'csir-net', name: 'CSIR NET', ...NTA, site: 'https://csirnet.nta.ac.in', aliases: ['csir[\\s-]*(?:ugc[\\s-]*)?net'], rounds: [R.exam], carry: NTA_CARRY },
-  { key: 'gate', name: 'GATE', body: 'IISc and the IITs (a different one each year)', site: null, scope: 'national', aliases: ['gate\\s+(?:exam|20\\d\\d)'], capitals: ['GATE'], rounds: [R.exam] },
-  { key: 'cat', name: 'CAT', body: 'IIMs', site: 'https://iimcat.ac.in', scope: 'national', aliases: ['iim\\s+cat', 'cat\\s+(?:exam|20\\d\\d)'], capitals: ['CAT'], rounds: [R.exam, as(R.interview, 'WAT & interview')] },
-  { key: 'clat', name: 'CLAT', body: 'Consortium of NLUs', site: 'https://consortiumofnlus.ac.in', scope: 'national', aliases: ['clat'], rounds: [R.exam, R.counselling] },
-  { key: 'ctet', name: 'CTET', body: 'CBSE', site: 'https://ctet.nic.in', scope: 'national', aliases: ['ctet'], rounds: [R.exam] },
+  { key: 'jee-main', name: 'JEE Main', ...NTA, site: 'https://jeemain.nta.nic.in', aliases: ['jee\\s*mains?', 'jee\\s*\\(\\s*main\\s*\\)'], rounds: [R.session1, R.session2], carry: NTA_CARRY, needs: { level: '12th' } },
+  { key: 'jee-advanced', name: 'JEE Advanced', body: 'IITs', site: 'https://jeeadv.ac.in', scope: 'national', aliases: ['jee\\s*adv(?:anced)?'], rounds: [R.exam], needs: { level: '12th' } },
+  { key: 'neet-ug', name: 'NEET UG', ...NTA, site: 'https://neet.nta.nic.in', aliases: ['neet(?!\\s*pg)(?:\\s*ug)?'], rounds: [R.exam, R.counselling], carry: [...NTA_CARRY, 'A postcard-size photo (4" × 6"), as the admit card asks'], needs: { level: '12th' } },
+  { key: 'cuet-ug', name: 'CUET UG', ...NTA, site: 'https://cuet.nta.nic.in', aliases: ['cuet(?:\\s*ug)?'], rounds: [R.exam], carry: NTA_CARRY, needs: { level: '12th' } },
+  { key: 'ugc-net', name: 'UGC NET', ...NTA, site: 'https://ugcnet.nta.ac.in', aliases: ['ugc[\\s-]*net'], rounds: [R.exam], carry: NTA_CARRY, needs: { level: 'postgraduate' } },
+  { key: 'csir-net', name: 'CSIR NET', ...NTA, site: 'https://csirnet.nta.ac.in', aliases: ['csir[\\s-]*(?:ugc[\\s-]*)?net'], rounds: [R.exam], carry: NTA_CARRY, needs: { level: 'postgraduate' } },
+  { key: 'gate', name: 'GATE', body: 'IISc and the IITs (a different one each year)', site: null, scope: 'national', aliases: ['gate\\s+(?:exam|20\\d\\d)'], capitals: ['GATE'], rounds: [R.exam], needs: { level: 'graduate' } },
+  { key: 'cat', name: 'CAT', body: 'IIMs', site: 'https://iimcat.ac.in', scope: 'national', aliases: ['iim\\s+cat', 'cat\\s+(?:exam|20\\d\\d)'], capitals: ['CAT'], rounds: [R.exam, as(R.interview, 'WAT & interview')], needs: { level: 'graduate' } },
+  { key: 'clat', name: 'CLAT', body: 'Consortium of NLUs', site: 'https://consortiumofnlus.ac.in', scope: 'national', aliases: ['clat'], rounds: [R.exam, R.counselling], needs: { level: '12th' } },
+  { key: 'ctet', name: 'CTET', body: 'CBSE', site: 'https://ctet.nic.in', scope: 'national', aliases: ['ctet'], rounds: [R.exam], needs: { level: '12th', training: ['teaching'] } },
 
   // Defence
-  { key: 'agniveer-army', name: 'Army Agniveer', body: 'Indian Army', site: 'https://joinindianarmy.nic.in', scope: 'national', aliases: ['(?<!(?:navy|vayu|air\\s*force)[^\\n]{0,40})(?:army\\s+)?agniveer(?![^\\n]{0,30}(?:navy|vayu|air\\s*force))', 'agnipath'], rounds: [as(R.cbt, 'Online exam (CEE)'), { key: 'rally', label: 'Recruitment rally' }, R.medical] },
-  { key: 'afcat', name: 'AFCAT', body: 'Indian Air Force', site: 'https://careerindianairforce.cdac.in', scope: 'national', aliases: ['afcat'], rounds: [as(R.exam, 'Online exam'), as(R.ssb, 'AFSB interview'), R.medical] },
+  { key: 'agniveer-army', name: 'Army Agniveer', body: 'Indian Army', site: 'https://joinindianarmy.nic.in', scope: 'national', aliases: ['(?<!(?:navy|vayu|air\\s*force)[^\\n]{0,40})(?:army\\s+)?agniveer(?![^\\n]{0,30}(?:navy|vayu|air\\s*force))', 'agnipath'], rounds: [as(R.cbt, 'Online exam (CEE)'), { key: 'rally', label: 'Recruitment rally' }, R.medical], needs: { level: '10th' } },
+  { key: 'afcat', name: 'AFCAT', body: 'Indian Air Force', site: 'https://careerindianairforce.cdac.in', scope: 'national', aliases: ['afcat'], rounds: [as(R.exam, 'Online exam'), as(R.ssb, 'AFSB interview'), R.medical], needs: { level: 'graduate' } },
 
   // Rajasthan
-  { key: 'ras', name: 'RAS/RTS', ...RPSC, capitals: ['RAS'], aliases: ['rpsc\\s+ras', 'ras(?:\\s*/\\s*rts)?\\s+(?:exam|pre(?:lims)?|mains|20\\d\\d)', 'ras\\s*/\\s*rts\\s+combined', 'raj(?:asthan|\\.)?\\s+state\\s+(?:and|&)\\s+sub(?:ordinate|\\.)?\\s+services'], rounds: [R.prelims, R.mains, R.interview] },
-  { key: 'rpsc-school-lecturer', name: 'RPSC School Lecturer', ...RPSC, aliases: ['(?:rpsc\\s+)?school\\s+lecturer', '(?:1st|first)\\s+grade\\s+(?:teacher|lecturer)'], rounds: [R.written, R.dv] },
-  { key: 'rpsc-senior-teacher', name: 'RPSC Senior Teacher (2nd Grade)', ...RPSC, aliases: ['(?:rpsc\\s+)?senior\\s+teacher', '(?:2nd|second)\\s+grade\\s+teacher'], rounds: [R.written, R.dv] },
-  { key: 'raj-police-si', name: 'Rajasthan Police SI', ...RPSC, aliases: ['raj(?:asthan)?\\s+police\\s+si', 'rajasthan\\s+si', 'rpsc\\s+si', 'rpsc\\s+sub[\\s-]*inspector'], rounds: [R.written, as(R.pet, 'PET'), R.interview] },
+  { key: 'ras', name: 'RAS/RTS', ...RPSC, capitals: ['RAS'], aliases: ['rpsc\\s+ras', 'ras(?:\\s*/\\s*rts)?\\s+(?:exam|pre(?:lims)?|mains|20\\d\\d)', 'ras\\s*/\\s*rts\\s+combined', 'raj(?:asthan|\\.)?\\s+state\\s+(?:and|&)\\s+sub(?:ordinate|\\.)?\\s+services'], rounds: [R.prelims, R.mains, R.interview], needs: { level: 'graduate' } },
+  { key: 'rpsc-school-lecturer', name: 'RPSC School Lecturer', ...RPSC, aliases: ['(?:rpsc\\s+)?school\\s+lecturer', '(?:1st|first)\\s+grade\\s+(?:teacher|lecturer)'], rounds: [R.written, R.dv], needs: { level: 'postgraduate', training: ['teaching'] } },
+  { key: 'rpsc-senior-teacher', name: 'RPSC Senior Teacher (2nd Grade)', ...RPSC, aliases: ['(?:rpsc\\s+)?senior\\s+teacher', '(?:2nd|second)\\s+grade\\s+teacher'], rounds: [R.written, R.dv], needs: { level: 'graduate', training: ['teaching'] } },
+  { key: 'raj-police-si', name: 'Rajasthan Police SI', ...RPSC, aliases: ['raj(?:asthan)?\\s+police\\s+si', 'rajasthan\\s+si', 'rpsc\\s+si', 'rpsc\\s+sub[\\s-]*inspector'], rounds: [R.written, as(R.pet, 'PET'), R.interview], needs: { level: 'graduate' } },
   { key: 'raj-police-constable', name: 'Rajasthan Police Constable', body: 'Rajasthan Police', site: 'https://police.rajasthan.gov.in', applyAt: 'https://recruitment.rajasthan.gov.in', scope: 'rajasthan', aliases: ['raj(?:asthan)?\\s+police(?:\\s+constable)?', 'rajasthan\\s+constable'], rounds: [R.written, as(R.pet, 'PET/PST'), as(R.dv, 'DV & medical')] },
-  { key: 'reet', name: 'REET', body: 'Board of Secondary Education, Rajasthan', site: 'https://rajeduboard.rajasthan.gov.in', scope: 'rajasthan', aliases: ['reet(?!\\s+mains)(?:\\s+level[\\s-]*(?:1|2|i{1,2}))?'], rounds: [R.exam] },
-  { key: 'reet-mains', name: 'REET Mains (3rd Grade Teacher)', ...RSSB, aliases: ['reet\\s+mains', '(?:3rd|third)\\s+grade\\s+teacher'], rounds: [R.written, R.dv] },
-  { key: 'rssb-cet', name: 'Rajasthan CET', ...RSSB, aliases: ['(?:rajasthan|rssb|rsmssb)\\s+cet', 'cet\\s+(?:graduate|senior\\s+secondary|12th)'], rounds: [R.exam] },
-  { key: 'rssb-patwari', name: 'Rajasthan Patwari', ...RSSB, aliases: ['patwari'], rounds: [R.written, R.dv] },
-  { key: 'rssb-vdo', name: 'Rajasthan VDO (Gram Vikas Adhikari)', ...RSSB, aliases: ['vdo', 'gram\\s+vikas\\s+adhikari', 'village\\s+development\\s+officer'], rounds: [R.written, R.dv] },
-  { key: 'rssb-ldc', name: 'Rajasthan LDC / Junior Assistant', ...RSSB, aliases: ['(?:rajasthan|rssb|rsmssb)\\s+(?:ldc|junior\\s+assistant|clerk\\s+grade[\\s-]*(?:ii|2))'], rounds: [R.written, R.typing, R.dv] },
-  { key: 'rssb-fourth-grade', name: 'Rajasthan Class IV (Fourth Grade)', ...RSSB, aliases: ['(?:rajasthan|rssb|rsmssb)\\s+(?:4th|fourth)\\s+grade', 'chaturth\\s+shreni', 'rajasthan\\s+class\\s+iv', '(?:4th|fourth)\\s+grade\\s+(?:exam|bharti|recruitment)'], rounds: [R.written, R.dv] },
+  { key: 'reet', name: 'REET', body: 'Board of Secondary Education, Rajasthan', site: 'https://rajeduboard.rajasthan.gov.in', scope: 'rajasthan', aliases: ['reet(?!\\s+mains)(?:\\s+level[\\s-]*(?:1|2|i{1,2}))?'], rounds: [R.exam], needs: { level: '12th', training: ['teaching'] } },
+  { key: 'reet-mains', name: 'REET Mains (3rd Grade Teacher)', ...RSSB, aliases: ['reet\\s+mains', '(?:3rd|third)\\s+grade\\s+teacher'], rounds: [R.written, R.dv], needs: { level: '12th', training: ['teaching'] } },
+  { key: 'rssb-cet', name: 'Rajasthan CET', ...RSSB, aliases: ['(?:rajasthan|rssb|rsmssb)\\s+cet', 'cet\\s+(?:graduate|senior\\s+secondary|12th)'], rounds: [R.exam], needs: { level: '12th' } },
+  { key: 'rssb-patwari', name: 'Rajasthan Patwari', ...RSSB, aliases: ['patwari'], rounds: [R.written, R.dv], needs: { level: 'graduate' } },
+  { key: 'rssb-vdo', name: 'Rajasthan VDO (Gram Vikas Adhikari)', ...RSSB, aliases: ['vdo', 'gram\\s+vikas\\s+adhikari', 'village\\s+development\\s+officer'], rounds: [R.written, R.dv], needs: { level: 'graduate' } },
+  { key: 'rssb-ldc', name: 'Rajasthan LDC / Junior Assistant', ...RSSB, aliases: ['(?:rajasthan|rssb|rsmssb)\\s+(?:ldc|junior\\s+assistant|clerk\\s+grade[\\s-]*(?:ii|2))'], rounds: [R.written, R.typing, R.dv], needs: { level: '12th' } },
+  { key: 'rssb-fourth-grade', name: 'Rajasthan Class IV (Fourth Grade)', ...RSSB, aliases: ['(?:rajasthan|rssb|rsmssb)\\s+(?:4th|fourth)\\s+grade', 'chaturth\\s+shreni', 'rajasthan\\s+class\\s+iv', '(?:4th|fourth)\\s+grade\\s+(?:exam|bharti|recruitment)'], rounds: [R.written, R.dv], needs: { level: '10th' } },
   { key: 'raj-high-court', name: 'Rajasthan High Court (LDC / JJA)', body: 'Rajasthan High Court', site: 'https://hcraj.nic.in', scope: 'rajasthan', aliases: ['rajasthan\\s+high\\s+court\\s*\\(?\\s*(?:ldc|clerk|jja|junior\\s+judicial\\s+assistant|exam|recruitment)'], rounds: [R.written, R.typing, R.dv] },
 ]
 
@@ -178,6 +192,22 @@ export const WATCHED_BOARDS: Record<string, string> = {
   SBI: 'State Bank of India',
   LIC: 'Life Insurance Corporation',
   CTET: 'CBSE',
+}
+
+/**
+ * Whether what someone has studied fits what an exam's form usually asks
+ * for: 'needs' when it plainly asks for more, null when either is not known.
+ * An engineering diploma or degree counts wherever ITI is asked for.
+ */
+export function examFit(
+  exam: Pick<CatalogExam, 'needs'> | null,
+  studied: { level: ExamLevel | null; training: readonly string[] },
+): 'fits' | 'needs' | null {
+  if (!exam?.needs || !studied.level) return null
+  const levelOk = EXAM_LEVELS.indexOf(studied.level) >= EXAM_LEVELS.indexOf(exam.needs.level)
+  const training = exam.needs.training
+  const trainingOk = !training || training.some((t) => studied.training.includes(t) || (t === 'iti' && studied.training.includes('engineering')))
+  return levelOk && trainingOk ? 'fits' : 'needs'
 }
 
 /** "RSSB", when Cue reads the notices of the board that holds this exam itself. */

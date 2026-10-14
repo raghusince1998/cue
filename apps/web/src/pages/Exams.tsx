@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom'
 import {
   CATEGORIES,
   EXAMS,
+  EXAM_LEVELS,
+  EXAM_TRAINING,
   EXAM_GROUPS,
   EXAM_STEPS,
   examGroup,
@@ -14,7 +16,9 @@ import {
   subjectsFor,
   type AdmitCard,
   type ExamDTO,
+  type ExamLevel,
   type ExamStep,
+  type ExamTraining,
   type OpenFormDTO,
 } from '@cue/shared'
 import { ApiError, api, apiSendFile } from '../lib/api.ts'
@@ -121,6 +125,8 @@ export default function Exams() {
 
   /** What adding just brought with it: the official dates already out, or that they will come. */
   const [addedNote, setAddedNote] = useState<string | null>(null)
+  /** Bumped when what they studied changes, so the forms open now are marked again. */
+  const [studied, setStudied] = useState(0)
   const open = useMemo(() => (exams ?? []).filter((x) => !x.closedAt), [exams])
   const closed = useMemo(() => (exams ?? []).filter((x) => x.closedAt), [exams])
 
@@ -182,11 +188,13 @@ export default function Exams() {
       ) : exams.length === 0 ? (
         <>
           <OpenForms
+            key={studied}
             onAdded={(official) => {
               setAddedNote(w.officialAdded(official))
               void load()
             }}
           />
+          <Studies onChanged={() => setStudied((n) => n + 1)} />
           <p className="muted small">
             {w.noExamsHow} <strong>applied for RRB NTPC 2026, RRB Ajmer, reg no …</strong> ·{' '}
             <strong>REET ka form bharna hai, last date 20 nov</strong>
@@ -200,12 +208,13 @@ export default function Exams() {
             ))}
           </div>
           <OpenForms
-            key={exams.length}
+            key={`${exams.length}-${studied}`}
             onAdded={(official) => {
               setAddedNote(w.officialAdded(official))
               void load()
             }}
           />
+          <Studies onChanged={() => setStudied((n) => n + 1)} />
           {closed.length > 0 && (
             <details className="tracker-closed">
               <summary>
@@ -375,8 +384,9 @@ function OpenForms({ onAdded }: { onAdded: (officialDates: number) => void }) {
       <ul className="plain open-forms-list">
         {forms.map((f) => {
           const key = `${f.examKey}|${f.cycle ?? ''}`
+          const needs = examByKey(f.examKey)?.needs
           return (
-            <li key={key} className="open-form">
+            <li key={key} className={`open-form${f.fit === 'needs' ? ' is-unfit' : ''}`}>
               <span className="open-form-what">
                 <strong>{examLabel({ name: f.name, cycle: f.cycle })}</strong>
                 <span className="muted small">
@@ -387,6 +397,8 @@ function OpenForms({ onAdded }: { onAdded: (officialDates: number) => void }) {
                     {w.theNoticeLink}
                   </a>
                 </span>
+                {f.fit === 'fits' && <span className="small open-form-fit"> · ✓ {w.fitsYou}</span>}
+                {f.fit === 'needs' && needs && <span className="muted small"> · {w.usuallyNeeds(needs.level, needs.training ?? [])}</span>}
               </span>
               <button className="primary small-btn" onClick={() => void add(f)} disabled={busy !== null}>
                 {w.addThis}
@@ -395,6 +407,98 @@ function OpenForms({ onAdded }: { onAdded: (officialDates: number) => void }) {
           )
         })}
       </ul>
+    </section>
+  )
+}
+
+interface Studied {
+  examLevel: ExamLevel | null
+  examTraining: ExamTraining[]
+  examFormAlerts: boolean
+}
+
+/**
+ * What they have studied, said once — never a date of birth: which forms
+ * fit them, and whether to hear when one opens for an exam like theirs.
+ * Open until it is said; a line with "Change" after.
+ */
+function Studies({ onChanged }: { onChanged: () => void }) {
+  const w = useExamWords()
+  const [said, setSaid] = useState<Studied | null>(null)
+  const [editing, setEditing] = useState(false)
+  useEffect(() => {
+    api<Studied>('/me/preferences')
+      .then(setSaid)
+      .catch(() => undefined)
+  }, [])
+  if (!said) return null
+
+  async function save(patch: Partial<Studied>) {
+    setSaid((s) => (s ? { ...s, ...patch } : s))
+    try {
+      const saved = await api<Studied>('/me/preferences', { method: 'PATCH', body: patch })
+      setSaid(saved)
+      onChanged()
+    } catch {
+      // Kept on screen; it is saved again with the next tap.
+    }
+  }
+
+  if (said.examLevel && !editing) {
+    const summary = [w.level(said.examLevel), ...said.examTraining.map((t) => w.training(t))].join(' · ')
+    return (
+      <p className="muted small exam-studies-line" lang={w.lang}>
+        {w.studiedAs(summary)}{' '}
+        <button className="link small" onClick={() => setEditing(true)}>
+          {w.change}
+        </button>
+      </p>
+    )
+  }
+
+  return (
+    <section className="card stack tight exam-studies" lang={w.lang}>
+      <h2 className="section-title">{w.studiesTitle}</h2>
+      <p className="muted small">{w.studiesHow}</p>
+      <div className="chips" role="group" aria-label={w.studiesTitle}>
+        {EXAM_LEVELS.map((level) => (
+          <button
+            key={level}
+            className={`chip${said.examLevel === level ? ' selected' : ''}`}
+            aria-pressed={said.examLevel === level}
+            onClick={() => void save({ examLevel: level })}
+          >
+            {w.level(level)}
+          </button>
+        ))}
+      </div>
+      <span className="label-text">{w.alsoHave}</span>
+      <div className="chips" role="group" aria-label={w.alsoHave}>
+        {EXAM_TRAINING.map((t) => {
+          const on = said.examTraining.includes(t)
+          return (
+            <button
+              key={t}
+              className={`chip${on ? ' selected' : ''}`}
+              aria-pressed={on}
+              onClick={() => void save({ examTraining: on ? said.examTraining.filter((x) => x !== t) : [...said.examTraining, t] })}
+            >
+              {w.training(t)}
+            </button>
+          )
+        })}
+      </div>
+      <label className="checkbox">
+        <input type="checkbox" checked={said.examFormAlerts} onChange={(e) => void save({ examFormAlerts: e.target.checked })} />
+        {w.formAlerts}
+      </label>
+      {said.examLevel && (
+        <div className="row">
+          <button className="ghost small-btn" onClick={() => setEditing(false)}>
+            {w.doneButton}
+          </button>
+        </div>
+      )}
     </section>
   )
 }

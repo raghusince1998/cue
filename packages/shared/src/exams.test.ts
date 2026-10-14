@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { EXAMS, examStages, examStepTitle, findExam, parseExamLine, readAdmitCard, splitExamStep, timesIn, dateIn } from './exams.ts'
+import { EXAMS, examByKey, examFit, examStages, examStepTitle, findExam, parseExamLine, readAdmitCard, splitExamStep, timesIn, dateIn } from './exams.ts'
 
 /** Mid-October 2026: the days in the lines below are read from here. */
 const NOW = new Date(2026, 9, 13, 10, 0)
@@ -198,4 +198,18 @@ test('every exam falls in a group to choose it from', async () => {
   const { examGroup, EXAM_GROUPS } = await import('./exams.ts')
   const counts = Object.fromEntries(EXAM_GROUPS.map((g) => [g.key, EXAMS.filter((e) => examGroup(e) === g.key).length]))
   assert.deepEqual(counts, { railways: 6, ssc: 8, upsc: 7, banks: 9, entrance: 10, rajasthan: 13 })
+})
+
+test('whether what someone studied fits what a form usually asks for', () => {
+  const studied = (level: string | null, training: string[] = []) => ({ level: level as never, training })
+  assert.equal(examFit(examByKey('ssc-cgl'), studied('graduate')), 'fits')
+  assert.equal(examFit(examByKey('ssc-cgl'), studied('12th')), 'needs')
+  assert.equal(examFit(examByKey('ssc-chsl'), studied('postgraduate')), 'fits', 'more than enough is enough')
+  assert.equal(examFit(examByKey('rrb-alp'), studied('10th', ['iti'])), 'fits')
+  assert.equal(examFit(examByKey('rrb-alp'), studied('graduate', ['engineering'])), 'fits', 'engineering counts where ITI is asked')
+  assert.equal(examFit(examByKey('rrb-alp'), studied('graduate')), 'needs')
+  assert.equal(examFit(examByKey('ctet'), studied('graduate', ['teaching'])), 'fits')
+  assert.equal(examFit(examByKey('ctet'), studied('graduate')), 'needs')
+  assert.equal(examFit(examByKey('ssc-cgl'), studied(null)), null, 'not said, not judged')
+  assert.equal(examFit(examByKey('raj-police-constable'), studied('10th')), null, 'not plain enough to say')
 })

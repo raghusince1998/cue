@@ -277,7 +277,7 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDTO; onDone: () => void 
     setBusy(true)
     setError(null)
     try {
-      const res = await api<{ told: number; checked: number; found: number; listProblem: string | null }>(`/admin/notices/${notice.id}/approve`, {
+      const res = await api<{ told: number; checked: number; found: number; listProblem: string | null; alerted?: number }>(`/admin/notices/${notice.id}/approve`, {
         method: 'POST',
         body: { proposals },
       })
@@ -288,6 +288,7 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDTO; onDone: () => void 
             : `Approved: ${res.told} ${res.told === 1 ? 'person' : 'people'} told.`,
           res.checked > 0 ? `${res.checked} roll number${res.checked === 1 ? '' : 's'} looked for; ${res.found} found.` : null,
           res.listProblem ? `The list could not be read: ${res.listProblem}` : null,
+          res.alerted ? `${res.alerted} more told the form is open, tracking an exam like it.` : null,
         ]
           .filter(Boolean)
           .join(' '),
