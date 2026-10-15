@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
-import { CalendarFeeds } from './CalendarFeeds.tsx'
+import { Connections } from './Connections.tsx'
+import { Fold } from './Fold.tsx'
 import { ProfilePhoto } from './ProfilePhoto.tsx'
 import { InfoTip } from './InfoTip.tsx'
 import { UsesPicker } from './UsesPicker.tsx'
-import { Integrations } from './Integrations.tsx'
 import { DeleteAccount } from './DeleteAccount.tsx'
 import { Modal } from './Modal.tsx'
 import { TemplateManager } from './QuickMessage.tsx'
 import { api } from '../lib/api.ts'
 import { locale, msg, rich, t } from '../lib/i18n.tsx'
 import { useAuth } from '../lib/auth.tsx'
-import { describeWorkHours, hasWork } from '@cue/shared'
+import { USES, describeWorkHours, hasWork } from '@cue/shared'
 
 interface Me {
   id: string
@@ -64,13 +64,9 @@ function label(hour: number): string {
 type Tab = 'profile' | 'settings'
 
 export function Settings({ onClose }: { onClose: () => void }) {
-  // Back from Google or Microsoft's sign-in, the result and the calendars to
-  // choose are on the Settings tab. Opening on Profile showed a name and a
-  // password box instead, and a connection that had worked looked like one
-  // that had not.
-  const [tab, setTab] = useState<Tab>(() =>
-    new URLSearchParams(window.location.search).has('connected') ? 'settings' : 'profile',
-  )
+  // Email and calendars live on Profile, together: back from Google or
+  // Microsoft's sign-in, that is where the result is, already open.
+  const [tab, setTab] = useState<Tab>('profile')
   const [me, setMe] = useState<Me | null>(null)
   const [name, setName] = useState('')
   const [nameSaved, setNameSaved] = useState(false)
@@ -295,17 +291,25 @@ export function Settings({ onClose }: { onClose: () => void }) {
       </div>
       {nameSaved && <p className="muted small">{t('Saved.')}</p>}
 
-      <hr className="rule" />
-      <span className="label-text">{t('Connected accounts')}</span>
-      <Integrations />
+      <div className="folds">
+      {/* Gmail or Outlook, and every calendar Cue reads, in one place. */}
+      <Connections />
 
-      <hr className="rule" />
-      <span className="label-text">{t('What you use Cue for')}</span>
-      <UsesPicker compact />
+      <Fold
+        title={t('What you use Cue for')}
+        summary={
+          (account?.uses ?? [])
+            .map((k) => USES.find((u) => u.key === k))
+            .filter((u) => u !== undefined)
+            .map((u) => t(u.label))
+            .join(', ') || t('Not chosen yet')
+        }
+      >
+        <UsesPicker compact />
+      </Fold>
 
-      <hr className="rule" />
       {/* Every screen, and what Cue sends: reminders, the morning brief, what quick add understood. */}
-      <span className="label-text">Language · भाषा</span>
+      <Fold title="Language · भाषा" summary={(account?.language ?? 'en') === 'hi' ? 'हिन्दी' : 'English'}>
       <div className="chips" role="group" aria-label={t('Language')}>
         {(
           [
@@ -326,10 +330,9 @@ export function Settings({ onClose }: { onClose: () => void }) {
       <p className="muted small">
         {t('Every screen, and the reminders and notices Cue sends you. What you type stays as you typed it.')}
       </p>
+      </Fold>
 
-      <hr className="rule" />
-
-      <span className="label-text">{t('Change password')}</span>
+      <Fold title={t('Change password')}>
       <input
         type="password"
         value={currentPassword}
@@ -352,10 +355,12 @@ export function Settings({ onClose }: { onClose: () => void }) {
         {t('Change it')}
       </button>
       {passwordNote && <p className="muted small">{passwordNote}</p>}
+      </Fold>
+      </div>
       </>
       )}
 
-      {/* How the app behaves: when it nudges, and which calendars it reads. */}
+      {/* How the app behaves: when it nudges. Calendars are with email, on Profile. */}
       {tab === 'settings' && (
       <>
       {/* The morning: what is coming, before it arrives. */}
@@ -698,8 +703,6 @@ export function Settings({ onClose }: { onClose: () => void }) {
         </InfoTip>
       </div>
 
-      <hr className="rule" />
-      <CalendarFeeds />
       </>
       )}
 

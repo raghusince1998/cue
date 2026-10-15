@@ -60,7 +60,7 @@ export function ConnectMailCard() {
       <h2 className="section-title">{t('Connect once, and things come in by themselves')}</h2>
       <p className="muted small">
         {t(
-          'Your calendar, plus what your email already says: train and flight tickets, parcels, card and electricity bills, insurance, PUC, service dues, FASTag and challans, exam registrations and admit cards, each with a reminder. One step. Email is read-only and only from the senders that send these; none of it is kept.',
+          'Your calendar, plus what your email already says: train and flight tickets, parcels, card and electricity bills, insurance, PUC, service dues, FASTag and challans, each with a reminder. One step. Email is read-only and only from the senders that send these; none of it is kept.',
         )}
       </p>
       <div className="row">

@@ -81,10 +81,16 @@ function calendarsLine(n: number): string {
 export function ConnectedCalendars({
   onChanged,
   refreshKey,
+  pickerOnly = false,
 }: {
   onChanged: () => void
   /** Changes when a calendar is added or removed below, so the counts follow. */
   refreshKey: string
+  /**
+   * Beside the accounts' own list (Integrations), only choosing calendars:
+   * connecting and removing an account happen there, once.
+   */
+  pickerOnly?: boolean
 }) {
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [accounts, setAccounts] = useState<Account[] | null>(null)
@@ -264,12 +270,16 @@ export function ConnectedCalendars({
           list was there before but read like more calendar cards, with
           nothing saying how many accounts there were or which was which. */}
       <div className="accounts-head">
-        <span className="label-text">{t('Connected accounts')}</span>
+        <span className="label-text">{pickerOnly ? t('Choose calendars to read') : t('Connected accounts')}</span>
         <span className="accounts-count">{accounts.length}</span>
       </div>
 
       {accounts.length === 0 && (
-        <p className="muted small">{t('None yet. Connect Google or Microsoft to bring your meetings in.')}</p>
+        <p className="muted small">
+          {pickerOnly
+            ? t('Connect Google or Microsoft above, then choose which of its calendars to read.')
+            : t('None yet. Connect Google or Microsoft to bring your meetings in.')}
+        </p>
       )}
 
       {accounts.length > 0 && (
@@ -306,13 +316,15 @@ export function ConnectedCalendars({
                     >
                       {open ? t('Hide') : t('Calendars')}
                     </button>
-                    <button
-                      className="ghost small-btn danger"
-                      onClick={() => void disconnect(account)}
-                      disabled={busy}
-                    >
-                      {t('Remove')}
-                    </button>
+                    {!pickerOnly && (
+                      <button
+                        className="ghost small-btn danger"
+                        onClick={() => void disconnect(account)}
+                        disabled={busy}
+                      >
+                        {t('Remove')}
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -352,7 +364,7 @@ export function ConnectedCalendars({
         </ul>
       )}
 
-      {offerable.length > 0 && (
+      {!pickerOnly && offerable.length > 0 && (
         <div className="row">
           {offerable.map((provider) => (
             <button
@@ -367,7 +379,7 @@ export function ConnectedCalendars({
         </div>
       )}
 
-      {unconfigured.length > 0 && (
+      {!pickerOnly && unconfigured.length > 0 && (
         <p className="muted small">
           {unconfigured.length > 1
             ? rich(

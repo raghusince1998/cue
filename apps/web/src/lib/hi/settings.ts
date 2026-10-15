@@ -113,8 +113,8 @@ export const settings: Record<string, string> = {
     '{email} हटाएँ? इसका कैलेंडर आना बंद हो जाएगा और इसके ईमेल नहीं पढ़े जाएँगे।',
   'Disconnected. To finish, remove Cue at {url}.': 'हटा दिया। पूरा करने के लिए {url} पर Cue हटाएँ।',
   'Disconnected.': 'हटा दिया।',
-  'One step: your calendar comes in, and Cue finds train and flight tickets, parcels, card and electricity bills, insurance, PUC, service dues, FASTag top-ups, traffic challans, and exam registrations, admit cards and results in your email, with reminders. Email is read-only, only from the senders that send these, and no email is kept.':
-    'बस एक कदम: आपका कैलेंडर आ जाता है, और Cue आपके ईमेल में ट्रेन और फ़्लाइट टिकट, पार्सल, कार्ड और बिजली के बिल, बीमा, PUC, सर्विस की तारीखें, FASTag रिचार्ज, ट्रैफ़िक चालान, और परीक्षा रजिस्ट्रेशन, एडमिट कार्ड और रिज़ल्ट ढूँढकर रिमाइंडर लगा देता है। ईमेल सिर्फ़ पढ़े जाते हैं, सिर्फ़ उन्हीं भेजने वालों के जो ये भेजते हैं, और कोई ईमेल रखा नहीं जाता।',
+  'One step: your calendar comes in, and Cue finds train and flight tickets, parcels, card and electricity bills, insurance, PUC, service dues, FASTag top-ups and traffic challans in your email, with reminders. Email is read-only, only from the senders that send these, and no email is kept.':
+    'बस एक कदम: आपका कैलेंडर आ जाता है, और Cue आपके ईमेल में ट्रेन और फ़्लाइट टिकट, पार्सल, कार्ड और बिजली के बिल, बीमा, PUC, सर्विस की तारीखें, FASTag रिचार्ज और ट्रैफ़िक चालान ढूँढकर रिमाइंडर लगा देता है। ईमेल सिर्फ़ पढ़े जाते हैं, सिर्फ़ उन्हीं भेजने वालों के जो ये भेजते हैं, और कोई ईमेल रखा नहीं जाता।',
   'Calendar · {n} mirrored': 'कैलेंडर · {n} जुड़े',
   'Calendar · none chosen': 'कैलेंडर · कोई नहीं चुना',
   'Calendar off': 'कैलेंडर बंद',
@@ -253,8 +253,8 @@ export const settings: Record<string, string> = {
 
   // ConnectMailCard
   'Connect once, and things come in by themselves': 'एक बार जोड़ें, फिर सब अपने-आप आता है',
-  'Your calendar, plus what your email already says: train and flight tickets, parcels, card and electricity bills, insurance, PUC, service dues, FASTag and challans, exam registrations and admit cards, each with a reminder. One step. Email is read-only and only from the senders that send these; none of it is kept.':
-    'आपका कैलेंडर, और आपके ईमेल में जो पहले से है: ट्रेन और फ़्लाइट टिकट, पार्सल, कार्ड और बिजली के बिल, बीमा, PUC, सर्विस की तारीखें, FASTag और चालान, परीक्षा रजिस्ट्रेशन और एडमिट कार्ड, हर एक रिमाइंडर के साथ। बस एक कदम। ईमेल सिर्फ़ पढ़े जाते हैं और सिर्फ़ उन्हीं भेजने वालों के जो ये भेजते हैं; कुछ भी रखा नहीं जाता।',
+  'Your calendar, plus what your email already says: train and flight tickets, parcels, card and electricity bills, insurance, PUC, service dues, FASTag and challans, each with a reminder. One step. Email is read-only and only from the senders that send these; none of it is kept.':
+    'आपका कैलेंडर, और आपके ईमेल में जो पहले से है: ट्रेन और फ़्लाइट टिकट, पार्सल, कार्ड और बिजली के बिल, बीमा, PUC, सर्विस की तारीखें, FASTag और चालान, हर एक रिमाइंडर के साथ। बस एक कदम। ईमेल सिर्फ़ पढ़े जाते हैं और सिर्फ़ उन्हीं भेजने वालों के जो ये भेजते हैं; कुछ भी रखा नहीं जाता।',
 
   // DeleteAccount
   'That password is not right.': 'यह पासवर्ड सही नहीं है।',
@@ -375,4 +375,16 @@ export const settings: Record<string, string> = {
     'iPhone पर पहले Share पर टैप करें, फिर “Add to Home Screen”, और फिर वहीं से नोटिफ़िकेशन चालू करें।',
   'This browser does not support push notifications.': 'यह ब्राउज़र पुश नोटिफ़िकेशन नहीं चलाता।',
   'Notification permission was declined.': 'नोटिफ़िकेशन की अनुमति नहीं दी गई।',
+
+  // Email and calendars in one place, on Profile
+  'Email & calendars': 'ईमेल और कैलेंडर',
+  'Not connected yet: Gmail or Outlook, and your calendar': 'अभी जुड़ा नहीं: Gmail या Outlook, और आपका कैलेंडर',
+  'email on': 'ईमेल चालू',
+  'email off': 'ईमेल बंद',
+  '1 calendar': '1 कैलेंडर',
+  '{n} calendars': '{n} कैलेंडर',
+  'needs connecting again': 'फिर से जोड़ना होगा',
+  'Choose calendars to read': 'पढ़ने के लिए कैलेंडर चुनें',
+  'Connect Google or Microsoft above, then choose which of its calendars to read.': 'ऊपर Google या Microsoft जोड़ें, फिर चुनें कि उसके कौन-से कैलेंडर पढ़े जाएँ।',
+  'Not chosen yet': 'अभी चुना नहीं',
 }

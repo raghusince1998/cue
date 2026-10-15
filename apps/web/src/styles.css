@@ -6938,6 +6938,89 @@ a.link-btn:hover {
   gap: 6px;
 }
 
+/* Profile, in folds: a title and where it stands; the rest a tap away. */
+.folds {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.fold {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.fold[open] {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  box-shadow: var(--shadow-sm);
+}
+
+.fold-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.fold-head::-webkit-details-marker {
+  display: none;
+}
+
+.fold-head:hover {
+  background: var(--accent-soft);
+}
+
+.fold-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.fold-title {
+  font-weight: 650;
+  font-size: 15px;
+}
+
+.fold-summary {
+  color: var(--muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fold-chevron {
+  flex: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.fold[open] .fold-chevron {
+  transform: rotate(90deg);
+  color: var(--accent);
+}
+
+.fold-body {
+  padding: 4px 16px 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.fold-divider {
+  height: 1px;
+  margin: 10px 0 4px;
+  background: var(--border);
+}
+
 /* The website: a day with Cue, and every feature in detail. */
 .site-day {
   list-style: none;

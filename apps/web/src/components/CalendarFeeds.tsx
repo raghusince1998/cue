@@ -96,7 +96,7 @@ function historyLabel(days: number | null | undefined): string {
  * price is freshness: Google regenerates that feed slowly, so this is for
  * "what does my week look like", not for something booked ten minutes ago.
  */
-export function CalendarFeeds() {
+export function CalendarFeeds({ pickerOnly = false }: { pickerOnly?: boolean } = {}) {
   const [feeds, setFeeds] = useState<FeedDTO[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -262,6 +262,7 @@ export function CalendarFeeds() {
       <ConnectedCalendars
         onChanged={() => void load()}
         refreshKey={feeds.map((f) => f.id).join(',')}
+        pickerOnly={pickerOnly}
       />
 
       <div className="accounts-head">
