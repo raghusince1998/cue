@@ -12,6 +12,7 @@ import {
 import { ApiError, api } from '../lib/api.ts'
 import { locale, msg, t } from '../lib/i18n.tsx'
 import { Checklist } from './Checklist.tsx'
+import { CommitmentSheet } from './CommitmentSheet.tsx'
 
 interface TripDetailResponse {
   trip: TripDTO
@@ -90,6 +91,8 @@ export function TripDetail({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  /** A plan on the trip, open over it: the ticket, the stay, the meeting there. */
+  const [planOpen, setPlanOpen] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setData(await api<TripDetailResponse>(`/trips/${tripId}`))
@@ -370,7 +373,7 @@ export function TripDetail({
               <p className="trip-day-name">{t('Before you go')}</p>
               <ul className="plain">
                 {plan.before.map((p) => (
-                  <TripRow key={p.id} item={p} withDay />
+                  <TripRow key={p.id} item={p} withDay onOpen={setPlanOpen} />
                 ))}
               </ul>
             </div>
@@ -381,7 +384,7 @@ export function TripDetail({
               <ul className="plain">
                 {rows.map((r) =>
                   r.item ? (
-                    <TripRow key={r.key} item={r.item} />
+                    <TripRow key={r.key} item={r.item} onOpen={setPlanOpen} />
                   ) : (
                     <li key={r.key} className="trip-row">
                       <span className="trip-time">{clock(r.at)}</span>
@@ -401,6 +404,19 @@ export function TripDetail({
       {packingSection}
 
       {error && <p className="error small">{error}</p>}
+
+      {planOpen && (
+        <CommitmentSheet
+          key={planOpen}
+          commitmentId={planOpen}
+          onClose={() => setPlanOpen(null)}
+          onChanged={() => {
+            void load()
+            onChanged()
+          }}
+          onOpenOther={(id) => setPlanOpen(id)}
+        />
+      )}
 
       <div className="row">
         <button className="ghost" onClick={onClose}>
@@ -434,7 +450,7 @@ export function TripDetail({
 }
 
 /** One line of a trip's day: when, what, and for a journey when to leave. */
-function TripRow({ item, withDay }: { item: TripItemDTO; withDay?: boolean }) {
+function TripRow({ item, withDay, onOpen }: { item: TripItemDTO; withDay?: boolean; onOpen?: (id: string) => void }) {
   const done = item.status === 'done' || item.status === 'cancelled'
   const flexible = item.flexibility === 'flexible' && item.preferredWindow
   const facts = [
@@ -449,7 +465,21 @@ function TripRow({ item, withDay }: { item: TripItemDTO; withDay?: boolean }) {
   const kind = item.booking ? (KIND_OF_BOOKING[item.booking.type] ?? 'Booking') : null
   const tag = kind && !item.title.toLowerCase().startsWith(kind.toLowerCase()) ? kind : null
   return (
-    <li className={`trip-row${done ? ' is-done' : ''}`}>
+    <li
+      className={`trip-row${done ? ' is-done' : ''}${onOpen ? ' is-tappable' : ''}`}
+      {...(onOpen
+        ? {
+            role: 'button',
+            tabIndex: 0,
+            onClick: () => onOpen(item.id),
+            onKeyDown: (e: { key: string; preventDefault: () => void }) => {
+              if (e.key !== 'Enter' && e.key !== ' ') return
+              e.preventDefault()
+              onOpen(item.id)
+            },
+          }
+        : {})}
+    >
       <span className="trip-time">
         {withDay ? `${dayName(dayKey(item.dueAt))}, ` : ''}
         {flexible ? t(WINDOW_LABELS[item.preferredWindow!]) : clock(item.dueAt)}

@@ -544,6 +544,17 @@ button:disabled {
   line-height: 1.4;
 }
 
+.trip-row.is-tappable {
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.trip-row.is-tappable:hover,
+.trip-row.is-tappable:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
+}
+
 .trip-row.is-done {
   opacity: 0.55;
   text-decoration: line-through;
