@@ -221,6 +221,8 @@ export function parseBill(input: string, now = new Date()): ParsedBill | null {
   if (amount && (amount.paise <= 0 || amount.paise > 100_000_000_00)) return null
 
   const name = rest
+    // "remind me to renew …", "don't forget to pay …": the asking, not the thing.
+    .replace(/^\s*(?:please\s+)?(?:remind me(?:\s+to)?|don'?t forget(?:\s+to)?|(?:i\s+)?(?:need|have) to)\s+/i, ' ')
     .replace(/\b(?:pay|paying|payment|due|is|are|on|of|by|before|the|my|for|amount|expires?|expiry|expiring|renewal|renew|renews|renewing|auto-?renews?|valid (?:till|until|upto)|every|each)\b/gi, ' ')
     .replace(/(?<![\p{L}\p{M}])(?:भरना|भरनी|भरने|भरें|भर|जमा|करना|करनी|करने|करें|देना|देनी|देने|है|हैं|तक|को|हर|bharna|bharni|jama|karna|karni|dena|deni|hai|hain|tak|ko)(?![\p{L}\p{M}])/giu, ' ')
     .replace(/[,:;-]+/g, ' ')

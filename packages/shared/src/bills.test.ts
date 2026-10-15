@@ -47,6 +47,12 @@ test('bills read from a line, with what they are, how much, when and how often',
   assert.equal(parseBill('electricity bill', now), null, 'no date')
 })
 
+test('the asking is not the name: "remind me to renew…", "don’t forget to pay…"', () => {
+  const now = new Date(2026, 9, 15, 10, 0)
+  assert.equal(parseBill('remind me to renew car insurance on 5 nov', now)?.name, 'Car insurance')
+  assert.equal(parseBill("don't forget to pay the electricity bill by 20th", now)?.name, 'Electricity bill')
+})
+
 test('the next due date keeps its day', () => {
   assert.equal(nextDue('2026-10-05', 'monthly'), '2026-11-05')
   assert.equal(nextDue('2026-01-31', 'monthly'), '2026-02-28')

@@ -38,6 +38,7 @@ const KIND_TAG: Record<Entry['kind'], { label: string; className: string }> = {
 const tagFor = (kind: Entry['kind']) => KIND_TAG[kind] ?? { label: kind, className: '' }
 import { api } from '../lib/api.ts'
 import { locale, msg, rich, t } from '../lib/i18n.tsx'
+import { readNotes } from '../lib/sample.ts'
 import { openAdd } from '../lib/addSheet.ts'
 import { relativeDay } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
@@ -155,9 +156,11 @@ export default function History() {
                   {v.place && <span className="tag">{v.place}</span>}
                   {v.contact && v.contact !== v.title && <span className="tag">{v.contact}</span>}
                   {v.outcome && <span className="tag is-live">{v.outcome}</span>}
+                  {/* The sample week's marker, said as a tag rather than shown raw. */}
+                  {readNotes(v.notes).sample && <span className="sample-tag">{t('Sample')}</span>}
                 </div>
 
-                {v.notes && <p className="notes">{v.notes}</p>}
+                {readNotes(v.notes).notes && <p className="notes">{readNotes(v.notes).notes}</p>}
               </div>
 
               {/* Only a logged visit has an editor; a finished plan is edited

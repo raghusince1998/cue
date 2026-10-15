@@ -142,12 +142,17 @@ function startOfDay(d: Date): Date {
 
 /**
  * `friday` means the soonest Friday that has not gone past. `next friday`
- * always skips to a later week, so the two never resolve to the same day.
+ * means the Friday of next week (weeks start on Monday): said on a Wednesday
+ * it skips this week's, and said on a Thursday "next monday" is the coming
+ * Monday — not the one a week after it.
  */
 function resolveWeekday(now: Date, target: number, forceNextWeek: boolean): Date {
   const result = startOfDay(now)
   let delta = (target - now.getDay() + 7) % 7
-  if (forceNextWeek) delta = delta === 0 ? 7 : delta + 7
+  if (forceNextWeek) {
+    const toNextMonday = (8 - now.getDay()) % 7 || 7
+    delta = toNextMonday + ((target + 6) % 7)
+  }
   result.setDate(result.getDate() + delta)
   return result
 }

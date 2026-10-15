@@ -3,6 +3,7 @@ import type { CommitmentDTO, PlaceDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { formatDateTime } from '../lib/time.ts'
 import { t } from '../lib/i18n.tsx'
+import { readNotes } from '../lib/sample.ts'
 
 interface Interaction {
   id: string
@@ -93,7 +94,7 @@ export default function Places() {
                         {' — '}
                         {t(i.outcome ?? i.purpose)}
                         {i.contactName ? ` · ${i.contactName}` : ''}
-                        {i.notes && <p className="notes">{i.notes}</p>}
+                        {readNotes(i.notes).notes && <p className="notes">{readNotes(i.notes).notes}</p>}
                       </li>
                     ))}
                   </ul>

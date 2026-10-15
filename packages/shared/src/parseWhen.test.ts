@@ -86,6 +86,13 @@ test('"next friday" skips past this friday', () => {
   assert.notEqual(iso(thisFriday), iso(nextFriday))
 })
 
+test('"next monday" said on a Thursday is the coming Monday, next week’s', () => {
+  const thursday = new Date(2026, 9, 15, 10, 0)
+  assert.equal(iso(parseWhen('meeting next monday 3pm', thursday).date), '2026-10-19 15:00')
+  assert.equal(iso(parseWhen('next sunday', thursday).date), '2026-10-25 09:00')
+  assert.equal(iso(parseWhen('next thursday', thursday).date), '2026-10-22 09:00', 'a week on, not today')
+})
+
 test('a weekday that already passed this week rolls forward', () => {
   // NOW is Wednesday; Monday has gone.
   assert.equal(iso(parse('physio monday 11am').date), '2026-08-24 11:00')

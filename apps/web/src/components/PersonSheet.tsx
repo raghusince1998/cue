@@ -14,6 +14,7 @@ import { announceChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
 import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
 import { locale, t } from '../lib/i18n.tsx'
+import { readNotes } from '../lib/sample.ts'
 import { Modal } from './Modal.tsx'
 import { CallLog } from './CallLog.tsx'
 import { QuickMessage } from './QuickMessage.tsx'
@@ -457,7 +458,7 @@ export function PersonSheet({
               <li key={c.at} className={c.connected ? '' : 'muted'}>
                 {/* The outcome is saved as its English label: shown in the reader's language. */}
                 {relativeDay(c.at).replace(/^./, (ch) => ch.toUpperCase())} · {c.outcome ? t(c.outcome) : t('Called')}
-                {c.notes ? <span className="muted"> — {c.notes}</span> : null}
+                {readNotes(c.notes).notes ? <span className="muted"> — {readNotes(c.notes).notes}</span> : null}
               </li>
             ))}
           </ul>
