@@ -306,6 +306,26 @@ button:disabled {
   text-align: left;
 }
 
+/* A plan named inside a sheet (a person's next meeting, a follow-up): it opens. */
+.plan-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 3px;
+}
+
+.plan-link:hover,
+.plan-link:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+
 .link.center {
   text-align: center;
 }

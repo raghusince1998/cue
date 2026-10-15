@@ -17,6 +17,7 @@ import { locale, t } from '../lib/i18n.tsx'
 import { readNotes } from '../lib/sample.ts'
 import { Modal } from './Modal.tsx'
 import { CallLog } from './CallLog.tsx'
+import { CommitmentSheet } from './CommitmentSheet.tsx'
 import { QuickMessage } from './QuickMessage.tsx'
 import type { PendingCall } from '../lib/calls.ts'
 import { Nudge, waitingWhat } from './Nudge.tsx'
@@ -118,6 +119,9 @@ export function PersonSheet({
 
   /** True when the person loaded but what is open with them could not. */
   const [partial, setPartial] = useState(false)
+
+  /** A plan with this person, open over their page: the meeting, the thing they owe, a follow-up. */
+  const [planOpen, setPlanOpen] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -281,7 +285,9 @@ export function PersonSheet({
           <span className="label-text">{t('Next meeting')}</span>
           {o.nextMeetings.map((m) => (
             <p key={m.id} className="person-line">
-              <strong>{m.title}</strong>
+              <button className="plan-link" onClick={() => setPlanOpen(m.id)}>
+                <strong>{m.title}</strong>
+              </button>
               <span className="muted small">
                 {' '}
                 · {formatDateTime(m.dueAt)} · {relativeDay(m.dueAt)}
@@ -304,7 +310,9 @@ export function PersonSheet({
             return (
               <div className="your-day-line" key={c.id}>
                 <span>
-                  {waitingWhat(c)}
+                  <button className="plan-link" onClick={() => setPlanOpen(c.id)}>
+                    {waitingWhat(c)}
+                  </button>
                   <span className={`small ${isDue ? 'due-now' : 'muted'}`}>
                     {' '}
                     · {isDue ? t('check in now') : t('check in {day}', { day: dayLabel(c.dueAt) })}
@@ -332,7 +340,9 @@ export function PersonSheet({
           o.youOwe.map((c) => (
             <div className="your-day-line" key={c.id}>
               <span>
-                {c.title}
+                <button className="plan-link" onClick={() => setPlanOpen(c.id)}>
+                  {c.title}
+                </button>
                 <span className="muted small"> · {t('due {day}', { day: dayLabel(c.dueAt) })}</span>
               </span>
               <button className="ghost tiny-btn" onClick={() => void close(c.id)} disabled={busy}>
@@ -357,7 +367,9 @@ export function PersonSheet({
               {o.lastMeetingFollowUps.map((f) => (
                 <li key={f.id} className={f.status === 'done' ? 'is-done' : ''}>
                   {f.status === 'done' ? '✓ ' : '○ '}
-                  {f.waitingOn ? `${f.waitingOn}: ${waitingWhat(f)}` : f.title}
+                  <button className="plan-link" onClick={() => setPlanOpen(f.id)}>
+                    {f.waitingOn ? `${f.waitingOn}: ${waitingWhat(f)}` : f.title}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -596,6 +608,19 @@ export function PersonSheet({
             }}
           />
         </Modal>
+      )}
+
+      {planOpen && (
+        <CommitmentSheet
+          key={planOpen}
+          commitmentId={planOpen}
+          onClose={() => setPlanOpen(null)}
+          onChanged={() => {
+            onChanged()
+            void load()
+          }}
+          onOpenOther={(id) => setPlanOpen(id)}
+        />
       )}
     </div>
   )
