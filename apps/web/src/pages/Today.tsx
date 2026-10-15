@@ -425,6 +425,15 @@ export default function Today() {
   /** A day a link asked to open on — "Open the day" on a clash. */
   const [focusDate, setFocusDate] = useState<string | null>(null)
 
+  // ?edit=<id>: a plan's own link, from anywhere, opens that plan.
+  useEffect(() => {
+    const id = params.get('edit')
+    if (!id) return
+    params.delete('edit')
+    setParams(params, { replace: true })
+    openPlan(id)
+  }, [params, setParams, openPlan])
+
   // ?prep=<id>: "your meeting starts soon — still open from last time", tapped.
   useEffect(() => {
     const id = params.get('prep')

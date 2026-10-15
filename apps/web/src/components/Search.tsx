@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api.ts'
+import { announceChange } from '../lib/changes.ts'
 import { locale, msg, t } from '../lib/i18n.tsx'
+import { readNotes } from '../lib/sample.ts'
+import { CommitmentSheet } from './CommitmentSheet.tsx'
+import { ContactEditor } from './ContactEditor.tsx'
+import { Modal } from './Modal.tsx'
+import { PersonSheet } from './PersonSheet.tsx'
+import { TripDetail } from './TripDetail.tsx'
 
 /**
  * One box, everything behind it.
@@ -13,6 +20,10 @@ import { locale, msg, t } from '../lib/i18n.tsx'
  */
 
 type Kind = 'commitment' | 'trip' | 'intention' | 'contact' | 'place' | 'recurrence' | 'visit'
+
+/** What opens in place, over the results: the thing itself, all of it. The rest go to their page. */
+type Opened = { kind: 'commitment' | 'contact' | 'trip' | 'edit-contact'; id: string }
+const OPENS_HERE = new Set<Kind>(['commitment', 'contact', 'trip'])
 
 interface Hit {
   kind: Kind
@@ -32,6 +43,21 @@ const KIND_LABEL: Record<Kind, string> = {
   place: msg('Place'),
   recurrence: msg('Repeats'),
   visit: msg('Visit'),
+}
+
+/** How often a repeating plan repeats, in the reader's language. Shown with t(). */
+const FREQ: Record<string, string> = {
+  daily: msg('Every day'),
+  weekly: msg('Every week'),
+  monthly: msg('Every month'),
+  yearly: msg('Every year'),
+}
+
+/** The line under a result: a repeat said in words, the sample week's marker as nothing. */
+function detailOf(hit: Hit): string | null {
+  if (!hit.detail) return null
+  if (hit.kind === 'recurrence') return FREQ[hit.detail] ? t(FREQ[hit.detail]!) : null
+  return readNotes(hit.detail).notes
 }
 
 function when(value: string | null): string {
@@ -58,6 +84,8 @@ export function Search({
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<Hit[] | null>(null)
   const [busy, setBusy] = useState(false)
+  const [opened, setOpened] = useState<Opened | null>(null)
+  const [refresh, setRefresh] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -82,7 +110,13 @@ export function Search({
         .finally(() => setBusy(false))
     }, 220)
     return () => clearTimeout(handle)
-  }, [q])
+  }, [q, refresh])
+
+  // Something changed in what was opened: the results, and the screen behind, catch up.
+  const changed = () => {
+    announceChange()
+    setRefresh((n) => n + 1)
+  }
 
   // Grouped, because "three plans and a person" is easier to scan than seven
   // rows in score order.
@@ -138,19 +172,64 @@ export function Search({
                 <button
                   className="search-hit"
                   onClick={() => {
+                    if (OPENS_HERE.has(hit.kind)) {
+                      setOpened({ kind: hit.kind as Opened['kind'], id: hit.id })
+                      return
+                    }
                     navigate(hit.href)
                     onClose?.()
                   }}
                 >
                   <span className="search-hit-title">{hit.title}</span>
                   {hit.when && <span className="muted small">{when(hit.when)}</span>}
-                  {hit.detail && <span className="muted small search-hit-detail">{hit.detail}</span>}
+                  {detailOf(hit) && <span className="muted small search-hit-detail">{detailOf(hit)}</span>}
                 </button>
               </li>
             ))}
           </ul>
         </section>
       ))}
+
+      {opened?.kind === 'commitment' && (
+        <CommitmentSheet
+          key={opened.id}
+          commitmentId={opened.id}
+          onClose={() => setOpened(null)}
+          onChanged={changed}
+          onOpenOther={(id) => setOpened({ kind: 'commitment', id })}
+        />
+      )}
+
+      {opened?.kind === 'contact' && (
+        <Modal title={t('Person')} onClose={() => setOpened(null)}>
+          <PersonSheet
+            key={opened.id}
+            contactId={opened.id}
+            onEdit={() => setOpened({ kind: 'edit-contact', id: opened.id })}
+            onChanged={changed}
+            onOpenPerson={(id) => setOpened({ kind: 'contact', id })}
+          />
+        </Modal>
+      )}
+
+      {opened?.kind === 'edit-contact' && (
+        <Modal title={t('Edit person')} onClose={() => setOpened({ kind: 'contact', id: opened.id })}>
+          <ContactEditor
+            contactId={opened.id}
+            onClose={() => setOpened({ kind: 'contact', id: opened.id })}
+            onSaved={() => {
+              changed()
+              setOpened({ kind: 'contact', id: opened.id })
+            }}
+          />
+        </Modal>
+      )}
+
+      {opened?.kind === 'trip' && (
+        <Modal title={t('Trip')} onClose={() => setOpened(null)}>
+          <TripDetail tripId={opened.id} onClose={() => setOpened(null)} onChanged={changed} />
+        </Modal>
+      )}
     </div>
   )
 }

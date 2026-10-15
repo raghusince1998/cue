@@ -81,10 +81,18 @@ export async function searchEverything(
              coalesce(c.place_label, c.notes) as detail,
              greatest(${rank(sql`c.title`, q)}, ${rank(sql`c.notes`, q)},
                       ${rank(sql`c.place_label`, q)}) as score
-      from commitments c
-      where c.user_id = ${userId}
-        and c.status <> 'deleted'
-        and (c.title ilike ${like} or c.notes ilike ${like} or c.place_label ilike ${like})
+      -- A repeating plan once, not every day of it: its next one, or else its latest.
+      from (
+        select distinct on (coalesce(m.recurrence_id::text, m.id::text)) m.*
+        from commitments m
+        where m.user_id = ${userId}
+          and m.status <> 'deleted'
+          and (m.title ilike ${like} or m.notes ilike ${like} or m.place_label ilike ${like})
+        order by coalesce(m.recurrence_id::text, m.id::text),
+                 (m.due_at < now()),
+                 case when m.due_at >= now() then m.due_at end asc,
+                 m.due_at desc
+      ) c
 
       union all
       select 'trip', t.id::text, t.place_label,
@@ -142,12 +150,17 @@ export async function searchEverything(
         and (v.notes ilike ${like} or v.contact_name ilike ${like} or v.outcome ilike ${like})
     ),
     ranked as (
-      select *, row_number() over (partition by kind order by score desc, when_at desc nulls last) as rn
+      -- Equally good matches: the one nearest today first, coming or gone.
+      select *, abs(extract(epoch from (when_at::timestamptz - now()))) as distance,
+             row_number() over (
+               partition by kind
+               order by score desc, abs(extract(epoch from (when_at::timestamptz - now()))) asc nulls last
+             ) as rn
       from hits
     )
     select kind, id, title, when_at, detail, score from ranked
     where rn <= ${PER_KIND}
-    order by score desc, when_at desc nulls last
+    order by score desc, distance asc nulls last
     limit 60
   `)
 

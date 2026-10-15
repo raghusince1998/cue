@@ -187,3 +187,22 @@ test('a sentence naming nobody known matches nobody', async () => {
   await contact('Ramesh Yadav', 'plumber')
   assert.equal(await memory.matchKnownPerson(me.orgId, 'buy milk tomorrow'), null)
 })
+
+test('a repeating plan is found once, by its next day', async () => {
+  const [series] = await h.sql<{ id: string }[]>`
+    insert into recurrences (org_id, user_id, title, freq, starts_on)
+    values (${me.orgId}, ${me.userId}, 'Daily standup', 'daily', current_date - 3) returning id`
+  for (const days of [-2, -1, 1, 2, 5]) {
+    await h.sql`
+      insert into commitments (org_id, user_id, title, due_at, recurrence_id, occurrence_on)
+      values (${me.orgId}, ${me.userId}, 'Daily standup', now() + ${days} * interval '1 day', ${series!.id},
+              (current_date + ${days}::int))`
+  }
+  await plan('Standup notes to Ravi')
+  const { hits } = await search.searchEverything(me.orgId, me.userId, 'standup')
+  const plans = hits.filter((x) => x.kind === 'commitment')
+  assert.equal(plans.filter((x) => x.title === 'Daily standup').length, 1, 'once, not every day')
+  const next = plans.find((x) => x.title === 'Daily standup')!
+  assert.ok(next.when && new Date(next.when).getTime() > Date.now(), 'the next one, not a past one')
+  assert.ok(plans.some((x) => x.title === 'Standup notes to Ravi'), 'a one-off plan still shows')
+})
