@@ -13,6 +13,7 @@ import { announceChange, useOnChange } from '../lib/changes.ts'
 import { msg, rich, t } from '../lib/i18n.tsx'
 import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
+import { CommitmentSheet } from '../components/CommitmentSheet.tsx'
 import { rupeesToPaise } from '../components/Owed.tsx'
 
 interface Detail extends TrackerItemDTO {
@@ -324,6 +325,8 @@ function ItemSheet({
   const [nextAt, setNextAt] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** A plan for this item, open over it: the interview, the follow-up. */
+  const [planOpen, setPlanOpen] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -468,7 +471,10 @@ function ItemSheet({
         <ul className="plain tracker-plans">
           {upcoming.map((p) => (
             <li key={p.id}>
-              {p.title} <span className="muted">· {formatDateTime(p.dueAt)}</span>
+              <button className="plan-link" onClick={() => setPlanOpen(p.id)}>
+                {p.title}
+              </button>{' '}
+              <span className="muted">· {formatDateTime(p.dueAt)}</span>
             </li>
           ))}
         </ul>
@@ -577,6 +583,18 @@ function ItemSheet({
         </button>
       </div>
       {error && <p className="error small">{error}</p>}
+      {planOpen && (
+        <CommitmentSheet
+          key={planOpen}
+          commitmentId={planOpen}
+          onClose={() => setPlanOpen(null)}
+          onChanged={() => {
+            void load()
+            onChanged()
+          }}
+          onOpenOther={(pid) => setPlanOpen(pid)}
+        />
+      )}
     </div>
   )
 }

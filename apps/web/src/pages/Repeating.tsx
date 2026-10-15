@@ -2,9 +2,75 @@ import { useEffect, useState } from 'react'
 import type { RecurrenceDTO, ScheduleDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { rich, t } from '../lib/i18n.tsx'
-import { dayLabel, relativeDay } from '../lib/time.ts'
-import { useOnChange } from '../lib/changes.ts'
+import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
+import { announceChange, useOnChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
+import { CommitmentSheet } from '../components/CommitmentSheet.tsx'
+import { Modal } from '../components/Modal.tsx'
+
+interface Occurrence {
+  id: string
+  title: string
+  dueAt: string
+  status: string
+}
+
+/**
+ * One repeating plan, opened: how it repeats, the days coming up — each one
+ * opens, to move or change just that day — and how many are behind it.
+ */
+function SeriesSheet({
+  item,
+  onOpenPlan,
+  onStop,
+  busy,
+}: {
+  item: RecurrenceDTO
+  onOpenPlan: (id: string) => void
+  onStop: () => void
+  busy: boolean
+}) {
+  const [days, setDays] = useState<Occurrence[] | null>(null)
+  useEffect(() => {
+    api<{ occurrences: Occurrence[] }>(`/recurrences/${item.id}`)
+      .then((r) => setDays(r.occurrences))
+      .catch(() => setDays([]))
+  }, [item.id])
+  const now = Date.now()
+  const ahead = (days ?? []).filter((d) => d.status === 'pending' && new Date(d.dueAt).getTime() >= now).slice(0, 8)
+  const behind = (days ?? []).filter((d) => d.status === 'done').length
+  return (
+    <div className="stack tight">
+      <p className="muted small">
+        {item.summary}
+        {item.placeName ?? item.placeLabel ? ` · ${item.placeName ?? item.placeLabel}` : ''} · {t('{n} min', { n: item.durationMinutes })}
+      </p>
+      <span className="label-text">{t('Coming up')}</span>
+      {days === null ? (
+        <p className="muted small">{t('Loading…')}</p>
+      ) : ahead.length === 0 ? (
+        <p className="muted small">{t('Nothing left ahead')}</p>
+      ) : (
+        <ul className="plain series-days">
+          {ahead.map((d) => (
+            <li key={d.id}>
+              <button className="plan-link" onClick={() => onOpenPlan(d.id)}>
+                {formatDateTime(d.dueAt)}
+              </button>{' '}
+              <span className="muted small">· {relativeDay(d.dueAt)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {behind > 0 && <p className="muted small">{behind === 1 ? t('1 done so far.') : t('{n} done so far.', { n: behind })}</p>}
+      <div className="row">
+        <button className="ghost small-btn" onClick={onStop} disabled={busy}>
+          {t('Stop')}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 /**
  * Everything that repeats.
@@ -19,6 +85,9 @@ export default function Repeating() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  /** A series opened, and a single day of one (or a schedule's next step) open over it. */
+  const [series, setSeries] = useState<RecurrenceDTO | null>(null)
+  const [planOpen, setPlanOpen] = useState<string | null>(null)
 
   async function load() {
     try {
@@ -55,6 +124,7 @@ export default function Repeating() {
       const r = await api<{ keptOccurrences: number }>(`/recurrences/${item.id}`, {
         method: 'DELETE',
       })
+      setSeries(null)
       setNote(
         r.keptOccurrences > 1
           ? t('Stopped. {n} past ones kept in your history.', { n: r.keptOccurrences })
@@ -145,7 +215,18 @@ export default function Repeating() {
       {active.length > 0 && (
         <div className="tiles two-up">
           {active.map((item) => (
-            <article className="tile" key={item.id}>
+            <article
+              className="tile is-tappable"
+              key={item.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setSeries(item)}
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return
+                e.preventDefault()
+                setSeries(item)
+              }}
+            >
               <span className="tile-mark is-repeat" aria-hidden>
                 &#8635;
               </span>
@@ -175,7 +256,10 @@ export default function Repeating() {
               <div className="tile-actions">
                 <button
                   className="ghost small-btn"
-                  onClick={() => void stop(item)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void stop(item)
+                  }}
                   disabled={busy === item.id}
                 >
                   {t('Stop')}
@@ -209,13 +293,13 @@ export default function Repeating() {
                   </div>
                   <div className="tile-tags">
                     {item.next ? (
-                      <span className="tag is-live">
+                      <button className="tag is-live tag-button" onClick={() => setPlanOpen(item.next!.id)}>
                         {t('Next: {step} · {day} · {when}', {
                           step: item.next.title.replace(`${item.title} — `, ''),
                           day: dayLabel(item.next.dueAt),
                           when: relativeDay(item.next.dueAt),
                         })}
-                      </span>
+                      </button>
                     ) : (
                       <span className="tag is-warn">{t('Nothing left ahead')}</span>
                     )}
@@ -255,6 +339,31 @@ export default function Repeating() {
             ))}
           </div>
         </section>
+      )}
+
+      {series && (
+        <Modal title={series.title} onClose={() => setSeries(null)}>
+          <SeriesSheet
+            key={series.id}
+            item={series}
+            busy={busy === series.id}
+            onOpenPlan={setPlanOpen}
+            onStop={() => void stop(series)}
+          />
+        </Modal>
+      )}
+
+      {planOpen && (
+        <CommitmentSheet
+          key={planOpen}
+          commitmentId={planOpen}
+          onClose={() => setPlanOpen(null)}
+          onChanged={() => {
+            announceChange()
+            void load()
+          }}
+          onOpenOther={(id) => setPlanOpen(id)}
+        />
       )}
     </div>
   )

@@ -306,6 +306,24 @@ button:disabled {
   text-align: left;
 }
 
+/* A tag that is also a way in: a schedule's next step. */
+.tag-button {
+  cursor: pointer;
+  font: inherit;
+  border: none;
+}
+
+.tag-button:hover,
+.tag-button:focus-visible {
+  filter: brightness(1.1);
+  outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.series-days {
+  display: grid;
+  gap: 4px;
+}
+
 /* A plan named inside a sheet (a person's next meeting, a follow-up): it opens. */
 .plan-link {
   background: none;

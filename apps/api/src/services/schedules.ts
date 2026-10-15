@@ -121,6 +121,7 @@ export async function listSchedules(
 
   const upcoming = await exec
     .select({
+      id: schema.commitments.id,
       scheduleId: schema.commitments.scheduleId,
       title: schema.commitments.title,
       dueAt: schema.commitments.dueAt,
@@ -145,7 +146,7 @@ export async function listSchedules(
       status: r.status,
       total: c?.total ?? 0,
       done: c?.done ?? 0,
-      next: next ? { title: next.title, dueAt: next.dueAt.toISOString() } : null,
+      next: next ? { id: next.id, title: next.title, dueAt: next.dueAt.toISOString() } : null,
       createdAt: r.createdAt.toISOString(),
     }
   })

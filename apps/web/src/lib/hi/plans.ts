@@ -221,6 +221,8 @@ export const plans: Record<string, string> = {
   '<b>Repeating plan</b> is for a rhythm — every day, every Monday, every 3 months, every year. <b>Schedule of dates</b> is for dates that follow a plan instead — a child’s vaccinations at 6 weeks, 10 weeks, 9 months. You can also just type “{example}” when you add something.':
     '<b>दोहराने वाला प्लान</b> किसी नियमित क्रम के लिए है — हर दिन, हर सोमवार, हर 3 महीने, हर साल। <b>तारीखों का शेड्यूल</b> उन तारीखों के लिए है जो किसी तय योजना से चलती हैं — जैसे बच्चे के टीके 6 हफ़्ते, 10 हफ़्ते, 9 महीने पर। कुछ जोड़ते समय आप बस “{example}” भी लिख सकते हैं।',
   'Next {day} · {when}': 'अगला {day} · {when}',
+  '1 done so far.': 'अब तक 1 हो गया।',
+  '{n} done so far.': 'अब तक {n} हो गए।',
   'Nothing left ahead': 'आगे कुछ बाकी नहीं',
   '{n} booked': '{n} तय',
   Stop: 'रोकें',

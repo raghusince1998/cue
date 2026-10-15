@@ -376,7 +376,7 @@ export interface ScheduleDTO {
   /** Steps that were booked. */
   total: number
   done: number
-  next: { title: string; dueAt: string } | null
+  next: { id: string; title: string; dueAt: string } | null
   createdAt: string
 }
 
