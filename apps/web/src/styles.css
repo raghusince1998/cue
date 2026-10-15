@@ -964,6 +964,17 @@ button:disabled {
   white-space: normal;
 }
 
+/* A title in a day opens itself; the day around it still picks the day. */
+.cal-chip.is-tappable {
+  cursor: pointer;
+}
+
+.cal-chip.is-tappable:hover,
+.cal-chip.is-tappable:focus-visible {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  outline: none;
+}
+
 .cal-chip em {
   display: block;
   font-style: normal;

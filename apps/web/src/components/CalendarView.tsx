@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import type { CommitmentDTO, TimeWindow } from '@cue/shared'
 import { api } from '../lib/api.ts'
+import { announceChange } from '../lib/changes.ts'
 import { locale, msg, t } from '../lib/i18n.tsx'
+import { Modal } from './Modal.tsx'
+import { TripDetail } from './TripDetail.tsx'
 
 export type CalendarMode = 'month' | 'week'
 
@@ -192,6 +195,9 @@ export function CalendarView({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(() => (opening ? keyOf(opening) : null))
+  /** A trip tapped on the calendar, open over it. */
+  const [tripOpen, setTripOpen] = useState<string | null>(null)
+  const [reload, setReload] = useState(0)
 
   const [calRef, measuredNarrow] = useNarrow()
   const narrow = measuredNarrow || compact
@@ -218,7 +224,30 @@ export function CalendarView({
     return () => {
       cancelled = true
     }
-  }, [from.getTime(), to.getTime(), refreshKey])
+  }, [from.getTime(), to.getTime(), refreshKey, reload])
+
+  /** Anything on the calendar opens: a plan its sheet, a trip its days. */
+  function open(e: DayEntry) {
+    if (e.isTrip) setTripOpen(e.id.replace(/^trip-/, ''))
+    else onOpen(e.id)
+  }
+
+  /** A title inside a day: opens itself, rather than only picking the day. */
+  const chipProps = (e: DayEntry) => ({
+    role: 'button' as const,
+    tabIndex: 0,
+    title: e.title,
+    onClick: (ev: MouseEvent) => {
+      ev.stopPropagation()
+      open(e)
+    },
+    onKeyDown: (ev: KeyboardEvent) => {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return
+      ev.preventDefault()
+      ev.stopPropagation()
+      open(e)
+    },
+  })
 
   /** One pass, so a 42-cell grid is not 42 scans of the same array. */
   const byDay = useMemo(() => {
@@ -340,8 +369,7 @@ export function CalendarView({
                       <button
                         className={`cal-chip tone-${e.tone}`}
                         key={e.id}
-                        disabled={e.isTrip}
-                        onClick={() => !e.isTrip && onOpen(e.id)}
+                        onClick={() => open(e)}
                       >
                         <em>{e.timeLabel}</em>
                         {e.title}
@@ -395,7 +423,7 @@ export function CalendarView({
                 </span>
               ) : (
                 visible.map((e) => (
-                  <span className={`cal-chip tone-${e.tone}`} key={e.id + key}>
+                  <span className={`cal-chip is-tappable tone-${e.tone}`} key={e.id + key} {...chipProps(e)}>
                     {mode === 'week' && <em>{e.timeLabel}</em>}
                     {e.title}
                   </span>
@@ -429,11 +457,7 @@ export function CalendarView({
             <ul className="plain">
               {selectedItems.map((e) => (
                 <li key={e.id}>
-                  <button
-                    className="cal-detail-row"
-                    disabled={e.isTrip}
-                    onClick={() => !e.isTrip && onOpen(e.id)}
-                  >
+                  <button className="cal-detail-row" onClick={() => open(e)}>
                     <span className={`cal-dot tone-${e.tone}`} />
                     <span className="cal-detail-time">{e.timeLabel}</span>
                     <span className="cal-detail-title">{e.title}</span>
@@ -446,6 +470,19 @@ export function CalendarView({
             </ul>
           )}
         </div>
+      )}
+
+      {tripOpen && (
+        <Modal title={t('Trip')} onClose={() => setTripOpen(null)}>
+          <TripDetail
+            tripId={tripOpen}
+            onClose={() => setTripOpen(null)}
+            onChanged={() => {
+              announceChange()
+              setReload((n) => n + 1)
+            }}
+          />
+        </Modal>
       )}
 
       {!compact && (
