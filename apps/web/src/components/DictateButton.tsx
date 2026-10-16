@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { dictationSupported, startDictation, type DictationHandle } from '../lib/dictation.ts'
 import { t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /**
  * Speaks into a text field using the browser's own recogniser. Renders nothing
@@ -59,7 +60,7 @@ export function DictateButton({
       })
       setListening(true)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }
 

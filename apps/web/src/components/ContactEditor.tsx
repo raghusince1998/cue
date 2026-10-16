@@ -4,6 +4,7 @@ import { MonthDayInput } from './MonthDayInput.tsx'
 import { api } from '../lib/api.ts'
 import { formatDateTime } from '../lib/time.ts'
 import { t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 interface ContactProfile extends ContactDTO {
   visits: { id: string; purpose: string; outcome: string | null; notes: string | null; startedAt: string }[]
@@ -93,7 +94,7 @@ export function ContactEditor({
       else await api('/contacts', { method: 'POST', body })
       onSaved()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -106,7 +107,7 @@ export function ContactEditor({
       await api(`/contacts/${contactId}`, { method: 'DELETE' })
       onSaved()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

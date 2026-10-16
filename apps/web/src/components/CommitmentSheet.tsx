@@ -14,6 +14,7 @@ import { Checklist } from './Checklist.tsx'
 import { WishPicker } from './WishPicker.tsx'
 import { WrapUp } from './WrapUp.tsx'
 import { Nudge } from './Nudge.tsx'
+import { errorText } from '../lib/errors.ts'
 
 export type SheetMode = 'view' | 'edit' | 'wrapup' | 'nudge'
 
@@ -101,7 +102,7 @@ export function CommitmentSheet({
       setError(null)
       return next
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
       return null
     }
   }, [commitmentId])
@@ -130,7 +131,7 @@ export function CommitmentSheet({
       onChanged()
       await loadPrep()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -144,7 +145,7 @@ export function CommitmentSheet({
       await load()
       onChanged()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -160,7 +161,7 @@ export function CommitmentSheet({
       await load()
       setMode('edit')
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -173,7 +174,7 @@ export function CommitmentSheet({
       onChanged()
       onClose()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
       setBusy(false)
     }
   }

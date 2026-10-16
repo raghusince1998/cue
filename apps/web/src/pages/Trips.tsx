@@ -16,6 +16,7 @@ import { dayLabel, spanLabel, toDateInputValue } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { TripDetail } from '../components/TripDetail.tsx'
 import { useOnChange } from '../lib/changes.ts'
+import { LoadFailed } from '../components/LoadFailed.tsx'
 
 function whenLabel(trip: TripDTO): string {
   const { daysUntil, nights } = trip
@@ -413,9 +414,16 @@ export default function Trips() {
   /** "Plan a trip" from Want to visit: the form, opened for that place. */
   const [prefill, setPrefill] = useState<{ place: string; key: number } | null>(null)
 
+  const [failed, setFailed] = useState(false)
   const load = useCallback(async () => {
-    setTrips(await api<TripDTO[]>('/trips'))
-    setLoading(false)
+    try {
+      setTrips(await api<TripDTO[]>('/trips'))
+      setFailed(false)
+    } catch {
+      setFailed(true)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -440,6 +448,18 @@ export default function Trips() {
       <div className="boot">
         <span className="spinner" />
       </div>
+    )
+  }
+
+  if (failed && trips.length === 0) {
+    return (
+      <LoadFailed
+        what={t('Could not load your trips just now.')}
+        onRetry={() => {
+          setLoading(true)
+          void load()
+        }}
+      />
     )
   }
 

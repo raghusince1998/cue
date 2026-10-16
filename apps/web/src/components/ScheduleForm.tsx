@@ -11,6 +11,7 @@ import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { msg, t } from '../lib/i18n.tsx'
 import { dayLabel, relativeDay, toDateInputValue } from '../lib/time.ts'
+import { errorText } from '../lib/errors.ts'
 
 interface StepDraft {
   key: number
@@ -155,7 +156,7 @@ export function ScheduleForm({
       announceChange()
       setSaved(r)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setSaving(false)
     }

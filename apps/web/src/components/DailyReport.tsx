@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api.ts'
 import { locale, msg, rich, t } from '../lib/i18n.tsx'
 import { waNumber } from './PersonSheet.tsx'
+import { errorText } from '../lib/errors.ts'
 
 type Format = 'report' | 'standup'
 
@@ -155,7 +156,7 @@ export function DailyReport({ initialFormat = 'report' }: { initialFormat?: Form
     setEdited(false)
     api<Report>('/report/day', { query: format === 'standup' ? { standup: '1' } : {} })
       .then((res) => !cancelled && setR(res))
-      .catch((err) => !cancelled && setError((err as Error).message))
+      .catch((err) => !cancelled && setError(errorText(err)))
     return () => {
       cancelled = true
     }
@@ -186,7 +187,7 @@ export function DailyReport({ initialFormat = 'report' }: { initialFormat?: Form
       setTo(saved)
       setEditingTo(false)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }
 

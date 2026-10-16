@@ -3,6 +3,8 @@ import { ApiError, api, getToken, BASE as API_BASE } from '../lib/api.ts'
 import { formatDateTime } from '../lib/time.ts'
 import { msg, t } from '../lib/i18n.tsx'
 import { ConnectedCalendars } from './ConnectedCalendars.tsx'
+import { errorText } from '../lib/errors.ts'
+import { LoadFailed } from './LoadFailed.tsx'
 
 interface FeedDTO {
   id: string
@@ -104,11 +106,12 @@ export function CalendarFeeds({ pickerOnly = false }: { pickerOnly?: boolean } =
   const [error, setError] = useState<string | null>(null)
 
   async function load() {
+    setError(null)
     try {
       const r = await api<{ feeds: FeedDTO[] }>('/calendar-feeds')
       setFeeds(r.feeds)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }
 
@@ -156,7 +159,7 @@ export function CalendarFeeds({ pickerOnly = false }: { pickerOnly?: boolean } =
       setNote(explainWindow(data.report as SyncReport))
       await load()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -177,7 +180,7 @@ export function CalendarFeeds({ pickerOnly = false }: { pickerOnly?: boolean } =
       setError(
         err instanceof ApiError
           ? ((err.data as { message?: string })?.message ?? err.message)
-          : (err as Error).message,
+          : errorText(err),
       )
       await load()
     } finally {
@@ -204,7 +207,7 @@ export function CalendarFeeds({ pickerOnly = false }: { pickerOnly?: boolean } =
       }
       await load()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -234,7 +237,7 @@ export function CalendarFeeds({ pickerOnly = false }: { pickerOnly?: boolean } =
       setNote(null)
       await load()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -255,6 +258,7 @@ export function CalendarFeeds({ pickerOnly = false }: { pickerOnly?: boolean } =
     }
   }
 
+  if (!feeds && error) return <LoadFailed what={error} onRetry={() => void load()} />
   if (!feeds) return <p className="muted small">{t('Loading calendars…')}</p>
 
   return (

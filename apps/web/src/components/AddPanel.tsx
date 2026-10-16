@@ -30,6 +30,7 @@ import { QuickAdd } from './QuickAdd.tsx'
 import { DictateButton } from './DictateButton.tsx'
 import { announceChange } from '../lib/changes.ts'
 import { t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /**
  * Everything there is to add, in the sheet the header's Add button opens.
@@ -386,7 +387,7 @@ export function AddPanel({
         finish()
         return
       }
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setSaving(false)
     }
@@ -403,7 +404,7 @@ export function AddPanel({
         setError(t('That time does not fit the other commitment either — pick another slot.'))
         return
       }
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }
 
@@ -497,7 +498,7 @@ export function AddPanel({
         }
       }
 
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setSaving(false)
     }

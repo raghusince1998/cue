@@ -6,7 +6,7 @@ import { t } from '../lib/i18n.tsx'
 export function Toasts() {
   const [shown, setShown] = useState<ToastMessage[]>([])
   const onToast = useCallback((m: ToastMessage) => {
-    setShown((list) => [...list.slice(-1), m])
+    setShown((list) => [...list.filter((x) => x.text !== m.text).slice(-1), m])
     window.setTimeout(() => setShown((list) => list.filter((x) => x.id !== m.id)), m.kind === 'error' ? 6000 : 3500)
   }, [])
   useToasts(onToast)

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { USES, USE_GROUPS } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
 import { t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /**
  * "What will you use Cue for?" — any number of answers, grouped as life,
@@ -26,7 +27,7 @@ export function UsesPicker({ onDone, compact = false }: { onDone?: () => void; c
       setSaved(true)
       onDone?.()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

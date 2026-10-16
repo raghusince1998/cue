@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { CommitmentDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { locale, t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /** The working day the free stretches are measured within — the same as the summary card's. */
 const DAY_START_HOUR = 8
@@ -64,7 +65,7 @@ export function YourDay({
       query: { from: dayStart.toISOString(), to: dayEnd.toISOString() },
     })
       .then((r) => setItems(r.commitments))
-      .catch((err) => setError((err as Error).message))
+      .catch((err) => setError(errorText(err)))
     // Today's bounds, fixed for the life of the sheet.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

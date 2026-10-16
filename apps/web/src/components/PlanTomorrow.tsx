@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
 import { openPlan } from '../lib/open.ts'
 import { locale, t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /**
  * Tomorrow, already worked out.
@@ -43,7 +44,7 @@ export function PlanTomorrow({ onClose, onApplied }: { onClose: () => void; onAp
   useEffect(() => {
     api<Plan>('/plan/tomorrow')
       .then(setPlan)
-      .catch((err) => setError((err as Error).message))
+      .catch((err) => setError(errorText(err)))
   }, [])
 
   async function apply() {
@@ -60,7 +61,7 @@ export function PlanTomorrow({ onClose, onApplied }: { onClose: () => void; onAp
       setDone(r.applied)
       onApplied()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

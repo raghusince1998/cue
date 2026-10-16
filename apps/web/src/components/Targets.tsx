@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { TargetMetric, TargetProgress } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 export interface WeekTargets {
   week: { from: string; to: string }
@@ -76,7 +77,7 @@ export function Targets({ onSaved }: { onSaved?: () => void }) {
       setSaved(true)
       onSaved?.()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

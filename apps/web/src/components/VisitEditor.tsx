@@ -11,6 +11,7 @@ import { formatDateTime, toLocalInputValue } from '../lib/time.ts'
 import { msg, t } from '../lib/i18n.tsx'
 import { VoiceNotes } from './VoiceNotes.tsx'
 import { DictateButton } from './DictateButton.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /** How each purpose reads on its chip. Show with t(). */
 const PURPOSE_LABELS: Record<Purpose, string> = {
@@ -77,7 +78,7 @@ export function VisitEditor({
       })
       onSaved()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -90,7 +91,7 @@ export function VisitEditor({
       await api(`/visits/${visitId}`, { method: 'DELETE' })
       onSaved()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

@@ -11,6 +11,7 @@ import {
   startRecording,
   type RecordingSession,
 } from '../lib/audio.ts'
+import { errorText } from '../lib/errors.ts'
 
 function Player({ note }: { note: VoiceNoteDTO }) {
   const [src, setSrc] = useState<string | null>(null)
@@ -92,7 +93,7 @@ export function VoiceNotes({
       setElapsedMs(0)
       setSession(await startRecording())
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }
 
@@ -139,7 +140,7 @@ export function VoiceNotes({
         onPendingClipsChange(next)
       }
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -155,7 +156,7 @@ export function VoiceNotes({
       await api(`/voice-notes/${id}`, { method: 'DELETE' })
       publish(notes.filter((n) => n.id !== id))
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }
 

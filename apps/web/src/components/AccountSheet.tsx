@@ -8,6 +8,7 @@ import { openAdd } from '../lib/addSheet.ts'
 import { openPlan } from '../lib/open.ts'
 import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
 import { waitingWhat } from './Nudge.tsx'
+import { errorText } from '../lib/errors.ts'
 
 interface Overview {
   name: string
@@ -57,7 +58,7 @@ export function AccountSheet({
       setO(r)
       setNotes(r.notes ?? '')
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }, [name])
 
@@ -74,7 +75,7 @@ export function AccountSheet({
       onChanged()
       await load()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -94,7 +95,7 @@ export function AccountSheet({
       announceChange()
       onRenamed(to)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
       setBusy(false)
     }
   }

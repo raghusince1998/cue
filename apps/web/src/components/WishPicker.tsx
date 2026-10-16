@@ -3,6 +3,7 @@ import { findCity, type IntentionDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /**
  * Wishes onto a plan: tick the ones that belong to it, and they become its
@@ -52,7 +53,7 @@ export function WishPicker({
       announceChange()
       onAdded(r.added)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

@@ -6,6 +6,7 @@ import type { PendingCall } from '../lib/calls.ts'
 import { t } from '../lib/i18n.tsx'
 import { dueChoices } from './WrapUp.tsx'
 import { QuickMessage } from './QuickMessage.tsx'
+import { errorText } from '../lib/errors.ts'
 
 type Next = 'none' | 'again' | 'followup' | 'waiting'
 
@@ -84,7 +85,7 @@ export function CallLog({ call, onDone }: { call: PendingCall; onDone: (saved: b
       if (thenMessage) setMessaging(true)
       else onDone(true)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

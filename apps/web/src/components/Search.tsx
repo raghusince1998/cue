@@ -83,6 +83,7 @@ export function Search({
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<Hit[] | null>(null)
   const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
   const [refresh, setRefresh] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -103,8 +104,14 @@ export function Search({
     setBusy(true)
     const handle = setTimeout(() => {
       api<{ hits: Hit[] }>('/search', { query: { q: value } })
-        .then((r) => setHits(r.hits))
-        .catch(() => setHits([]))
+        .then((r) => {
+          setHits(r.hits)
+          setFailed(false)
+        })
+        .catch(() => {
+          setHits(null)
+          setFailed(true)
+        })
         .finally(() => setBusy(false))
     }, 220)
     return () => clearTimeout(handle)
@@ -151,6 +158,15 @@ export function Search({
       )}
 
       {busy && hits === null && <p className="muted small">{t('Looking…')}</p>}
+
+      {failed && !busy && (
+        <p className="error small">
+          {t('Could not search just now.')}{' '}
+          <button className="link small" onClick={() => setRefresh((n) => n + 1)}>
+            {t('Try again')}
+          </button>
+        </p>
+      )}
 
       {hits !== null && hits.length === 0 && !busy && (
         <p className="muted small">{t('Nothing matches that.')}</p>

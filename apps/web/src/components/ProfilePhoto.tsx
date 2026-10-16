@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { BASE, getToken } from '../lib/api.ts'
 import { t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /**
  * The photo on the account.
@@ -135,7 +136,7 @@ export function ProfilePhoto({
       if (!res.ok) throw new Error(t('That image was not accepted.'))
       onChanged()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

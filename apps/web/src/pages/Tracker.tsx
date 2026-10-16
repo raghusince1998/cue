@@ -15,6 +15,7 @@ import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { CommitmentSheet } from '../components/CommitmentSheet.tsx'
 import { rupeesToPaise } from '../components/Owed.tsx'
+import { errorText } from '../lib/errors.ts'
 
 interface Detail extends TrackerItemDTO {
   events: { from: string | null; to: string; at: string }[]
@@ -81,7 +82,7 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
     try {
       setItems(await api<TrackerItemDTO[]>(`/trackers/${key}`))
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }, [key])
   useEffect(() => {
@@ -117,7 +118,7 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
       await load()
       announceChange()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -342,7 +343,7 @@ function ItemSheet({
       })
       setDirty(false)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }, [id])
   useEffect(() => {
@@ -366,7 +367,7 @@ function ItemSheet({
       onChanged()
       announceChange()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -425,7 +426,7 @@ function ItemSheet({
       onChanged()
       announceChange()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

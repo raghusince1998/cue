@@ -6,7 +6,8 @@ import { createTestDb, seedUser, type Harness, type Seeded } from '../testing/ha
 /**
  * A notification's Done and Snooze can be tapped long after the plan changed:
  * neither brings back something deleted, Snooze never reopens what is closed,
- * and Done twice keeps when it was first done.
+ * and Done twice keeps when it was first done. A link with a mangled id is
+ * a bad link, not a server failure.
  */
 
 let h: Harness
@@ -33,7 +34,9 @@ before(async () => {
   const { registerAuth } = await import('../auth.ts')
   const { commitmentRoutes } = await import('./commitments.ts')
   me = await seedUser(h.sql, 'stale@test.local')
+  const { handleError } = await import('../errors.ts')
   app = Fastify()
+  app.setErrorHandler(handleError)
   await registerAuth(app)
   await app.register(commitmentRoutes)
   await app.ready()
@@ -88,4 +91,16 @@ test('Snooze on an open plan moves it', async () => {
   assert.equal(res.status, 200)
   const moved = new Date(res.body.dueAt as string).getTime()
   assert.ok(Math.abs(moved - (Date.now() + 15 * 60_000)) < 60_000)
+})
+
+test('a mangled id in a link is bad input, not a server failure', async () => {
+  for (const [method, url] of [
+    ['GET', '/commitments/not-an-id'],
+    ['POST', '/commitments/123/done'],
+    ['POST', '/commitments/%20/snooze'],
+  ] as const) {
+    const res = await call(method, url, method === 'POST' ? { minutes: 15 } : undefined)
+    assert.equal(res.status, 400, `${method} ${url}`)
+    assert.equal(res.body.error, 'invalid_input')
+  }
 })

@@ -4,6 +4,7 @@ import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { formatSpan, toLocalInputValue } from '../lib/time.ts'
 import { msg, t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 interface Due {
   key: string
@@ -96,7 +97,7 @@ export function WrapUp({
       announceChange()
       onDone()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
       setSaving(false)
     }
   }

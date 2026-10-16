@@ -15,6 +15,7 @@ import { language, msg, rich, t } from '../lib/i18n.tsx'
 import { dayLabel } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { rupeesToPaise } from '../components/Owed.tsx'
+import { errorText } from '../lib/errors.ts'
 
 interface Summary {
   bills: BillDTO[]
@@ -50,7 +51,7 @@ export default function Bills() {
     try {
       setData(await api<Summary>('/bills'))
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }, [])
   useEffect(() => {
@@ -197,7 +198,7 @@ export default function Bills() {
       )}
 
       {renewing && (
-        <Modal title={t('Renewed: {name}', { name: renewing.name })} onClose={() => setRenewing(null)}>
+        <Modal title={t('Renewed: {name}', { name: renewing.name })} onClose={() => setRenewing(null)} closeOnBackdrop={false}>
           <RenewForm
             bill={renewing}
             onRenewed={(next) => {
@@ -317,7 +318,7 @@ function BillForm({ initial, onDone }: { initial: BillDTO | null; onDone: () => 
       else await api('/bills', { method: 'POST', body })
       onDone()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

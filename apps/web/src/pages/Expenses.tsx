@@ -16,6 +16,7 @@ import { dayLabel, spanLabel } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { waNumber } from '../components/PersonSheet.tsx'
 import { OwedCard, rupeesToPaise } from '../components/Owed.tsx'
+import { errorText } from '../lib/errors.ts'
 
 interface Month {
   month: string
@@ -143,7 +144,7 @@ export default function Expenses() {
       setAwaiting(c)
       setOwedKey((k) => k + 1)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }, [month])
 
@@ -551,7 +552,7 @@ function ExpenseForm({
           await uploadReceipt(saved.id, file)
           saved.hasReceipt = true
         } catch (err) {
-          setError(t('Saved, but {problem}', { problem: (err as Error).message.toLowerCase() }))
+          setError(t('Saved, but {problem}', { problem: errorText(err).toLowerCase() }))
         }
       }
       if (!initial) {
@@ -566,7 +567,7 @@ function ExpenseForm({
       }
       onSaved(saved)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -579,7 +580,7 @@ function ExpenseForm({
       await api(`/expenses/${initial.id}`, { method: 'DELETE' })
       onDeleted?.()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
       setBusy(false)
     }
   }
@@ -818,7 +819,7 @@ function ReceiptView({ x, onChanged }: { x: ExpenseDTO; onChanged: () => void })
       await uploadReceipt(x.id, file)
       onChanged()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
       setBusy(false)
     }
   }
@@ -830,7 +831,7 @@ function ReceiptView({ x, onChanged }: { x: ExpenseDTO; onChanged: () => void })
       await api(`/expenses/${x.id}/receipt`, { method: 'DELETE' })
       onChanged()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
       setBusy(false)
     }
   }
@@ -1025,7 +1026,7 @@ function ClaimSheet({ items, onClaimed, onClose }: { items: ExpenseDTO[]; onClai
       setDone(total)
       onClaimed()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -1181,7 +1182,7 @@ function PaidSheet({ items, onChanged }: { items: ExpenseDTO[]; onChanged: () =>
       setLeft((l) => l.filter((x) => !ids.includes(x.id)))
       onChanged()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(null)
     }

@@ -15,6 +15,7 @@ import {
 } from '@cue/shared'
 import { ApiError, api, apiSendFile } from '../lib/api.ts'
 import { dayLabel, formatDateTime } from '../lib/time.ts'
+import { errorText } from '../lib/errors.ts'
 
 type Status = 'pending' | 'unmatched' | 'approved' | 'dismissed'
 
@@ -58,7 +59,7 @@ export default function NoticeReview() {
       setCounts(res.counts)
       setSources(res.sources)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }, [status])
   useEffect(() => {
@@ -74,7 +75,7 @@ export default function NoticeReview() {
       setMessage(added > 0 ? `${added} new notice${added === 1 ? '' : 's'} to look at.` : 'Read every page: nothing new.')
       await load()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setChecking(false)
     }
@@ -175,7 +176,7 @@ function AddNotice({ onAdded }: { onAdded: () => void }) {
       setOpen(false)
       onAdded()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -259,7 +260,7 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDTO; onDone: () => void 
       }
     } catch (err) {
       const problem = err instanceof ApiError ? (err.data as { problem?: string } | null)?.problem : null
-      setError(problem ?? (err as Error).message)
+      setError(problem ?? errorText(err))
     } finally {
       setBusy(false)
     }
@@ -295,7 +296,7 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDTO; onDone: () => void 
       )
       setTimeout(onDone, 1500)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -307,7 +308,7 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDTO; onDone: () => void 
       await api(`/admin/notices/${notice.id}/dismiss`, { method: 'POST' })
       onDone()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
       setBusy(false)
     }
   }

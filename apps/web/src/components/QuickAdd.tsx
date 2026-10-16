@@ -17,6 +17,7 @@ import {
   type TripLink,
   type UpcomingTrip,
 } from './QuickLinks.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /**
  * Type it, press Enter, it is planned.
@@ -306,7 +307,7 @@ export function QuickAdd({
           const data = err.data as { problem?: string }
           setError(data.problem ?? t('I could not read that.'))
         } else {
-          setError((err as Error).message)
+          setError(errorText(err))
         }
       } finally {
         setBusy(false)

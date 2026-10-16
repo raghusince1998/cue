@@ -3,6 +3,7 @@ import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { dueChoices } from './WrapUp.tsx'
 import { t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /**
  * "Waiting on someone", added directly — not only from a meeting wrap-up.
@@ -37,7 +38,7 @@ export function WaitingForm({ onDone, initialWho = '' }: { onDone: () => void; i
       announceChange()
       onDone()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
       setBusy(false)
     }
   }

@@ -24,6 +24,7 @@ import { Nudge, waitingWhat } from './Nudge.tsx'
 import { WaitingForm } from './WaitingForm.tsx'
 import { dueChoices } from './WrapUp.tsx'
 import { OwedRow, useUpiId, type OwedPerson } from './Owed.tsx'
+import { errorText } from '../lib/errors.ts'
 
 interface Contact {
   id: string
@@ -127,7 +128,7 @@ export function PersonSheet({
     try {
       setContact(await api<Contact>(`/contacts/${contactId}`))
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
       return
     }
     // The person still opens if this part fails — their number and Edit

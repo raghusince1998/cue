@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { locale, t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 const LENGTHS = [25, 50, 90, 120]
 
@@ -70,7 +71,7 @@ export function FocusStart({
       if (err instanceof ApiError && err.status === 409) {
         setClash((err.data as { conflicts: { title: string; dueAt: string }[] }).conflicts)
       } else {
-        setError((err as Error).message)
+        setError(errorText(err))
       }
       setBusy(false)
     }

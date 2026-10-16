@@ -4,6 +4,7 @@ import { api } from '../lib/api.ts'
 import { useOnChange } from '../lib/changes.ts'
 import { rich, t } from '../lib/i18n.tsx'
 import { initials, relativeDay } from '../lib/time.ts'
+import { LoadFailed } from '../components/LoadFailed.tsx'
 
 interface AccountRow {
   key: string
@@ -44,10 +45,16 @@ export function AccountsView({
   const [newName, setNewName] = useState('')
   const [busy, setBusy] = useState(false)
 
+  const [failed, setFailed] = useState(false)
   const load = useCallback(async () => {
-    const r = await api<{ stages: Record<AccountStage, number>; accounts: AccountRow[] }>('/accounts')
-    setRows(r.accounts)
-    setStages(r.stages)
+    try {
+      const r = await api<{ stages: Record<AccountStage, number>; accounts: AccountRow[] }>('/accounts')
+      setRows(r.accounts)
+      setStages(r.stages)
+      setFailed(false)
+    } catch {
+      setFailed(true)
+    }
   }, [])
   useOnChange(() => void load())
   useEffect(() => {
@@ -76,6 +83,10 @@ export function AccountsView({
     } finally {
       setBusy(false)
     }
+  }
+
+  if (!rows && failed) {
+    return <LoadFailed what={t('Could not load your accounts just now.')} onRetry={() => void load()} />
   }
 
   if (!rows) {

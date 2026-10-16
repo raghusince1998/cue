@@ -5,6 +5,7 @@ import { announceChange } from '../lib/changes.ts'
 import { loadContacts } from '../lib/cache.ts'
 import { dueChoices } from './WrapUp.tsx'
 import { t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /** "Waiting on Ravi: signed contract" → "signed contract". */
 export function waitingWhat(c: CommitmentDTO): string {
@@ -99,7 +100,7 @@ export function Nudge({ item, onDone }: { item: CommitmentDTO; onDone: () => voi
       announceChange()
       onDone()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
       setBusy(false)
     }
   }
@@ -111,7 +112,7 @@ export function Nudge({ item, onDone }: { item: CommitmentDTO; onDone: () => voi
       announceChange()
       onDone()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
       setBusy(false)
     }
   }

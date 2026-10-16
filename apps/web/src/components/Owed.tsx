@@ -5,6 +5,7 @@ import { openPerson } from '../lib/open.ts'
 import { rich, t } from '../lib/i18n.tsx'
 import { dayLabel, relativeDay } from '../lib/time.ts'
 import { waNumber } from './PersonSheet.tsx'
+import { errorText } from '../lib/errors.ts'
 
 export interface OwedItem {
   id: string
@@ -84,7 +85,7 @@ export function OwedRow({
       await api('/owed/status', { method: 'POST', body: { ids, status: 'paid' } })
       onChanged()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -97,7 +98,7 @@ export function OwedRow({
       await api(`/owed/${id}`, { method: 'DELETE' })
       onChanged()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -193,7 +194,7 @@ export function OwedCard({
   const load = () =>
     void api<OwedSummary>('/owed')
       .then(setData)
-      .catch((err) => setError((err as Error).message))
+      .catch((err) => setError(errorText(err)))
   useEffect(load, [reloadKey])
 
   const changed = () => {
@@ -222,7 +223,7 @@ export function OwedCard({
       setAdding(false)
       changed()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

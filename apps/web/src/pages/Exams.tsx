@@ -33,6 +33,7 @@ import { useExamWords, type ExamWords } from '../lib/examWords.ts'
 import { Checklist } from '../components/Checklist.tsx'
 import { Modal } from '../components/Modal.tsx'
 import { PhotoFitter } from '../components/PhotoFitter.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /** The soonest date still to come, for a card's "Next:" line. */
 function nextDate(exam: ExamDTO) {
@@ -125,7 +126,7 @@ export default function Exams() {
       setExams(await api<ExamDTO[]>('/exams'))
       setClashes(await api<ExamClash[]>('/exams/clashes').catch(() => []))
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }, [])
   useEffect(() => {
@@ -330,7 +331,7 @@ function ExamsPicker({ onAdded, onOther }: { onAdded: (officialDates: number) =>
       announceChange()
       onAdded(official)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -650,7 +651,7 @@ function AddExam({
       onAdded(made.officialDates ?? 0)
       announceChange()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -812,7 +813,7 @@ function ExamSheet({
       })
       setDirty(false)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }, [id])
   useEffect(() => {
@@ -837,7 +838,7 @@ function ExamSheet({
       onChanged()
       announceChange()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -1196,7 +1197,7 @@ function StudyPlan({ exam, onChanged }: { exam: ExamDTO; onChanged: () => void }
       setEditing(false)
       onChanged()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -1353,7 +1354,7 @@ function Expected({ exam, onChanged }: { exam: ExamDTO; onChanged: () => void })
       })
       onChanged()
     } catch (err) {
-      setError(err instanceof ApiError && (err.data as { error?: string } | null)?.error === 'too_many' ? w.tooMany : (err as Error).message)
+      setError(err instanceof ApiError && (err.data as { error?: string } | null)?.error === 'too_many' ? w.tooMany : errorText(err))
     } finally {
       setBusy(false)
     }
@@ -1621,7 +1622,7 @@ function AdmitCardReader({
       adopt(res.card)
     } catch (err) {
       const problem = err instanceof ApiError ? (err.data as { problem?: string } | null)?.problem : null
-      setError(problem ?? (err as Error).message)
+      setError(problem ?? errorText(err))
     } finally {
       setBusy(false)
     }
@@ -1659,7 +1660,7 @@ function AdmitCardReader({
       announceChange()
       setDone(res.travel === 'trip' ? w.plannedTrip(res.trip?.placeLabel ?? '') : res.travel === 'no-home-city' ? w.plannedNoHome : w.planned)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -1831,7 +1832,7 @@ function Results({ exam, onChecked }: { exam: ExamDTO; onChecked: () => void }) 
       onChecked()
     } catch (err) {
       const problem = err instanceof ApiError ? (err.data as { problem?: string } | null)?.problem : null
-      setError(problem ?? (err as Error).message)
+      setError(problem ?? errorText(err))
     } finally {
       setBusy(false)
     }

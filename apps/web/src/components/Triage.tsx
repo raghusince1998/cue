@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
 import { openPlan } from '../lib/open.ts'
 import { locale, msg, t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /**
  * Clearing what the nagging failed on.
@@ -85,7 +86,7 @@ export function Triage({
         // press — but every one of them is visible and changeable first.
         setChoices(Object.fromEntries(r.items.map((i) => [i.id, i.suggested])))
       })
-      .catch((err) => setError((err as Error).message))
+      .catch((err) => setError(errorText(err)))
   }, [all])
 
   async function apply() {
@@ -103,7 +104,7 @@ export function Triage({
       setDone(await api<Record<string, number>>('/triage', { method: 'POST', body: { decisions: usable } }))
       onApplied()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

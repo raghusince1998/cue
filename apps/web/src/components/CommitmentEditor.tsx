@@ -13,6 +13,7 @@ import { ApiError, api } from '../lib/api.ts'
 import { msg, rich, t } from '../lib/i18n.tsx'
 import { formatDateTime, toLocalInputValue } from '../lib/time.ts'
 import { ConflictWarning } from './ConflictWarning.tsx'
+import { errorText } from '../lib/errors.ts'
 
 const STATUSES: { value: CommitmentStatus; label: string }[] = [
   { value: 'pending', label: msg('Still open') },
@@ -111,7 +112,7 @@ export function CommitmentEditor({
         setError(t('That time does not fit the other commitment either — pick another slot.'))
         return
       }
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }
 
@@ -139,7 +140,7 @@ export function CommitmentEditor({
         setError(t('That slot was taken while you were editing.'))
         return
       }
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -152,7 +153,7 @@ export function CommitmentEditor({
       await api(`/commitments/${commitmentId}`, { method: 'DELETE' })
       onSaved()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

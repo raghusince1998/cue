@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
 import { formatSpan } from '../lib/time.ts'
 import { t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 interface ExtractedEvent {
   title: string
@@ -56,7 +57,7 @@ export function ExtractReview({
             ? t('No AI provider is set up yet — add one in Settings.')
             : code === 'extraction_failed'
               ? t('The provider could not be reached, or rejected the request. Check the key in Settings.')
-              : (err as Error).message,
+              : errorText(err),
         )
       })
     return () => {
@@ -105,7 +106,7 @@ export function ExtractReview({
       }
       onDone(added)
     } catch (err) {
-      setError(t('Added {n} before failing: {error}', { n: added, error: (err as Error).message }))
+      setError(t('Added {n} before failing: {error}', { n: added, error: errorText(err) }))
     } finally {
       setSaving(false)
     }

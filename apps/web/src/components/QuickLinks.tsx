@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { locale, msg, rich, t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 export interface PersonLink {
   id: string
@@ -261,7 +262,7 @@ export function SavedForTrip({
       setDone((x) => ({ ...x, ...Object.fromEntries(left.map((w) => [w.id, when])) }))
       announceChange()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }
 
@@ -276,7 +277,7 @@ export function SavedForTrip({
       setDone((x) => ({ ...x, [id]: `${day(onDay)}, ${t(label).toLowerCase()}` }))
       announceChange()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }
 

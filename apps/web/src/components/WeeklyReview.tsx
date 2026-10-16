@@ -5,6 +5,7 @@ import { TargetBar, statusText } from './Targets.tsx'
 import { api } from '../lib/api.ts'
 import { locale, t } from '../lib/i18n.tsx'
 import { dayLabel, relativeDay, spanLabel } from '../lib/time.ts'
+import { errorText } from '../lib/errors.ts'
 
 interface WeekReview {
   week: { from: string; to: string }
@@ -61,7 +62,7 @@ export function WeeklyReview({
   useEffect(() => {
     api<WeekReview>('/review/week')
       .then(setR)
-      .catch((err) => setError((err as Error).message))
+      .catch((err) => setError(errorText(err)))
   }, [])
 
   async function finish() {
@@ -70,7 +71,7 @@ export function WeeklyReview({
       await api('/review/week/done', { method: 'POST' })
       setFinished(true)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

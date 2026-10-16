@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { locale, msg, t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 type Range = 'soon' | 'week' | 'next'
 type Part = 'any' | 'morning' | 'afternoon'
@@ -94,7 +95,7 @@ export function ShareAvailability({ onDone, initialWith = '' }: { onDone: () => 
         setChosen(r.slots.slice(0, 5))
         setEdited(false)
       })
-      .catch((err) => !cancelled && setError((err as Error).message))
+      .catch((err) => !cancelled && setError(errorText(err)))
     return () => {
       cancelled = true
     }
@@ -141,7 +142,7 @@ export function ShareAvailability({ onDone, initialWith = '' }: { onDone: () => 
       setError(
         err instanceof ApiError && err.status === 409
           ? t('That time has been taken since you shared it. Pick another, or offer new times.')
-          : (err as Error).message,
+          : errorText(err),
       )
     } finally {
       setBusy(false)

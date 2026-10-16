@@ -6998,6 +6998,15 @@ a.link-btn:hover {
   gap: 6px;
 }
 
+/* Today, when a refresh failed: what is showing may be old. */
+.stale-note {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--text);
+}
+
 /* The weekly review's bars open that day in the week view. */
 button.week-bar {
   background: none;

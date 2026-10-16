@@ -4,6 +4,8 @@ import { api } from '../lib/api.ts'
 import { useAuth } from '../lib/auth.tsx'
 import { t } from '../lib/i18n.tsx'
 import { waNumber } from './PersonSheet.tsx'
+import { errorText } from '../lib/errors.ts'
+import { LoadFailed } from './LoadFailed.tsx'
 
 export interface Recipient {
   name: string | null
@@ -63,13 +65,18 @@ export function QuickMessage({
     ? { id: 'preset', title: preset.title, body: preset.body, uses: 0 }
     : null
 
-  useEffect(() => {
-    void load().then((list) => {
-      const pick = presetTemplate ?? ((suggest && list.find((tpl) => suggest.test(tpl.title))) || list[0])
-      if (pick) choose(pick)
-    })
-    // Once, on opening: later reloads must not undo what was picked or typed.
-  }, [])
+  const [failed, setFailed] = useState(false)
+  const firstLoad = () => {
+    setFailed(false)
+    void load()
+      .then((list) => {
+        const pick = presetTemplate ?? ((suggest && list.find((tpl) => suggest.test(tpl.title))) || list[0])
+        if (pick) choose(pick)
+      })
+      .catch(() => setFailed(true))
+  }
+  // Once, on opening: later reloads must not undo what was picked or typed.
+  useEffect(firstLoad, [])
 
   async function addStarters() {
     try {
@@ -78,7 +85,7 @@ export function QuickMessage({
       const pick = (suggest && list.find((tpl) => suggest.test(tpl.title))) || list[0]
       if (pick) choose(pick)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }
 
@@ -118,6 +125,9 @@ export function QuickMessage({
     )
   }
 
+  if (templates === null && failed) {
+    return <LoadFailed what={t('Could not load your messages just now.')} onRetry={firstLoad} />
+  }
   if (templates === null) return <p className="muted small">{t('Loading your messages…')}</p>
 
   if (templates.length === 0 && !presetTemplate) {
@@ -263,7 +273,7 @@ export function TemplateManager({ onClose }: { onClose: () => void }) {
       setEditing(null)
       await load()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

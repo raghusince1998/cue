@@ -74,7 +74,12 @@ export function Opener() {
             )
           case 'edit-person':
             return (
-              <Modal key={key} title={t('Edit person')} onClose={() => swapAt(i, { kind: 'person', id: entry.id })}>
+              <Modal
+                key={key}
+                title={t('Edit person')}
+                onClose={() => swapAt(i, { kind: 'person', id: entry.id })}
+                closeOnBackdrop={false}
+              >
                 <ContactEditor
                   contactId={entry.id}
                   onClose={() => swapAt(i, { kind: 'person', id: entry.id })}
@@ -87,7 +92,7 @@ export function Opener() {
             )
           case 'add-person':
             return (
-              <Modal key={key} title={t('Add person')} onClose={() => closeAt(i)}>
+              <Modal key={key} title={t('Add person')} onClose={() => closeAt(i)} closeOnBackdrop={false}>
                 <ContactEditor
                   contactId={null}
                   initialOrganization={entry.organization}

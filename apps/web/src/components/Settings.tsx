@@ -11,6 +11,8 @@ import { api } from '../lib/api.ts'
 import { locale, msg, rich, t } from '../lib/i18n.tsx'
 import { useAuth } from '../lib/auth.tsx'
 import { USES, describeWorkHours, hasWork } from '@cue/shared'
+import { errorText } from '../lib/errors.ts'
+import { LoadFailed } from './LoadFailed.tsx'
 
 interface Me {
   id: string
@@ -83,8 +85,15 @@ export function Settings({ onClose }: { onClose: () => void }) {
   // The Sunday prep report is for whoever chose Competitive exams.
   const aspirant = Boolean(account?.uses.includes('exams'))
 
+  const [prefsFailed, setPrefsFailed] = useState(false)
+  const loadPrefs = () => {
+    setPrefsFailed(false)
+    api<Preferences>('/me/preferences')
+      .then(setPrefs)
+      .catch(() => setPrefsFailed(true))
+  }
   useEffect(() => {
-    void api<Preferences>('/me/preferences').then(setPrefs)
+    loadPrefs()
     void loadMe()
   }, [])
 
@@ -94,7 +103,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
     try {
       setPrefs(await api<Preferences>('/me/preferences', { method: 'PATCH', body: patch }))
     } catch (err) {
-      setMessage((err as Error).message)
+      setMessage(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -115,7 +124,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
             : t('No device registered — enable notifications on the Today screen first.'),
       )
     } catch (err) {
-      setMessage((err as Error).message)
+      setMessage(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -136,7 +145,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
             : t('No device registered — enable notifications on the Today screen first.'),
       )
     } catch (err) {
-      setMessage((err as Error).message)
+      setMessage(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -154,7 +163,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
             : t('No device registered — enable notifications on the Today screen first.'),
       )
     } catch (err) {
-      setMessage((err as Error).message)
+      setMessage(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -175,7 +184,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
             : t('No device registered — enable notifications on the Today screen first.'),
       )
     } catch (err) {
-      setMessage((err as Error).message)
+      setMessage(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -194,10 +203,14 @@ export function Settings({ onClose }: { onClose: () => void }) {
           : t('No device registered — enable notifications on the Today screen first.'),
       )
     } catch (err) {
-      setMessage((err as Error).message)
+      setMessage(errorText(err))
     } finally {
       setBusy(false)
     }
+  }
+
+  if (!prefs && prefsFailed) {
+    return <LoadFailed what={t('Could not load your settings just now.')} onRetry={loadPrefs} />
   }
 
   if (!prefs) {
@@ -223,7 +236,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
       await api('/auth/profile', { method: 'PATCH', body: { name: name.trim() } })
       setNameSaved(true)
     } catch (err) {
-      setMessage((err as Error).message)
+      setMessage(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -247,7 +260,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
           ? t('That is not your current password.')
           : code === 'invalid_input'
             ? t('The new password must be at least 8 characters.')
-            : (err as Error).message,
+            : errorText(err),
       )
     } finally {
       setBusy(false)

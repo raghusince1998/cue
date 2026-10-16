@@ -5,6 +5,7 @@ import { announceChange } from '../lib/changes.ts'
 import { locale, msg, t } from '../lib/i18n.tsx'
 import { Modal } from './Modal.tsx'
 import { TripDetail } from './TripDetail.tsx'
+import { errorText } from '../lib/errors.ts'
 
 export type CalendarMode = 'month' | 'week'
 
@@ -219,7 +220,7 @@ export function CalendarView({
           setError(null)
         }
       })
-      .catch((err) => !cancelled && setError((err as Error).message))
+      .catch((err) => !cancelled && setError(errorText(err)))
       .finally(() => !cancelled && setLoading(false))
     return () => {
       cancelled = true

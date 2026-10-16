@@ -41,6 +41,7 @@ import { ConflictWarning } from './ConflictWarning.tsx'
 import { DictateButton } from './DictateButton.tsx'
 import { Modal } from './Modal.tsx'
 import { ExtractReview } from './ExtractReview.tsx'
+import { errorText } from '../lib/errors.ts'
 
 interface PlannedRepeat {
   title: string
@@ -381,7 +382,7 @@ export function UpcomingForm({
       })
       onDone()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setSaving(false)
     }
@@ -420,7 +421,7 @@ export function UpcomingForm({
         setError(t('That slot was taken while you were filling this in.'))
         return
       }
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setSaving(false)
     }
@@ -477,7 +478,7 @@ export function UpcomingForm({
       // The sheet stays open on its note, so the page behind it is told now.
       announceChange()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setSaving(false)
     }
@@ -517,7 +518,7 @@ export function UpcomingForm({
         }),
       )
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setSaving(false)
     }
@@ -555,7 +556,7 @@ export function UpcomingForm({
         navigate('/trips')
       }
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setSaving(false)
     }

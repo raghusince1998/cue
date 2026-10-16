@@ -14,6 +14,8 @@ import { locale, msg, t } from '../lib/i18n.tsx'
 import { Checklist } from './Checklist.tsx'
 import { openAdd } from '../lib/addSheet.ts'
 import { CommitmentSheet } from './CommitmentSheet.tsx'
+import { errorText } from '../lib/errors.ts'
+import { LoadFailed } from './LoadFailed.tsx'
 
 interface TripDetailResponse {
   trip: TripDTO
@@ -95,8 +97,14 @@ export function TripDetail({
   /** A plan on the trip, open over it: the ticket, the stay, the meeting there. */
   const [planOpen, setPlanOpen] = useState<string | null>(null)
 
+  const [failed, setFailed] = useState(false)
   const load = useCallback(async () => {
-    setData(await api<TripDetailResponse>(`/trips/${tripId}`))
+    try {
+      setData(await api<TripDetailResponse>(`/trips/${tripId}`))
+      setFailed(false)
+    } catch {
+      setFailed(true)
+    }
   }, [tripId])
 
   useEffect(() => {
@@ -118,7 +126,7 @@ export function TripDetail({
       await load()
       onChanged()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
@@ -146,7 +154,7 @@ export function TripDetail({
       setError(
         err instanceof ApiError && err.code === 'already_scheduled'
           ? t('That one is already on the plan.')
-          : (err as Error).message,
+          : errorText(err),
       )
     } finally {
       setBusy(false)
@@ -166,10 +174,14 @@ export function TripDetail({
         alert(t('Trip removed. {n} plan(s) were kept and detached from it.', { n: r.detached }))
       }
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }
+  }
+
+  if (!data && failed) {
+    return <LoadFailed what={t('Could not open this trip just now.')} onRetry={() => void load()} />
   }
 
   if (!data) {
@@ -195,7 +207,7 @@ export function TripDetail({
       await load()
       onChanged()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

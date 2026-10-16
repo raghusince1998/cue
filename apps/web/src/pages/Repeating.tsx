@@ -8,6 +8,7 @@ import { announceChange, useOnChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
 import { CommitmentSheet } from '../components/CommitmentSheet.tsx'
 import { Modal } from '../components/Modal.tsx'
+import { errorText } from '../lib/errors.ts'
 
 interface Occurrence {
   id: string
@@ -99,7 +100,7 @@ export default function Repeating() {
       setItems(r.recurrences)
       setSchedules(s.schedules)
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     }
   }
 
@@ -146,7 +147,7 @@ export default function Repeating() {
       )
       await load()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(null)
     }
@@ -171,7 +172,7 @@ export default function Repeating() {
       )
       await load()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(null)
     }

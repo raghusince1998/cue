@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../lib/api.ts'
 import { msg, rich, t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /**
  * Connecting a Google or Microsoft account, and choosing what to mirror.
@@ -70,7 +71,7 @@ function messageOf(err: unknown): string {
   if (err instanceof ApiError) {
     return (err.data as { message?: string })?.message ?? err.message
   }
-  return (err as Error).message
+  return errorText(err)
 }
 
 function calendarsLine(n: number): string {

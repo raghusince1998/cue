@@ -3,6 +3,7 @@ import { ApiError, api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { relativeDay } from '../lib/time.ts'
 import { msg, t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 interface ProviderInfo {
   id: string
@@ -69,7 +70,7 @@ function outcomeOf(code: string): { text: string; bad: boolean } {
 
 function messageOf(err: unknown): string {
   if (err instanceof ApiError) return (err.data as { message?: string })?.message ?? err.message
-  return (err as Error).message
+  return errorText(err)
 }
 
 function ago(iso: string): string {

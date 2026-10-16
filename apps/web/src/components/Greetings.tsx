@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth.tsx'
 import { announceChange } from '../lib/changes.ts'
 import { t } from '../lib/i18n.tsx'
 import { waNumber } from './PersonSheet.tsx'
+import { errorText } from '../lib/errors.ts'
 
 interface RunPerson {
   id: string
@@ -85,7 +86,7 @@ export function Greetings({ contacts, onClose }: { contacts: ContactDTO[]; onClo
         }),
       )
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

@@ -5,7 +5,7 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import fastifyStatic from '@fastify/static'
 import { sql } from 'drizzle-orm'
-import { ZodError } from 'zod'
+import { handleError } from './errors.ts'
 import { db } from './db/index.ts'
 import { env, pushConfigured } from './env.ts'
 import { configFor, providerConfigured, PROVIDERS } from './services/oauthProviders.ts'
@@ -66,14 +66,7 @@ import { syncAllFeeds } from './services/calendarFeed.ts'
 
 const app = Fastify({ logger: { level: 'info' } })
 
-app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
-  if (err instanceof ZodError) {
-    return reply.code(400).send({ error: 'invalid_input', issues: err.issues })
-  }
-  const status = err.statusCode ?? 500
-  if (status >= 500) app.log.error(err)
-  return reply.code(status).send({ error: err.message || 'internal_error' })
-})
+app.setErrorHandler(handleError)
 
 await app.register(cors, {
   // The Capacitor Android build later loads from capacitor://localhost, so the

@@ -10,8 +10,10 @@ import { Search } from './components/Search.tsx'
 import { AddPanel } from './components/AddPanel.tsx'
 import { CallTracker } from './components/CallTracker.tsx'
 import { Toasts } from './components/Toasts.tsx'
+import { toast } from './lib/toast.ts'
+import { errorText, isOffline } from './lib/errors.ts'
 import { Opener } from './components/Opener.tsx'
-import { api } from './lib/api.ts'
+import { ApiError, api } from './lib/api.ts'
 import { useOpenAdd, type AddOptions } from './lib/addSheet.ts'
 import { resyncPush } from './lib/push.ts'
 import Login from './pages/Login.tsx'
@@ -212,6 +214,19 @@ export default function App() {
   useEffect(() => {
     if (new URLSearchParams(location.search).has('settings')) setSettingsOpen(true)
   }, [location.search])
+
+  // A tap whose request failed and that nothing else reported — Done on a
+  // card with no signal — still says so, rather than doing nothing.
+  useEffect(() => {
+    const onRejection = (e: PromiseRejectionEvent) => {
+      if (!(e.reason instanceof ApiError) && !isOffline(e.reason)) return
+      if (e.reason instanceof ApiError && e.reason.status === 401) return
+      e.preventDefault()
+      toast(errorText(e.reason), 'error')
+    }
+    window.addEventListener('unhandledrejection', onRejection)
+    return () => window.removeEventListener('unhandledrejection', onRejection)
+  }, [])
 
   // A notification tapped while Cue is open: the service worker hands over
   // the address, and the app goes there without reloading.

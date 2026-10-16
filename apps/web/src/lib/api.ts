@@ -68,6 +68,23 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The answer's JSON. A gateway's HTML error page (a 502 while the server
+ * restarts) is not JSON, and must not surface as a parse error in the UI.
+ */
+async function readBody(res: Response): Promise<any> {
+  const text = await res.text()
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    if (res.ok) throw new ApiError(res.status, 'bad_response')
+    return null
+  }
+}
+
+const failedCode = (status: number) => (status >= 500 ? 'internal_error' : 'request_failed')
+
 export async function api<T>(
   path: string,
   options: { method?: string; body?: unknown; query?: Record<string, string> } = {},
@@ -89,14 +106,13 @@ export async function api<T>(
 
   if (res.status === 204) return undefined as T
 
-  const text = await res.text()
-  const data = text ? JSON.parse(text) : null
+  const data = await readBody(res)
 
   if (!res.ok) {
     // A dead token should log you out rather than leaving the UI stuck on a
     // spinner it can never resolve.
     if (res.status === 401) setToken(null)
-    throw new ApiError(res.status, data?.error ?? 'request_failed', data, data?.error)
+    throw new ApiError(res.status, data?.error ?? failedCode(res.status), data, data?.error)
   }
 
   return data as T
@@ -110,8 +126,7 @@ export async function apiSendFile<T>(path: string, file: Blob): Promise<T> {
     headers: { 'content-type': file.type || 'application/octet-stream', ...(token ? { authorization: `Bearer ${token}` } : {}) },
     body: file,
   })
-  const text = await res.text()
-  const data = text ? JSON.parse(text) : null
+  const data = await readBody(res)
   if (!res.ok) {
     if (res.status === 401) setToken(null)
     throw new ApiError(res.status, data?.error ?? 'upload_failed', data, data?.problem ?? data?.error)
@@ -138,9 +153,11 @@ export async function apiUploadAudio(
     body: blob,
   })
 
-  const text = await res.text()
-  const data = text ? JSON.parse(text) : null
-  if (!res.ok) throw new ApiError(res.status, data?.error ?? 'upload_failed', data)
+  const data = await readBody(res)
+  if (!res.ok) {
+    if (res.status === 401) setToken(null)
+    throw new ApiError(res.status, data?.error ?? 'upload_failed', data)
+  }
   return data
 }
 

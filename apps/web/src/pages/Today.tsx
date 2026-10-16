@@ -554,11 +554,32 @@ export default function Today() {
     }
   }, [params, setParams])
 
+  const [loadFailed, setLoadFailed] = useState(false)
+  const loadedOnce = useRef(false)
+  const lastAgenda = useRef('')
+  const lastSideRefresh = useRef(0)
   const load = useCallback(async () => {
     const { from, to } = dayBounds()
-    setAgenda(await api<Agenda>('/commitments/agenda', { query: { from, to } }))
-    setLoading(false)
-    setCalendarKey((k) => k + 1)
+    try {
+      const next = await api<Agenda>('/commitments/agenda', { query: { from, to } })
+      loadedOnce.current = true
+      setLoadFailed(false)
+      // The calendar and the summary beside it fetch their own; they follow
+      // when the day changed, and every few minutes regardless.
+      const signature = JSON.stringify(next)
+      const changed = signature !== lastAgenda.current
+      lastAgenda.current = signature
+      if (changed) setAgenda(next)
+      if (changed || Date.now() - lastSideRefresh.current > 5 * 60_000) {
+        lastSideRefresh.current = Date.now()
+        setCalendarKey((k) => k + 1)
+      }
+    } catch {
+      // What was on screen stays; the line above it says it may be old.
+      setLoadFailed(true)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   // Something added from the header, over this page: show it now rather than
@@ -567,9 +588,19 @@ export default function Today() {
 
   useEffect(() => {
     void load()
-    // Keeps the overdue list honest while the tab sits open on a desk.
-    const handle = setInterval(() => void load(), 60_000)
-    return () => clearInterval(handle)
+    // Keeps the overdue list honest while the tab sits open on a desk — and
+    // not while it sits in the background, where nobody is reading it.
+    const handle = setInterval(() => {
+      if (!document.hidden) void load()
+    }, 60_000)
+    const onVisible = () => {
+      if (!document.hidden) void load()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(handle)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [load])
 
   const complete = useCallback(
@@ -646,6 +677,23 @@ export default function Today() {
     return (
       <div className="boot">
         <span className="spinner" />
+      </div>
+    )
+  }
+
+  if (loadFailed && !loadedOnce.current) {
+    return (
+      <div className="stack">
+        <p className="error small">{t('Could not load your day just now.')}</p>
+        <button
+          className="ghost small-btn fit-btn"
+          onClick={() => {
+            setLoading(true)
+            void load()
+          }}
+        >
+          {t('Try again')}
+        </button>
       </div>
     )
   }
@@ -881,6 +929,14 @@ export default function Today() {
       </aside>
 
       <div className="today-main stack">
+        {loadFailed && (
+          <p className="stale-note small">
+            {t('Not up to date: Cue could not be reached.')}{' '}
+            <button className="link small" onClick={() => void load()}>
+              {t('Try again')}
+            </button>
+          </p>
+        )}
       <div className="row spread">
         <div className="viewswitch">
           {(['agenda', 'week', 'month'] as const).map((v) => (

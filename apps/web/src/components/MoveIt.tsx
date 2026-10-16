@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
 import { locale, msg, t } from '../lib/i18n.tsx'
+import { errorText } from '../lib/errors.ts'
 
 /**
  * Somewhere this could actually go.
@@ -62,7 +63,7 @@ export function MoveIt({
   useEffect(() => {
     api<Slots>(`/commitments/${commitmentId}/slots`)
       .then(setData)
-      .catch((err) => setError((err as Error).message))
+      .catch((err) => setError(errorText(err)))
   }, [commitmentId])
 
   async function moveTo(iso: string) {
@@ -72,7 +73,7 @@ export function MoveIt({
       await api(`/commitments/${commitmentId}/reschedule`, { method: 'POST', body: { dueAt: iso } })
       onMoved()
     } catch (err) {
-      setError((err as Error).message)
+      setError(errorText(err))
     } finally {
       setBusy(false)
     }

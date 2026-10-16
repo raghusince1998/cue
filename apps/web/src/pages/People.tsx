@@ -19,6 +19,8 @@ import {
   deviceContactsReason,
   pickDeviceContacts,
 } from '../lib/deviceContacts.ts'
+import { errorText } from '../lib/errors.ts'
+import { LoadFailed } from '../components/LoadFailed.tsx'
 
 /** `undefined` = closed, `null` = creating a new person, string = editing one. */
 type Editing = string | null | undefined
@@ -112,7 +114,7 @@ export default function People() {
       setImportNote(parts.length ? t('{text}.', { text: parts.join(', ') }) : t('Nothing changed.'))
       await load()
     } catch (err) {
-      setImportNote((err as Error).message)
+      setImportNote(errorText(err))
     } finally {
       setImporting(false)
     }
@@ -137,18 +139,25 @@ export default function People() {
   const [viewing, setViewing] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
 
+  const [failed, setFailed] = useState(false)
   const load = useCallback(async () => {
-    const [list, s, keep, occ] = await Promise.all([
-      api<ContactDTO[]>('/contacts'),
-      api<Summary>('/people/summary').catch(() => ({ people: {}, unsaved: [] })),
-      api<{ people: Touch[] }>('/people/keep-in-touch').catch(() => ({ people: [] as Touch[] })),
-      api<Occasion[]>('/occasions/upcoming', { query: { days: '30' } }).catch(() => [] as Occasion[]),
-    ])
-    setContacts(list)
-    setSummary(s)
-    setTouches(keep.people)
-    setOccasions(occ)
-    setLoading(false)
+    try {
+      const [list, s, keep, occ] = await Promise.all([
+        api<ContactDTO[]>('/contacts'),
+        api<Summary>('/people/summary').catch(() => ({ people: {}, unsaved: [] })),
+        api<{ people: Touch[] }>('/people/keep-in-touch').catch(() => ({ people: [] as Touch[] })),
+        api<Occasion[]>('/occasions/upcoming', { query: { days: '30' } }).catch(() => [] as Occasion[]),
+      ])
+      setContacts(list)
+      setSummary(s)
+      setTouches(keep.people)
+      setOccasions(occ)
+      setFailed(false)
+    } catch {
+      setFailed(true)
+    } finally {
+      setLoading(false)
+    }
   }, [])
   useOnChange(() => void load())
 
@@ -189,6 +198,18 @@ export default function People() {
       <div className="boot">
         <span className="spinner" />
       </div>
+    )
+  }
+
+  if (failed && contacts.length === 0) {
+    return (
+      <LoadFailed
+        what={t('Could not load your people just now.')}
+        onRetry={() => {
+          setLoading(true)
+          void load()
+        }}
+      />
     )
   }
 
@@ -451,7 +472,7 @@ export default function People() {
         const c = contacts.find((x) => x.id === wishing.contactId)
         if (!c) return null
         return (
-          <Modal title={t('Wish {name}', { name: c.name })} onClose={() => setWishing(null)}>
+          <Modal title={t('Wish {name}', { name: c.name })} onClose={() => setWishing(null)} closeOnBackdrop={false}>
             <QuickMessage
               to={{ name: c.name, company: c.organization, phone: c.phone, email: c.email }}
               preset={{
@@ -465,7 +486,7 @@ export default function People() {
       })()}
 
       {messaging && (
-        <Modal title={t('Message {name}', { name: messaging.name })} onClose={() => setMessaging(null)}>
+        <Modal title={t('Message {name}', { name: messaging.name })} onClose={() => setMessaging(null)} closeOnBackdrop={false}>
           <QuickMessage
             to={{ name: messaging.name, company: messaging.organization, phone: messaging.phone }}
             suggest={/remind|touch|catch/i}
@@ -528,6 +549,7 @@ export default function People() {
             setNewName('')
             setNewOrg('')
           }}
+          closeOnBackdrop={false}
         >
           <ContactEditor
             contactId={editing}

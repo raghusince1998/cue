@@ -2,9 +2,20 @@ import { language, setLanguage } from './i18n.tsx'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { FILLABLE, sectionsFor } from '@cue/shared'
-import { api, getToken, setToken } from './api.ts'
+import { ApiError, api, getToken, setToken } from './api.ts'
 import { useOnChange } from './changes.ts'
 import { stopPushHere } from './push.ts'
+
+const ME_KEY = 'cue.me'
+
+function lastKnownMe(): Me | null {
+  try {
+    const raw = localStorage.getItem(ME_KEY)
+    return raw ? (JSON.parse(raw) as Me) : null
+  } catch {
+    return null
+  }
+}
 
 export interface Me {
   id: string
@@ -64,13 +75,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       setMe(await api<Me>('/auth/me'))
-    } catch {
-      setToken(null)
-      setMe(null)
+    } catch (err) {
+      // No signal, or the server restarting: the last known profile, so the
+      // app opens on what it has rather than on the sign-in page.
+      const known = err instanceof ApiError && err.status === 401 ? null : lastKnownMe()
+      if (!known) setToken(null)
+      setMe(known)
     } finally {
       setLoading(false)
     }
   }, [])
+
+  // Kept for the next start without signal.
+  useEffect(() => {
+    try {
+      if (me) localStorage.setItem(ME_KEY, JSON.stringify(me))
+      else localStorage.removeItem(ME_KEY)
+    } catch {
+      // Private mode: the next start just needs the network.
+    }
+  }, [me])
 
   useEffect(() => {
     void refresh()

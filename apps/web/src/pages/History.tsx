@@ -45,6 +45,8 @@ import { relativeDay } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { VisitEditor } from '../components/VisitEditor.tsx'
 import { CommitmentEditor } from '../components/CommitmentEditor.tsx'
+import { errorText } from '../lib/errors.ts'
+import { LoadFailed } from '../components/LoadFailed.tsx'
 
 type Editing = { type: 'visit'; id: string } | { type: 'commitment'; id: string } | null
 
@@ -76,15 +78,22 @@ export default function History() {
       await api(`/history/${entry.kind}/${entry.id}`, { method: 'DELETE' })
       setVisits((list) => list.filter((e) => !(e.id === entry.id && e.kind === entry.kind)))
     } catch (err) {
-      window.alert(t('Could not remove it: {error}', { error: (err as Error).message }))
+      window.alert(t('Could not remove it: {error}', { error: errorText(err) }))
     } finally {
       setRemoving(null)
     }
   }
 
+  const [failed, setFailed] = useState(false)
   const load = useCallback(async () => {
-    setVisits((await api<{ entries: Entry[] }>('/history')).entries)
-    setLoading(false)
+    try {
+      setVisits((await api<{ entries: Entry[] }>('/history')).entries)
+      setFailed(false)
+    } catch {
+      setFailed(true)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -96,6 +105,18 @@ export default function History() {
       <div className="boot">
         <span className="spinner" />
       </div>
+    )
+  }
+
+  if (failed && visits.length === 0) {
+    return (
+      <LoadFailed
+        what={t('Could not load your history just now.')}
+        onRetry={() => {
+          setLoading(true)
+          void load()
+        }}
+      />
     )
   }
 
@@ -198,7 +219,7 @@ export default function History() {
       </div>
 
       {editing?.type === 'visit' && (
-        <Modal title={t('Edit entry')} onClose={() => setEditing(null)}>
+        <Modal title={t('Edit entry')} onClose={() => setEditing(null)} closeOnBackdrop={false}>
           <VisitEditor
             visitId={editing.id}
             onClose={() => setEditing(null)}
@@ -212,7 +233,7 @@ export default function History() {
       )}
 
       {editing?.type === 'commitment' && (
-        <Modal title={t('Edit follow-up')} onClose={() => setEditing(null)}>
+        <Modal title={t('Edit follow-up')} onClose={() => setEditing(null)} closeOnBackdrop={false}>
           <CommitmentEditor
             commitmentId={editing.id}
             onClose={() => setEditing(null)}

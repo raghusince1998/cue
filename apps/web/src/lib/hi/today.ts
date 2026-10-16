@@ -334,6 +334,8 @@ export const today: Record<string, string> = {
 
   // A notification's button, acted on from Today
   'That one is no longer here.': 'वह अब यहाँ नहीं है।',
+  'Could not load your day just now.': 'अभी आपका दिन लोड नहीं हो सका।',
+  'Not up to date: Cue could not be reached.': 'ताज़ा नहीं: Cue तक नहीं पहुँच सके।',
   'That one is already closed.': 'वह पहले ही बंद हो चुका है।',
   'Could not reach Cue. Try again in a moment.': 'Cue तक नहीं पहुँच सके। थोड़ी देर में फिर कोशिश करें।',
   'Marked done.': 'हो गया लिख दिया।',
