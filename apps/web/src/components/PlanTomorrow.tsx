@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
+import { openPlan } from '../lib/open.ts'
 import { locale, t } from '../lib/i18n.tsx'
 
 /**
@@ -110,7 +111,9 @@ export function PlanTomorrow({ onClose, onApplied }: { onClose: () => void; onAp
         return (
           <div className={`plan-row${off ? ' is-off' : ''}`} key={p.commitmentId}>
             <div>
-              <strong>{p.title}</strong>
+              <button className="plan-link" onClick={() => openPlan(p.commitmentId)}>
+                <strong>{p.title}</strong>
+              </button>
               <p className="muted small">
                 {clock(p.at)} · {t('{n} min', { n: p.durationMinutes })} — {p.because}
               </p>
@@ -133,7 +136,9 @@ export function PlanTomorrow({ onClose, onApplied }: { onClose: () => void; onAp
       {plan.unplaceable.map((u) => (
         <div className="plan-row is-stuck" key={u.commitmentId}>
           <div>
-            <strong>{u.title}</strong>
+            <button className="plan-link" onClick={() => openPlan(u.commitmentId)}>
+              <strong>{u.title}</strong>
+            </button>
             <p className="muted small">{u.because}</p>
           </div>
         </div>

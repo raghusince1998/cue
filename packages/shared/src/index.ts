@@ -1097,6 +1097,7 @@ export interface CommitmentDTO {
   scheduleTitle?: string | null
   /** The meeting this follow-up came out of. */
   fromTitle?: string | null
+  fromId?: string | null
   /** Someone else's to do: who it is waiting on. A check-in, not time booked. */
   waitingOn?: string | null
   /** For a meeting: follow-ups still open from earlier meetings like it. */

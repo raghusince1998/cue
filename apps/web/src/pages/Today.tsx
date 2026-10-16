@@ -1181,7 +1181,10 @@ export default function Today() {
           <ul className="plain">
             {upcomingContext.slice(0, showAllContext ? undefined : 5).map((c) => (
               <li key={c.id} className="muted small">
-                {formatSpan(c.dueAt, c.endsAt, c.allDay)} — {c.title}
+                {formatSpan(c.dueAt, c.endsAt, c.allDay)} —{' '}
+                <button className="plan-link" onClick={() => openPlan(c.id)}>
+                  {c.title}
+                </button>
               </li>
             ))}
           </ul>
@@ -1203,7 +1206,11 @@ export default function Today() {
               <li key={c.id} className="card done">
                 <div className="commitment-head">
                   <div>
-                    <p className="commitment-title struck">{c.title}</p>
+                    <p className="commitment-title struck">
+                      <button className="plan-link" onClick={() => openPlan(c.id)}>
+                        {c.title}
+                      </button>
+                    </p>
                     {/* Two ways to close something, and they mean different
                         things, so the card says which one happened. */}
                     <p className="muted small">

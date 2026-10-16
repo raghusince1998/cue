@@ -188,8 +188,10 @@ export const plans: Record<string, string> = {
   'Or all together, as one plan with a list': 'या सब एक साथ, एक प्लान और उसकी लिस्ट बनाकर',
   'Add all {n} as one plan': 'सभी {n} को एक प्लान में जोड़ें',
   'Day by day': 'दिन-ब-दिन',
-  'Nothing planned yet. Bookings found in your email, and plans you add here, show up day by day.':
-    'अभी कुछ तय नहीं। आपके ईमेल में मिली बुकिंग और यहाँ जोड़े प्लान दिन-ब-दिन दिखेंगे।',
+  'Nothing planned yet. Bookings found in your email, and plans you add for these dates, show up day by day.':
+    'अभी कुछ तय नहीं। आपके ईमेल में मिली बुकिंग और इन तारीख़ों के लिए जोड़े प्लान दिन-ब-दिन दिखेंगे।',
+  '+ Add a plan': '+ प्लान जोड़ें',
+  'Open the trip': 'यात्रा खोलें',
   'Before you go': 'जाने से पहले',
   'Check out: {place}': 'चेक आउट: {place}',
   'Yes, remove the trip': 'हाँ, यात्रा हटाएँ',

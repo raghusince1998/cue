@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api.ts'
+import { openPlan } from '../lib/open.ts'
 import { locale, msg, t } from '../lib/i18n.tsx'
 
 /**
@@ -180,7 +181,9 @@ export function Triage({
       {report.items.map((item) => (
         <div className="triage-row" key={item.id}>
           <div className="triage-head">
-            <strong>{item.title}</strong>
+            <button className="plan-link" onClick={() => openPlan(item.id)}>
+              <strong>{item.title}</strong>
+            </button>
             <span className="muted small">
               {when(item.dueAt)} · {t('{n} days ago', { n: item.daysOverdue })}
             </span>

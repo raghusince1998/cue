@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { openPerson } from '../lib/open.ts'
 import { Link } from 'react-router-dom'
 import { KIND_LABELS, PRIORITY_LABELS, WINDOW_LABELS, hasWork, type CommitmentDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
@@ -352,14 +353,30 @@ export function CommitmentSheet({
             {(c.placeName || c.placeLabel) && (
               <div>
                 <dt>{t('Where')}</dt>
-                <dd>{[c.placeName, c.placeLabel].filter(Boolean).join(' · ')}</dd>
+                <dd>
+                  {c.placeId && c.placeName ? (
+                    <Link className="plan-link" to={`/places?place=${c.placeId}`} onClick={onClose}>
+                      {c.placeName}
+                    </Link>
+                  ) : (
+                    c.placeName
+                  )}
+                  {c.placeName && c.placeLabel ? ' · ' : ''}
+                  {c.placeLabel}
+                </dd>
               </div>
             )}
             {c.contactName && (
               <div>
                 <dt>{t('With')}</dt>
                 <dd>
-                  {c.contactName}
+                  {c.contactId ? (
+                    <button className="plan-link" onClick={() => openPerson(c.contactId!)}>
+                      {c.contactName}
+                    </button>
+                  ) : (
+                    c.contactName
+                  )}
                   {c.contactPhone && (
                     <>
                       {' · '}
@@ -397,7 +414,15 @@ export function CommitmentSheet({
             {c.fromTitle && (
               <div>
                 <dt>{t('Came from')}</dt>
-                <dd>{t('The meeting “{title}”', { title: c.fromTitle })}</dd>
+                <dd>
+                  {c.fromId && onOpenOther ? (
+                    <button className="plan-link" onClick={() => onOpenOther(c.fromId!)}>
+                      {t('The meeting “{title}”', { title: c.fromTitle })}
+                    </button>
+                  ) : (
+                    t('The meeting “{title}”', { title: c.fromTitle })
+                  )}
+                </dd>
               </div>
             )}
             {c.scheduleTitle && (

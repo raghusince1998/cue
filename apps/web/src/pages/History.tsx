@@ -40,6 +40,7 @@ import { api } from '../lib/api.ts'
 import { locale, msg, rich, t } from '../lib/i18n.tsx'
 import { readNotes } from '../lib/sample.ts'
 import { openAdd } from '../lib/addSheet.ts'
+import { openPlan } from '../lib/open.ts'
 import { relativeDay } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
 import { VisitEditor } from '../components/VisitEditor.tsx'
@@ -145,7 +146,15 @@ export default function History() {
               </span>
 
               <div className="tile-body">
-                <p className="tile-title">{v.title}</p>
+                <p className="tile-title">
+                  {v.kind === 'done' || v.kind === 'cancelled' ? (
+                    <button className="plan-link" onClick={() => openPlan(v.id)}>
+                      {v.title}
+                    </button>
+                  ) : (
+                    v.title
+                  )}
+                </p>
                 <p className="tile-sub">
                   {when.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })} ·{' '}
                   {relativeDay(v.at)}

@@ -6998,6 +6998,21 @@ a.link-btn:hover {
   gap: 6px;
 }
 
+/* The weekly review's bars open that day in the week view. */
+button.week-bar {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+button.week-bar:hover .week-bar-fill,
+button.week-bar:focus-visible .week-bar-fill {
+  filter: brightness(1.15);
+}
+
 /* toast(): a line at the bottom for what just happened. Above the tab bar on a phone. */
 .toasts {
   position: fixed;

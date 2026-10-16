@@ -10,6 +10,7 @@ import { Search } from './components/Search.tsx'
 import { AddPanel } from './components/AddPanel.tsx'
 import { CallTracker } from './components/CallTracker.tsx'
 import { Toasts } from './components/Toasts.tsx'
+import { Opener } from './components/Opener.tsx'
 import { api } from './lib/api.ts'
 import { useOpenAdd, type AddOptions } from './lib/addSheet.ts'
 import { resyncPush } from './lib/push.ts'
@@ -403,6 +404,9 @@ export default function App() {
       <CallTracker />
 
       <Toasts />
+
+      {/* Whatever openPlan / openPerson / openTrip asked for, over this screen. */}
+      <Opener />
 
       {addOpen && (
         <Modal title={t('Add')} onClose={() => setAddOpen(false)} closeOnBackdrop={false}>

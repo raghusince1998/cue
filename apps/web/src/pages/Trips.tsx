@@ -31,7 +31,8 @@ function NewTrip({
   onCreated,
   prefill,
 }: {
-  onCreated: () => void
+  /** With the trip's id when it should open now: things were saved for there. */
+  onCreated: (openId?: string) => void
   /** "Plan a trip" on a place in Want to visit: the form opens with it filled in. */
   prefill: { place: string; key: number } | null
 }) {
@@ -99,16 +100,29 @@ function NewTrip({
               </li>
             ))}
           </ul>
-          <button
-            className="primary"
-            onClick={() => {
-              setFound(null)
-              setOpen(false)
-              onCreated()
-            }}
-          >
-            {t('OK')}
-          </button>
+          <div className="row">
+            <button
+              className="primary"
+              onClick={() => {
+                const id = found.trip.id
+                setFound(null)
+                setOpen(false)
+                onCreated(id)
+              }}
+            >
+              {t('Open the trip')}
+            </button>
+            <button
+              className="ghost"
+              onClick={() => {
+                setFound(null)
+                setOpen(false)
+                onCreated()
+              }}
+            >
+              {t('Later')}
+            </button>
+          </div>
         </div>
       </Modal>
     )
@@ -446,7 +460,13 @@ export default function Trips() {
       {/* Trips on the left; what you want to do in places, beside them. */}
       <div className="trips-layout">
       <div className="trips-main stack">
-      <NewTrip onCreated={load} prefill={prefill} />
+      <NewTrip
+        onCreated={(id) => {
+          void load()
+          if (id) setOpenId(id)
+        }}
+        prefill={prefill}
+      />
 
       {trips.length === 0 && (
         <div className="blank">

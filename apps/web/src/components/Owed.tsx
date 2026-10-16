@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { formatRupees, owedMessage } from '@cue/shared'
 import { api } from '../lib/api.ts'
+import { openPerson } from '../lib/open.ts'
 import { rich, t } from '../lib/i18n.tsx'
 import { dayLabel, relativeDay } from '../lib/time.ts'
 import { waNumber } from './PersonSheet.tsx'
@@ -122,6 +123,11 @@ export function OwedRow({
       </button>
       {!compact && <strong className="owed-amount">{formatRupees(person.totalPaise)}</strong>}
       <div className="owed-actions">
+        {person.contactId && !compact && (
+          <button className="ghost tiny-btn" onClick={() => openPerson(person.contactId!)}>
+            {t('Their page')}
+          </button>
+        )}
         <button className="ghost tiny-btn" onClick={() => void remind()} disabled={busy}>
           {person.phone ? t('Remind') : t('Remind…')}
         </button>

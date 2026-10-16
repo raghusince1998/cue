@@ -12,6 +12,7 @@ import {
 import { ApiError, api } from '../lib/api.ts'
 import { locale, msg, t } from '../lib/i18n.tsx'
 import { Checklist } from './Checklist.tsx'
+import { openAdd } from '../lib/addSheet.ts'
 import { CommitmentSheet } from './CommitmentSheet.tsx'
 
 interface TripDetailResponse {
@@ -363,9 +364,14 @@ export function TripDetail({
 
       <span className="label-text">{t('Day by day')}</span>
       {plan.before.length === 0 && plan.days.length === 0 ? (
-        <p className="muted small">
-          {t('Nothing planned yet. Bookings found in your email, and plans you add here, show up day by day.')}
-        </p>
+        <div className="stack tight">
+          <p className="muted small">
+            {t('Nothing planned yet. Bookings found in your email, and plans you add for these dates, show up day by day.')}
+          </p>
+          <button className="ghost small-btn fit-btn" onClick={() => openAdd()}>
+            {t('+ Add a plan')}
+          </button>
+        </div>
       ) : (
         <div className="trip-days">
           {plan.before.length > 0 && (

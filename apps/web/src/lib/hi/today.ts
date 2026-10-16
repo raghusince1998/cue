@@ -140,7 +140,7 @@ export const today: Record<string, string> = {
   now: 'अभी',
   done: 'हो गया',
   'Nothing booked between 8 am and 9 pm.': 'सुबह 8 से रात 9 बजे के बीच कुछ बुक नहीं।',
-  'Sometime today: {titles}': 'आज कभी भी: {titles}',
+  'Sometime today:': 'आज कभी भी:',
   'Check in today': 'आज पूछना है',
   'Still need follow-ups': 'फ़ॉलो-अप अभी बाकी',
 

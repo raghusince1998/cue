@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { WINDOW_LABELS, type IntentionDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { getFix } from '../lib/geo.ts'
@@ -47,6 +48,7 @@ export function NearbyIntentions() {
     }
   }, [])
 
+  const navigate = useNavigate()
   if (dismissed || near.length === 0) return null
 
   // They are all within the same radius, so the closest names the place.
@@ -71,9 +73,14 @@ export function NearbyIntentions() {
           ))}
         </ul>
       </div>
-      <button className="ghost small-btn" onClick={() => setDismissed(true)}>
-        {t('Not now')}
-      </button>
+      <div className="row">
+        <button className="ghost small-btn" onClick={() => navigate('/trips')}>
+          {t('See them')}
+        </button>
+        <button className="ghost small-btn" onClick={() => setDismissed(true)}>
+          {t('Not now')}
+        </button>
+      </div>
     </div>
   )
 }

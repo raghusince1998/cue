@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth.tsx'
 import { announceChange } from '../lib/changes.ts'
 import { t } from '../lib/i18n.tsx'
 import { openAdd } from '../lib/addSheet.ts'
+import { openPlan } from '../lib/open.ts'
 import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
 import { waitingWhat } from './Nudge.tsx'
 
@@ -205,7 +206,9 @@ export function AccountSheet({
           <span className="label-text">{t('Coming up')}</span>
           {o.nextMeetings.map((m) => (
             <p key={m.id} className="person-line">
-              <strong>{m.title}</strong>
+              <button className="plan-link" onClick={() => openPlan(m.id)}>
+                <strong>{m.title}</strong>
+              </button>
               <span className="muted small">
                 {' '}
                 · {formatDateTime(m.dueAt)} · {relativeDay(m.dueAt)}
@@ -224,7 +227,9 @@ export function AccountSheet({
               <div className="your-day-line" key={c.id}>
                 <span>
                   {c.waitingOn ? `${c.waitingOn}: ` : ''}
-                  {waitingWhat(c)}
+                  <button className="plan-link" onClick={() => openPlan(c.id)}>
+                    {waitingWhat(c)}
+                  </button>
                   <span className={`small ${isDue ? 'due-now' : 'muted'}`}>
                     {' '}
                     · {isDue ? t('check in now') : t('check in {day}', { day: dayLabel(c.dueAt) })}
@@ -245,7 +250,9 @@ export function AccountSheet({
           {o.owe.map((c) => (
             <div className="your-day-line" key={c.id}>
               <span>
-                {c.title}
+                <button className="plan-link" onClick={() => openPlan(c.id)}>
+                  {c.title}
+                </button>
                 <span className="muted small"> · {t('due {day}', { day: dayLabel(c.dueAt) })}</span>
               </span>
               <button className="ghost tiny-btn" onClick={() => void close(c.id)} disabled={busy}>
@@ -262,7 +269,10 @@ export function AccountSheet({
           <ul className="plain person-followups">
             {o.pastMeetings.map((m) => (
               <li key={m.id}>
-                {m.title} <span className="muted small">· {dayLabel(m.dueAt)}</span>
+                <button className="plan-link" onClick={() => openPlan(m.id)}>
+                  {m.title}
+                </button>{' '}
+                <span className="muted small">· {dayLabel(m.dueAt)}</span>
               </li>
             ))}
           </ul>

@@ -563,16 +563,24 @@ function ItemSheet({
       <span className="label-text">{t('History')}</span>
       <ul className="plain tracker-history">
         {[
-          ...item.events.map((e) => ({ at: e.at, text: t(stageOf(key, e.to)?.label ?? e.to) })),
+          ...item.events.map((e) => ({ at: e.at, text: t(stageOf(key, e.to)?.label ?? e.to), planId: null })),
           ...past.map((p) => ({
             at: p.dueAt,
             text: p.status === 'cancelled' ? t('{title} (cancelled)', { title: p.title }) : p.title,
+            planId: p.id,
           })),
         ]
           .sort((a, b) => a.at.localeCompare(b.at))
           .map((h, i) => (
             <li key={i}>
-              <span className="muted">{dayLabel(h.at)}</span> · {h.text}
+              <span className="muted">{dayLabel(h.at)}</span> ·{' '}
+              {h.planId ? (
+                <button className="plan-link" onClick={() => setPlanOpen(h.planId)}>
+                  {h.text}
+                </button>
+              ) : (
+                h.text
+              )}
             </li>
           ))}
       </ul>

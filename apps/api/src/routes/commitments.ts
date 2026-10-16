@@ -93,6 +93,7 @@ const selection = {
   fromTitle: sql<string | null>`(
     select f.title from commitments f where f.id = ${schema.commitments.fromCommitmentId}
   )`,
+  fromId: schema.commitments.fromCommitmentId,
   scheduleTitle: sql<string | null>`(
     select s.title from schedules s where s.id = ${schema.commitments.scheduleId}
   )`,
@@ -143,6 +144,7 @@ function toDTO(row: SelectedRow): CommitmentDTO {
     history: Boolean(row.history),
     scheduleTitle: (row.scheduleTitle as string | null) ?? null,
     fromTitle: (row.fromTitle as string | null) ?? null,
+    fromId: (row.fromId as string | null) ?? null,
     checklistCount: Number(row.checklistCount ?? 0),
     checklistDone: Number(row.checklistDone ?? 0),
     notes: (row.notes as string | null) ?? null,

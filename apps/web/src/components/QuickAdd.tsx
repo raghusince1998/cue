@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { openPlan, openTrip } from '../lib/open.ts'
 import { useNavigate } from 'react-router-dom'
 import { ApiError, api } from '../lib/api.ts'
 import { DictateButton } from './DictateButton.tsx'
@@ -172,6 +173,20 @@ export function QuickAdd({
   const [focused, setFocused] = useState(false)
   const [plan, setPlan] = useState<Plan | null>(null)
   const [saved, setSaved] = useState<Saved | null>(null)
+
+  /** What "Open it" does for what was just saved: the thing itself, or its page. */
+  function openSaved(s: Saved): (() => void) | null {
+    if (s.kind === 'commitment' && !s.ids) return () => openPlan(s.id)
+    if (s.kind === 'trip') return () => openTrip(s.savedTrip?.id ?? s.id)
+    if (s.kind === 'recurrence') {
+      return () => {
+        setSaved(null)
+        onDone()
+        navigate(`/repeating?series=${s.id}`)
+      }
+    }
+    return null
+  }
   const [frequent, setFrequent] = useState<Frequent[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -622,6 +637,11 @@ export function QuickAdd({
             )}
           </div>
           <div className="row">
+            {openSaved(saved) && (
+              <button className="ghost small-btn" onClick={openSaved(saved)!}>
+                {t('Open it')}
+              </button>
+            )}
             <button className="ghost small-btn" onClick={() => void undo()} disabled={busy}>
               {t('Undo')}
             </button>

@@ -267,11 +267,16 @@ export function WeeklyReview({
 
       <section className="review-part">
         <span className="label-text">{t('Next week')}</span>
-        <div className="week-bars" role="img" aria-label={t('Booked time each day next week')}>
+        <div className="week-bars" role="group" aria-label={t('Booked time each day next week')}>
           {r.nextWeek.days.map((d) => (
-            <div
+            <button
+              type="button"
               key={d.date}
               className={`week-bar${d.date === r.nextWeek.busiest ? ' is-busiest' : ''}`}
+              onClick={() => {
+                onDone()
+                navigate(`/?view=week&date=${d.date}`)
+              }}
               title={
                 d.meetings === 1
                   ? t('{day}: {hours} booked, 1 meeting', { day: weekdayOf(d.date, 'long'), hours: hours(d.minutes) })
@@ -288,7 +293,7 @@ export function WeeklyReview({
                 style={{ height: `${Math.max(d.minutes > 0 ? 6 : 2, (d.minutes / maxMinutes) * 100)}%` }}
               />
               <span className="week-bar-day">{weekdayOf(d.date)}</span>
-            </div>
+            </button>
           ))}
         </div>
         <p className="muted small">

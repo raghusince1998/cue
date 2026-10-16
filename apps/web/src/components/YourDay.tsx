@@ -195,7 +195,15 @@ export function YourDay({
 
       {loose.length > 0 && (
         <p className="muted small">
-          {t('Sometime today: {titles}', { titles: loose.map((c) => c.title).join(', ') })}
+          {t('Sometime today:')}{' '}
+          {loose.map((c, i) => (
+            <span key={c.id}>
+              {i > 0 ? ', ' : ''}
+              <button className="plan-link" onClick={() => onOpen(c.id)}>
+                {c.title}
+              </button>
+            </span>
+          ))}
         </p>
       )}
 
@@ -206,7 +214,9 @@ export function YourDay({
             <div className="your-day-line" key={c.id}>
               <span>
                 <span className="waiting-who">{c.waitingOn}</span>
-                {c.title.replace(/^Waiting on [^:]+:\s*/i, '')}
+                <button className="plan-link" onClick={() => onOpen(c.id)}>
+                  {c.title.replace(/^Waiting on [^:]+:\s*/i, '')}
+                </button>
               </span>
               <button className="ghost small-btn" onClick={() => onNudge(c)}>
                 {t('Nudge')}
@@ -221,7 +231,9 @@ export function YourDay({
           <span className="label-text">{t('Still need follow-ups')}</span>
           {toWrap.map((c) => (
             <div className="your-day-line" key={c.id}>
-              <span>{c.title}</span>
+              <button className="plan-link" onClick={() => onOpen(c.id)}>
+                {c.title}
+              </button>
               <button className="ghost small-btn" onClick={() => onWrapUp(c)}>
                 {t('Add follow-ups')}
               </button>
