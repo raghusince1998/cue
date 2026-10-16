@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { CommitmentDTO, PlaceDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { formatDateTime } from '../lib/time.ts'
@@ -21,13 +22,26 @@ interface PlaceDetail {
 }
 
 export default function Places() {
-  const [places, setPlaces] = useState<PlaceDTO[]>([])
-  const [openId, setOpenId] = useState<string | null>(null)
+  const [places, setPlaces] = useState<PlaceDTO[] | null>(null)
+  const [error, setError] = useState(false)
+  const [params, setParams] = useSearchParams()
+  // /places?place=<id>: a search result, opened.
+  const [openId, setOpenId] = useState<string | null>(() => params.get('place'))
   const [detail, setDetail] = useState<PlaceDetail | null>(null)
 
+  const load = () => {
+    setError(false)
+    void api<PlaceDTO[]>('/places')
+      .then(setPlaces)
+      .catch(() => setError(true))
+  }
+  useEffect(load, [])
+
   useEffect(() => {
-    void api<PlaceDTO[]>('/places').then(setPlaces)
-  }, [])
+    if (!params.has('place')) return
+    params.delete('place')
+    setParams(params, { replace: true })
+  }, [params, setParams])
 
   useEffect(() => {
     if (!openId) {
@@ -36,6 +50,26 @@ export default function Places() {
     }
     void api<PlaceDetail>(`/places/${openId}`).then(setDetail)
   }, [openId])
+
+  if (error) {
+    return (
+      <div className="stack">
+        <h1 className="page-title">{t('Places')}</h1>
+        <p className="error small">{t('Could not load your places just now.')}</p>
+        <button className="ghost small-btn fit-btn" onClick={load}>
+          {t('Try again')}
+        </button>
+      </div>
+    )
+  }
+
+  if (places === null) {
+    return (
+      <div className="boot">
+        <span className="spinner" />
+      </div>
+    )
+  }
 
   if (places.length === 0) {
     return (
@@ -52,6 +86,7 @@ export default function Places() {
 
   return (
     <div className="stack">
+      <h1 className="page-title">{t('Places')}</h1>
       <ul className="list">
         {places.map((p) => (
           <li key={p.id} className="card">

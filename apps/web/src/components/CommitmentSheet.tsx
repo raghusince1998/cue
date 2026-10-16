@@ -381,7 +381,10 @@ export function CommitmentSheet({
               <div>
                 <dt>{t('Repeats')}</dt>
                 <dd>
-                  {t('One of a repeating plan')} · <Link to="/repeating">{t('See the series')}</Link>
+                  {t('One of a repeating plan')} ·{' '}
+                  <Link to={`/repeating?series=${c.recurrenceId}`} onClick={onClose}>
+                    {t('See the series')}
+                  </Link>
                 </dd>
               </div>
             )}
@@ -401,7 +404,10 @@ export function CommitmentSheet({
               <div>
                 <dt>{t('Part of')}</dt>
                 <dd>
-                  {c.scheduleTitle} · <Link to="/repeating">{t('See the schedule')}</Link>
+                  {c.scheduleTitle} ·{' '}
+                  <Link to="/repeating" onClick={onClose}>
+                    {t('See the schedule')}
+                  </Link>
                 </dd>
               </div>
             )}

@@ -211,11 +211,14 @@ async function processOne(claim: ClaimedReminder) {
     tag: `commitment-${commitment.id}`,
     // Lets the notification offer a Call button instead of only a nag.
     phone: row.contactPhone ?? undefined,
-    // Deliberately the root route: the service worker appends ?action=&id= and
-    // the Today screen acts on them. A deeper path would hit the SPA catch-all,
-    // which redirects to "/" and drops the query string with it.
-    url: waiting ? `/?nudge=${commitment.id}` : '/',
-    commitmentId: commitment.id,
+    // The root route, so Today opens it: the plan itself (or, for a check-in,
+    // the nudge). A deeper path would hit the SPA catch-all, which redirects
+    // to "/" and drops the query string with it.
+    url: waiting ? `/?nudge=${commitment.id}` : `/?edit=${commitment.id}`,
+    // Done and Snooze only where they cannot do harm: snoozing a train moves
+    // the train, a calendar meeting is the calendar's, and a focus block ends
+    // from its own button.
+    commitmentId: booked || mirrored || focusing ? undefined : commitment.id,
   })
 
   await db

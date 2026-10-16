@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { FILLABLE, sectionsFor } from '@cue/shared'
 import { api, getToken, setToken } from './api.ts'
 import { useOnChange } from './changes.ts'
+import { stopPushHere } from './push.ts'
 
 export interface Me {
   id: string
@@ -106,8 +107,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(() => {
-    setToken(null)
-    setMe(null)
+    // Told while still signed in, so the request carries the token; never
+    // waited on for more than a moment.
+    void Promise.race([stopPushHere(), new Promise((r) => setTimeout(r, 1500))]).finally(() => {
+      setToken(null)
+      setMe(null)
+    })
   }, [])
 
   const saveUses = useCallback(async (uses: string[]) => {

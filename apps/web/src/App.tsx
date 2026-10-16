@@ -9,6 +9,7 @@ import { Settings } from './components/Settings.tsx'
 import { Search } from './components/Search.tsx'
 import { AddPanel } from './components/AddPanel.tsx'
 import { CallTracker } from './components/CallTracker.tsx'
+import { Toasts } from './components/Toasts.tsx'
 import { api } from './lib/api.ts'
 import { useOpenAdd, type AddOptions } from './lib/addSheet.ts'
 import { resyncPush } from './lib/push.ts'
@@ -206,10 +207,26 @@ export default function App() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  // "Connect email" on a Today card: Settings, open at that section.
+  // "Found in your email", or anything else that names Settings: open at that section.
   useEffect(() => {
     if (new URLSearchParams(location.search).has('settings')) setSettingsOpen(true)
   }, [location.search])
+
+  // A notification tapped while Cue is open: the service worker hands over
+  // the address, and the app goes there without reloading.
+  useEffect(() => {
+    const worker = navigator.serviceWorker
+    if (!worker) return
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data as { type?: string; url?: string } | null
+      if (data?.type !== 'cue:open' || !data.url?.startsWith('/')) return
+      e.ports[0]?.postMessage('ok')
+      setSearchOpen(false)
+      navigate(data.url)
+    }
+    worker.addEventListener('message', onMessage)
+    return () => worker.removeEventListener('message', onMessage)
+  }, [navigate])
   /** Set while turning an old /log link into the sheet, so the redirect that
    *  follows does not close the sheet it just opened. */
   const openedFromLink = useRef(false)
@@ -237,8 +254,10 @@ export default function App() {
       return
     }
     // Anything inside the sheet that navigates — a saved trip opening Trips —
-    // has left the sheet behind, so it closes.
+    // has left the sheet behind, so it closes. Search too: a result's link
+    // has taken you somewhere.
     setAddOpen(false)
+    setSearchOpen(false)
   }, [location.pathname])
 
   useEffect(() => {
@@ -368,6 +387,8 @@ export default function App() {
           <Route path="/hiring" element={<Tracker key="hiring" board="hiring" />} />
           <Route path="/deals" element={<Tracker key="deals" board="deals" />} />
           <Route path="/bills" element={<Bills />} />
+          {/* A reset link opened while signed in still sets the new password. */}
+          <Route path="/reset" element={<ResetPassword />} />
           <Route path="/exams" element={<Exams />} />
           <Route path="/admin/notices" element={me?.isAdmin ? <NoticeReview /> : <Navigate to="/" replace />} />
           {/* Just signed in or up: Cue Exams opens on the exams. */}
@@ -380,6 +401,8 @@ export default function App() {
 
       {/* Asks how a call went when you come back from it. */}
       <CallTracker />
+
+      <Toasts />
 
       {addOpen && (
         <Modal title={t('Add')} onClose={() => setAddOpen(false)} closeOnBackdrop={false}>

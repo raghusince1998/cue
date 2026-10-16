@@ -653,7 +653,11 @@ export async function commitmentRoutes(app: FastifyInstance) {
   app.post('/commitments/:id/done', async (req, reply) => {
     const { orgId } = scope(req)
     const { id } = req.params as { id: string }
-    if (!(await owned(orgId, id))) return reply.code(404).send({ error: 'not_found' })
+    const row = await owned(orgId, id)
+    // A stale notification's "Mark done" must not bring back something deleted.
+    if (!row || row.status === 'deleted') return reply.code(404).send({ error: 'not_found' })
+    // Already done: say so, and keep when it was done.
+    if (row.status === 'done') return { ok: true, already: true }
 
     await db.transaction(async (tx) => {
       await tx
@@ -869,7 +873,11 @@ export async function commitmentRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string }
     const { minutes } = snoozeInput.parse(req.body)
 
-    if (!(await owned(orgId, id))) return reply.code(404).send({ error: 'not_found' })
+    const row = await owned(orgId, id)
+    if (!row || row.status === 'deleted') return reply.code(404).send({ error: 'not_found' })
+    // Snoozing reopens nothing: a stale notification's button on something
+    // already done or cancelled leaves it as it is.
+    if (row.status !== 'pending') return reply.code(409).send({ error: 'not_open', status: row.status })
 
     const nextDue = new Date(Date.now() + minutes * 60_000)
 

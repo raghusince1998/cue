@@ -35,6 +35,8 @@ import { Triage } from '../components/Triage.tsx'
 import { Search } from '../components/Search.tsx'
 import { CalendarView, type CalendarMode } from '../components/CalendarView.tsx'
 import { useOnChange } from '../lib/changes.ts'
+import { toast } from '../lib/toast.ts'
+import { ApiError } from '../lib/api.ts'
 import { readNotes } from '../lib/sample.ts'
 import { locale, t } from '../lib/i18n.tsx'
 
@@ -428,7 +430,7 @@ export default function Today() {
   // ?edit=<id>: a plan's own link, from anywhere, opens that plan.
   useEffect(() => {
     const id = params.get('edit')
-    if (!id) return
+    if (!id || params.has('action')) return
     params.delete('edit')
     setParams(params, { replace: true })
     openPlan(id)
@@ -501,18 +503,17 @@ export default function Today() {
     setDayOpen(true)
   }, [params, setParams])
 
-  // ?nudge=<id>: a check-in reminder, tapped — straight to the message.
+  // ?nudge=<id>: a check-in reminder, tapped — straight to the message; if it
+  // was settled meanwhile, the plan itself, which says so.
   useEffect(() => {
     const id = params.get('nudge')
-    if (!id) return
+    if (!id || params.has('action')) return
     params.delete('nudge')
     setParams(params, { replace: true })
     void api<CommitmentDTO>(`/commitments/${id}`)
-      .then((c) => {
-        if (c.status === 'pending') setNudging(c)
-      })
-      .catch(() => undefined)
-  }, [params, setParams])
+      .then((c) => (c.status === 'pending' ? setNudging(c) : openPlan(c.id)))
+      .catch(() => toast(t('That one is no longer here.'), 'error'))
+  }, [params, setParams, openPlan])
 
   // ?focus=waiting: the summary's "waiting on others" count, tapped.
   useEffect(() => {
@@ -526,28 +527,31 @@ export default function Today() {
   }, [params, setParams, loading])
 
   // ?wrapup=<id>: the "just ended — any follow-ups?" notification, tapped.
+  // Already wrapped up from Today: the meeting itself, with what came of it.
   useEffect(() => {
     const id = params.get('wrapup')
     if (!id) return
     params.delete('wrapup')
     setParams(params, { replace: true })
     void api<CommitmentDTO>(`/commitments/${id}`)
-      .then((c) => {
-        if (c.status === 'pending') setWrapping(c)
-      })
-      .catch(() => undefined)
-  }, [params, setParams])
+      .then((c) => (c.status === 'pending' ? setWrapping(c) : openPlan(c.id)))
+      .catch(() => toast(t('That one is no longer here.'), 'error'))
+  }, [params, setParams, openPlan])
 
   // ?view=week&date=YYYY-MM-DD: switch to that view on that day, then take
   // the parameters out of the address so a refresh does not keep jumping back.
   useEffect(() => {
     const linked = params.get('view')
-    if (linked !== 'week' && linked !== 'month') return
+    if (linked !== 'week' && linked !== 'month' && linked !== 'agenda') return
     setView(linked)
     setFocusDate(params.get('date'))
     params.delete('view')
     params.delete('date')
     setParams(params, { replace: true })
+    // The summary's "today": the list, from its top.
+    if (linked === 'agenda') {
+      requestAnimationFrame(() => document.querySelector('.today-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    }
   }, [params, setParams])
 
   const load = useCallback(async () => {
@@ -587,18 +591,33 @@ export default function Today() {
   // Notification action buttons deep-link back here rather than calling the API
   // from the service worker, which has no access to the auth token.
   useEffect(() => {
-    if (handledDeepLink.current) return
     const action = params.get('action')
     const id = params.get('id')
-    if (!action || !id) return
-
+    // Ready for the next one: with Cue left open, each button tapped arrives here.
+    if (!action || !id) {
+      handledDeepLink.current = false
+      return
+    }
+    if (handledDeepLink.current) return
     handledDeepLink.current = true
+    const settled = () => setParams({}, { replace: true })
+    const failed = (err: unknown) =>
+      toast(
+        err instanceof ApiError && (err.status === 404 || err.status === 409)
+          ? t('That one is already closed.')
+          : t('Could not reach Cue. Try again in a moment.'),
+        'error',
+      )
 
-    // "Call" from a notification: look the number up, then dial.
+    // "Call" from a notification: look the number up, then dial. No number:
+    // the plan, so the call can still be made from there.
     if (action === 'call') {
       void api<CommitmentDTO>(`/commitments/${id}`)
         .then((c) => {
-          if (!c.contactPhone) return
+          if (!c.contactPhone) {
+            openPlan(c.id)
+            return
+          }
           startCall({
             phone: c.contactPhone,
             contactId: c.contactId,
@@ -608,13 +627,20 @@ export default function Today() {
           })
           window.location.href = `tel:${c.contactPhone}`
         })
-        .finally(() => setParams({}, { replace: true }))
+        .catch(failed)
+        .finally(settled)
       return
     }
-
+    if (action !== 'done' && action !== 'snooze') {
+      settled()
+      return
+    }
     const run = action === 'done' ? complete(id) : snooze(id, 15)
-    void run.finally(() => setParams({}, { replace: true }))
-  }, [params, setParams, complete, snooze])
+    void run
+      .then(() => toast(action === 'done' ? t('Marked done.') : t('Snoozed for 15 minutes.')))
+      .catch(failed)
+      .finally(settled)
+  }, [params, setParams, complete, snooze, openPlan])
 
   if (loading) {
     return (

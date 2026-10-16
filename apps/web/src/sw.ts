@@ -120,32 +120,51 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
   const data = (event.notification.data ?? {}) as { url?: string; commitmentId?: string }
-  const target = new URL(data.url ?? '/', self.location.origin)
-
-  // The action buttons deep-link into the app rather than calling the API from
-  // here, because the worker has no access to the auth token in localStorage.
-  if (event.action === 'done' && data.commitmentId) {
-    target.searchParams.set('action', 'done')
-    target.searchParams.set('id', data.commitmentId)
+  // A button (Done, Snooze, Call) acts on the plan from Today itself — the
+  // worker has no access to the auth token — and from Today's plain address,
+  // so it is not also taken as "open this". A tap opens what it is about.
+  const acting = ['done', 'snooze', 'call'].includes(event.action) && data.commitmentId
+  const target = new URL(acting ? '/' : (data.url ?? '/'), self.location.origin)
+  if (acting) {
+    target.searchParams.set('action', event.action)
+    target.searchParams.set('id', data.commitmentId!)
   }
-  if (event.action === 'snooze' && data.commitmentId) {
-    target.searchParams.set('action', 'snooze')
-    target.searchParams.set('id', data.commitmentId)
-  }
-  // A worker cannot dial; it hands the app the intent and the page opens tel:.
-  if (event.action === 'call' && data.commitmentId) {
-    target.searchParams.set('action', 'call')
-    target.searchParams.set('id', data.commitmentId)
-  }
-
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      const existing = clients.find((c) => c.url.startsWith(self.location.origin))
-      if (existing) {
-        void existing.focus()
-        return existing.navigate(target.toString()).then(() => undefined)
-      }
-      return self.clients.openWindow(target.toString()).then(() => undefined)
-    }),
-  )
+  event.waitUntil(openIn(target))
 })
+
+/**
+ * To an open Cue, the address is handed over and it goes there in place —
+ * no reload, nothing half-typed lost. A page that does not answer (an older
+ * version still open) is navigated; with none open, a window is.
+ */
+async function openIn(target: URL): Promise<void> {
+  const controlled = await self.clients.matchAll({ type: 'window' })
+  const mine = controlled.find((c) => c.url.startsWith(self.location.origin))
+  if (mine) {
+    await mine.focus().catch(() => undefined)
+    if (await handOver(mine, target.pathname + target.search)) return
+    await mine.navigate(target.toString()).catch(() => undefined)
+    return
+  }
+  const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+  const other = all.find((c) => c.url.startsWith(self.location.origin))
+  if (other) {
+    await other.focus().catch(() => undefined)
+    const went = await other.navigate(target.toString()).catch(() => null)
+    if (went) return
+  }
+  await self.clients.openWindow(target.toString())
+}
+
+/** True when the page took the address (it answers on the channel). */
+function handOver(client: WindowClient, url: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel()
+    const timer = setTimeout(() => resolve(false), 1000)
+    channel.port1.onmessage = () => {
+      clearTimeout(timer)
+      resolve(true)
+    }
+    client.postMessage({ type: 'cue:open', url }, [channel.port2])
+  })
+}

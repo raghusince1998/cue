@@ -109,6 +109,22 @@ export async function resyncPush(): Promise<void> {
   }
 }
 
+/**
+ * Signing out: this device stops receiving the account's reminders. The
+ * browser keeps its subscription; the next person to sign in here takes it
+ * over (resyncPush), so only the server's record goes.
+ */
+export async function stopPushHere(): Promise<void> {
+  if (!pushSupported()) return
+  try {
+    const registration = await navigator.serviceWorker.getRegistration()
+    const subscription = await registration?.pushManager.getSubscription()
+    if (subscription) await api('/push/unsubscribe', { method: 'POST', body: { endpoint: subscription.endpoint } })
+  } catch {
+    // Signing out never waits on this.
+  }
+}
+
 export async function sendTestPush(): Promise<number> {
   const res = await api<{ delivered: number }>('/push/test', { method: 'POST' })
   return res.delivered

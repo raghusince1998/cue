@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { RecurrenceDTO, ScheduleDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { rich, t } from '../lib/i18n.tsx'
@@ -108,6 +109,17 @@ export default function Repeating() {
 
   // "gym every mon wed fri at 7" typed from the header lands here.
   useOnChange(() => void load())
+
+  // /repeating?series=<id>: a plan's "See the series", or a search result.
+  const [params, setParams] = useSearchParams()
+  useEffect(() => {
+    const id = params.get('series')
+    if (!id || !items) return
+    const found = items.find((i) => i.id === id)
+    if (found) setSeries(found)
+    params.delete('series')
+    setParams(params, { replace: true })
+  }, [params, setParams, items])
 
   async function stop(item: RecurrenceDTO) {
     // Worth a confirm: it removes every future occurrence in one go.

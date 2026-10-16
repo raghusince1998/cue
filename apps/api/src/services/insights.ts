@@ -7,6 +7,7 @@ import { quietItems } from './trackers.ts'
 import { occasionLabel, upcomingOccasions } from './occasions.ts'
 import { orgOf } from './keepInTouch.ts'
 import { db, schema } from '../db/index.ts'
+import { env } from '../env.ts'
 import { estimateTravel, geocode, sameLabel } from './travel.ts'
 import { canBeOverdue, takesTime } from './overdue.ts'
 
@@ -48,8 +49,8 @@ export interface Insight {
 
 const DAY_MS = 86_400_000
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-/** Matches the reminder worker's cap: past this, the chain has given up. */
-const MAX_ESCALATIONS = 4
+/** The reminder worker's cap: past this, the chain has given up. */
+const MAX_ESCALATIONS = env.maxEscalations
 
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
@@ -440,7 +441,7 @@ export async function buildInsights(userId: string, now = new Date(), language?:
           : daysAway === 1
             ? t(lang, 'You are there in 1 day: {list}.', { list })
             : t(lang, 'You are there in {n} days: {list}.', { n: daysAway, list }),
-      action: { label: t(lang, 'See the trip'), href: '/trips' },
+      action: { label: t(lang, 'See the trip'), href: `/trips?trip=${trip.id}` },
       weight: 85,
     })
   }

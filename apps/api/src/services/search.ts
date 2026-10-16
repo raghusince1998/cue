@@ -166,11 +166,11 @@ export async function searchEverything(
 
   const HREF: Record<SearchKind, (id: string) => string> = {
     commitment: (id) => `/?edit=${id}`,
-    trip: () => '/trips',
+    trip: (id) => `/trips?trip=${id}`,
     intention: () => '/trips',
     contact: () => '/people',
-    place: () => '/places',
-    recurrence: () => '/repeating',
+    place: (id) => `/places?place=${id}`,
+    recurrence: (id) => `/repeating?series=${id}`,
     visit: () => '/history',
   }
 

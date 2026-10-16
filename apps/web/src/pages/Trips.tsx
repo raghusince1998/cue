@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   STRICTNESS_LABELS,
   TIME_WINDOWS,
@@ -409,6 +410,16 @@ export default function Trips() {
 
   // "going to Agra 2 to 4 Oct" typed from the header lands here.
   useOnChange(() => void load())
+
+  // /trips?trip=<id>: a notification, an insight or a search result naming one.
+  const [params, setParams] = useSearchParams()
+  useEffect(() => {
+    const id = params.get('trip')
+    if (!id) return
+    setOpenId(id)
+    params.delete('trip')
+    setParams(params, { replace: true })
+  }, [params, setParams])
 
   if (loading) {
     return (

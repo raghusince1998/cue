@@ -218,7 +218,7 @@ export async function saveFoundBooking(
                 list,
               }),
         tag: `trip-${saved.trip.tripId}`,
-        url: '/trips',
+        url: `/trips?trip=${saved.trip.tripId}`,
         lang,
       }).catch(() => 0)
     }

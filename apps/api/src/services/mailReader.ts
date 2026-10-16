@@ -535,7 +535,8 @@ export async function runMailReading(now = new Date()): Promise<number> {
     await sendToUser(userId, {
       title: found.length === 1 ? t(lang, 'Found in your email') : t(lang, '{n} things found in your email', { n: found.length }),
       body: found.slice(0, 4).join(' · ') + (found.length > 4 ? ' …' : ''),
-      url: '/',
+      // Where the finds are listed: Profile's Email & calendars, open.
+      url: '/?settings=mail',
       tag: 'mail',
       lang,
     }).catch(() => undefined)

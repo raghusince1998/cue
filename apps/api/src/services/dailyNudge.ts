@@ -136,7 +136,7 @@ function compose(stats: DayStats, plan: TomorrowPlan, lang: Lang): { title: stri
     return {
       title: stats.overdue === 1 ? t(lang, '1 thing still open') : t(lang, '{n} things still open', { n: stats.overdue }),
       body: t(lang, 'Nothing booked tomorrow, so there is room to clear them.'),
-      url: '/',
+      url: '/?triage=all',
     }
   }
 

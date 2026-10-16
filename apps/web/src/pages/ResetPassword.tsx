@@ -65,7 +65,7 @@ export default function ResetPassword() {
             Cue
           </div>
           <p className="error">{t('That link is missing its token. Ask for a new one.')}</p>
-          <button className="ghost" onClick={() => navigate('/')}>
+          <button className="ghost" onClick={() => navigate('/login')}>
             {t('Back to sign in')}
           </button>
         </div>
@@ -82,7 +82,7 @@ export default function ResetPassword() {
             Cue
           </div>
           <p>{t('Your password is changed. Sign in with the new one.')}</p>
-          <button className="primary" onClick={() => navigate('/')}>
+          <button className="primary" onClick={() => navigate('/login')}>
             {t('Sign in')}
           </button>
         </div>
@@ -130,7 +130,7 @@ export default function ResetPassword() {
           {busy ? t('Changing…') : t('Change my password')}
         </button>
 
-        <button type="button" className="link" onClick={() => navigate('/')}>
+        <button type="button" className="link" onClick={() => navigate('/login')}>
           {t('Back to sign in')}
         </button>
       </form>

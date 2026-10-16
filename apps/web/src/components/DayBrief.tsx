@@ -234,18 +234,18 @@ export function DayBrief({
       )}
 
       <div className="brief-stats">
-        <button className="stat" onClick={() => onNavigate('/')}>
+        <button className="stat" onClick={() => onNavigate('/?view=agenda')}>
           <strong>{summary.todayCount}</strong>
           <span>{ahead ? t('tomorrow') : t('today')}</span>
         </button>
         <button
           className={`stat${summary.overdue > 0 ? ' is-alert' : ''}`}
-          onClick={() => onNavigate('/')}
+          onClick={() => onNavigate(summary.overdue > 0 ? '/?triage=all' : '/?view=agenda')}
         >
           <strong>{summary.overdue}</strong>
           <span>{t('overdue')}</span>
         </button>
-        <button className="stat" onClick={() => onNavigate('/')}>
+        <button className="stat" onClick={() => onNavigate('/?view=week')}>
           <strong>{summary.weekAhead}</strong>
           <span>{t('this week')}</span>
         </button>

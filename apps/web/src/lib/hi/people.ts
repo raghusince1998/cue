@@ -235,6 +235,8 @@ export const people: Record<string, string> = {
     'ऊपर वाले {n} फ़ॉलो-अप बने रहेंगे — मीटिंग का नोट हटाने से आपका किया वादा ग़ायब नहीं होता।',
 
   // Places
+  Places: 'जगहें',
+  'Could not load your places just now.': 'अभी आपकी जगहें लोड नहीं हो सकीं।',
   'No places yet.': 'अभी कोई जगह नहीं।',
   'The first time you log a visit somewhere new, it gets saved here and recognised automatically on every visit after that.':
     'किसी नई जगह पर पहली बार मुलाकात दर्ज करने पर वह यहाँ सहेजी जाती है, और उसके बाद हर बार अपने आप पहचान ली जाती है।',

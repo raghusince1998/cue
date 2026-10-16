@@ -163,14 +163,21 @@ export default function Expenses() {
   }, [])
 
   // Arriving from an insight: "Make a claim", "See claims", "Remind them".
+  // The sheet waits for the lists, or it would open empty and stay so.
+  const [linked, setLinked] = useState<'claim' | 'paid' | null>(null)
   useEffect(() => {
     const params = new URLSearchParams(location.search)
-    if (params.has('claim')) setSheet('claim')
-    else if (params.has('paid')) setSheet('paid')
+    if (params.has('claim')) setLinked('claim')
+    else if (params.has('paid')) setLinked('paid')
     else if (params.has('owed')) setOwedFocus(true)
     else return
     navigate('/expenses', { replace: true })
   }, [location.search, navigate])
+  useEffect(() => {
+    if (!linked || !data) return
+    setSheet(linked)
+    setLinked(null)
+  }, [linked, data])
 
   useEffect(() => {
     if (owedFocus) document.getElementById('owed')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
