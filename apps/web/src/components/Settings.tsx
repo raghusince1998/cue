@@ -65,7 +65,7 @@ function label(hour: number): string {
 
 type Tab = 'profile' | 'settings'
 
-export function Settings({ onClose }: { onClose: () => void }) {
+export function Settings() {
   // Email and calendars live on Profile, together: back from Google or
   // Microsoft's sign-in, that is where the result is, already open.
   const [tab, setTab] = useState<Tab>('profile')
@@ -109,16 +109,14 @@ export function Settings({ onClose }: { onClose: () => void }) {
     }
   }
 
-  async function testBrief() {
+  /** A notification sent now, as it would arrive — or why there is nothing to send. */
+  async function sendTest(path: string, emptyText: string) {
     setBusy(true)
     try {
-      const res = await api<{ delivered: number; title: string | null; empty?: boolean }>(
-        '/me/preferences/test-brief',
-        { method: 'POST' },
-      )
+      const res = await api<{ delivered: number; title: string | null; empty?: boolean }>(path, { method: 'POST' })
       setMessage(
         res.empty
-          ? t('Nothing booked today and nothing outstanding, so there is nothing to brief — it stays quiet on days like this.')
+          ? emptyText
           : res.delivered > 0
             ? t('Sent: “{title}”', { title: res.title ?? '' })
             : t('No device registered — enable notifications on the Today screen first.'),
@@ -130,84 +128,25 @@ export function Settings({ onClose }: { onClose: () => void }) {
     }
   }
 
-  async function testReview() {
-    setBusy(true)
-    try {
-      const res = await api<{ delivered: number; title: string | null; empty?: boolean }>(
-        '/review/week/test',
-        { method: 'POST' },
-      )
-      setMessage(
-        res.empty
-          ? t('Nothing happened this week and nothing is booked next, so there is nothing to review yet.')
-          : res.delivered > 0
-            ? t('Sent: “{title}”', { title: res.title ?? '' })
-            : t('No device registered — enable notifications on the Today screen first.'),
-      )
-    } catch (err) {
-      setMessage(errorText(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function testExamWeek() {
-    setBusy(true)
-    try {
-      const res = await api<{ delivered: number; title: string | null; empty?: boolean }>('/me/preferences/test-exam-week', { method: 'POST' })
-      setMessage(
-        res.empty
-          ? t('No study sessions, mock tests or exam dates this week yet, so there is nothing to report.')
-          : res.delivered > 0
-            ? t('Sent: “{title}”', { title: res.title ?? '' })
-            : t('No device registered — enable notifications on the Today screen first.'),
-      )
-    } catch (err) {
-      setMessage(errorText(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function testReport() {
-    setBusy(true)
-    try {
-      const res = await api<{ delivered: number; title: string | null; empty?: boolean }>(
-        '/me/preferences/test-report',
-        { method: 'POST' },
-      )
-      setMessage(
-        res.empty
-          ? t('Nothing has happened today yet, so there is no report to send.')
-          : res.delivered > 0
-            ? t('Sent: “{title}”', { title: res.title ?? '' })
-            : t('No device registered — enable notifications on the Today screen first.'),
-      )
-    } catch (err) {
-      setMessage(errorText(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function testNudge() {
-    setBusy(true)
-    try {
-      const res = await api<{ delivered: number; title: string; body: string }>(
-        '/me/preferences/test-nudge',
-        { method: 'POST' },
-      )
-      setMessage(
-        res.delivered > 0
-          ? t('Sent: “{title}”', { title: res.title })
-          : t('No device registered — enable notifications on the Today screen first.'),
-      )
-    } catch (err) {
-      setMessage(errorText(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+  const testBrief = () =>
+    sendTest(
+      '/me/preferences/test-brief',
+      t('Nothing booked today and nothing outstanding, so there is nothing to brief — it stays quiet on days like this.'),
+    )
+  const testReview = () =>
+    sendTest(
+      '/review/week/test',
+      t('Nothing happened this week and nothing is booked next, so there is nothing to review yet.'),
+    )
+  const testExamWeek = () =>
+    sendTest(
+      '/me/preferences/test-exam-week',
+      t('No study sessions, mock tests or exam dates this week yet, so there is nothing to report.'),
+    )
+  const testReport = () =>
+    sendTest('/me/preferences/test-report', t('Nothing has happened today yet, so there is no report to send.'))
+  // The evening nudge always has something to say.
+  const testNudge = () => sendTest('/me/preferences/test-nudge', '')
 
   if (!prefs && prefsFailed) {
     return <LoadFailed what={t('Could not load your settings just now.')} onRetry={loadPrefs} />

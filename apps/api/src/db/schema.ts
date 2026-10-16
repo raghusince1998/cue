@@ -26,7 +26,7 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 /**
  * Every tenant-owned row carries `orgId`. Adding that column later is the
  * genuinely painful migration, so it is here from the first commit even though
- * isolation is currently enforced in the query layer (see src/db/scope.ts)
+ * isolation is currently enforced in the query layer (scope() in src/auth.ts)
  * rather than by Postgres row-level security.
  */
 

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, api } from '../lib/api.ts'
+import { api } from '../lib/api.ts'
 import { announceChange } from '../lib/changes.ts'
 import { relativeDay } from '../lib/time.ts'
 import { msg, t } from '../lib/i18n.tsx'
-import { errorText } from '../lib/errors.ts'
+import { connectionError, outcomeOf } from '../lib/oauthOutcome.ts'
 
 interface ProviderInfo {
   id: string
@@ -41,37 +41,6 @@ const WHAT: Record<string, { name: string; button: string }> = {
   microsoft: { name: 'Microsoft', button: msg('Connect Microsoft: Outlook + Calendar') },
 }
 
-/** Codes the sign-in round trip can come back with; the wording lives here. Shown through outcomeOf. */
-const OUTCOME: Record<string, { text: string; bad: boolean }> = {
-  mail_connected: { text: msg('Email connected. Cue is looking through the last two weeks now.'), bad: false },
-  mail_scope_missing: {
-    text: msg('Email permission was not granted. Connect again and leave the box for reading email ticked.'),
-    bad: true,
-  },
-  scope_missing: {
-    text: msg('Neither calendar nor email access was granted. Connect again and leave the boxes ticked.'),
-    bad: true,
-  },
-  cancelled: { text: msg('No change — you cancelled at the sign-in screen.'), bad: false },
-  access_denied: { text: msg('No change — you cancelled at the sign-in screen.'), bad: false },
-  no_refresh_token: {
-    text: msg('That account did not grant lasting access. Remove Cue from your account permissions, then connect again.'),
-    bad: true,
-  },
-}
-
-/** The outcome for a code, in the reader's language. */
-function outcomeOf(code: string): { text: string; bad: boolean } {
-  const known = OUTCOME[code]
-  return known
-    ? { text: t(known.text), bad: known.bad }
-    : { text: t('That did not work. Try connecting again.'), bad: true }
-}
-
-function messageOf(err: unknown): string {
-  if (err instanceof ApiError) return (err.data as { message?: string })?.message ?? err.message
-  return errorText(err)
-}
 
 function ago(iso: string): string {
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60_000)
@@ -106,7 +75,7 @@ export function Integrations({ onChanged }: { onChanged?: () => void }) {
       setAccounts(status.accounts)
       setFinds(found)
     } catch (err) {
-      setNote({ text: messageOf(err), bad: true })
+      setNote({ text: connectionError(err), bad: true })
     }
   }, [])
 
@@ -139,7 +108,7 @@ export function Integrations({ onChanged }: { onChanged?: () => void }) {
         announceChange()
         onChanged?.()
       } catch (err) {
-        setNote({ text: messageOf(err), bad: true })
+        setNote({ text: connectionError(err), bad: true })
       } finally {
         setBusy(null)
         await load()
@@ -148,24 +117,24 @@ export function Integrations({ onChanged }: { onChanged?: () => void }) {
     [load, onChanged],
   )
 
-  // Back from the provider, or sent here from Today.
+  // Back from the provider, or sent here from Today. Every sign-in outcome
+  // is read here, once, then taken out of the address so a refresh does not
+  // replay it.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const code = params.get('connected')
     const asked = params.get('settings') === 'connect' || params.get('settings') === 'mail'
-    const mine = code && (code.startsWith('all_connected') || code.startsWith('mail') || (code !== 'connected' && OUTCOME[code]))
-    if (!asked && !mine) return
+    if (!asked && !code) return
     requestAnimationFrame(() => root.current?.scrollIntoView({ block: 'start' }))
     params.delete('settings')
-    if (mine) params.delete('connected')
+    params.delete('connected')
     const rest = params.toString()
     window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : ''))
     if (code?.startsWith('all_connected:')) void finish(code.split(':')[1]!)
     else if (code === 'mail_connected') {
       setNote(outcomeOf('mail_connected'))
       void checkNow()
-    } else if (code && mine) setNote(outcomeOf(code))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    } else if (code) setNote(outcomeOf(code))
   }, [])
 
   async function connect(provider: string) {
@@ -175,7 +144,7 @@ export function Integrations({ onChanged }: { onChanged?: () => void }) {
       const { url } = await api<{ url: string }>(`/oauth/${provider}/connect`, { method: 'POST', body: { purpose: 'all' } })
       window.location.assign(url)
     } catch (err) {
-      setNote({ text: messageOf(err), bad: true })
+      setNote({ text: connectionError(err), bad: true })
       setBusy(null)
     }
   }
@@ -196,7 +165,7 @@ export function Integrations({ onChanged }: { onChanged?: () => void }) {
       )
       if (r.found.length) announceChange()
     } catch (err) {
-      setNote({ text: messageOf(err), bad: true })
+      setNote({ text: connectionError(err), bad: true })
     } finally {
       setBusy(null)
       await load()

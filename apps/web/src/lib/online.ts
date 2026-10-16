@@ -43,17 +43,20 @@ export function usePendingCount(): number {
 export function startSyncLoop(): () => void {
   const attempt = () => void syncOutbox()
 
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') attempt()
+  }
+
   attempt()
   window.addEventListener('online', attempt)
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') attempt()
-  })
+  document.addEventListener('visibilitychange', onVisible)
 
   // Backstop for a connection that returns without any event firing.
   const timer = setInterval(attempt, 60_000)
 
   return () => {
     window.removeEventListener('online', attempt)
+    document.removeEventListener('visibilitychange', onVisible)
     clearInterval(timer)
   }
 }

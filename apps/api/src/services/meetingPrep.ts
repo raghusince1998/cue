@@ -1,3 +1,4 @@
+import { stripWaitingOn } from '@cue/shared'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { db, schema } from '../db/index.ts'
 import { langsOf, t } from '../i18n.ts'
@@ -144,7 +145,7 @@ export async function promptPrep(now = new Date()): Promise<number> {
       if (open.length === 0) continue
 
       const named = open.slice(0, 2).map((o) =>
-        o.waitingOn ? `${o.title.replace(/^Waiting on [^:]+:\s*/i, '')} (${o.waitingOn})` : o.title,
+        o.waitingOn ? `${stripWaitingOn(o.title)} (${o.waitingOn})` : o.title,
       )
       const list = named.join('; ')
       await sendToUser(row.user_id, {

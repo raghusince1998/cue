@@ -13,9 +13,9 @@ import { announceChange, useOnChange } from '../lib/changes.ts'
 import { msg, rich, t } from '../lib/i18n.tsx'
 import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
 import { Modal } from '../components/Modal.tsx'
-import { CommitmentSheet } from '../components/CommitmentSheet.tsx'
 import { rupeesToPaise } from '../components/Owed.tsx'
 import { errorText } from '../lib/errors.ts'
+import { openPlan } from '../lib/open.ts'
 
 interface Detail extends TrackerItemDTO {
   events: { from: string | null; to: string; at: string }[]
@@ -327,7 +327,6 @@ function ItemSheet({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   /** A plan for this item, open over it: the interview, the follow-up. */
-  const [planOpen, setPlanOpen] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -349,6 +348,8 @@ function ItemSheet({
   useEffect(() => {
     void load()
   }, [load])
+  // A plan opened from here and changed: this follows.
+  useOnChange(() => void load())
 
   const field = (k: keyof typeof draft) => ({
     value: draft[k],
@@ -472,7 +473,7 @@ function ItemSheet({
         <ul className="plain tracker-plans">
           {upcoming.map((p) => (
             <li key={p.id}>
-              <button className="plan-link" onClick={() => setPlanOpen(p.id)}>
+              <button className="plan-link" onClick={() => openPlan(p.id)}>
                 {p.title}
               </button>{' '}
               <span className="muted">· {formatDateTime(p.dueAt)}</span>
@@ -576,7 +577,7 @@ function ItemSheet({
             <li key={i}>
               <span className="muted">{dayLabel(h.at)}</span> ·{' '}
               {h.planId ? (
-                <button className="plan-link" onClick={() => setPlanOpen(h.planId)}>
+                <button className="plan-link" onClick={() => openPlan(h.planId)}>
                   {h.text}
                 </button>
               ) : (
@@ -592,18 +593,6 @@ function ItemSheet({
         </button>
       </div>
       {error && <p className="error small">{error}</p>}
-      {planOpen && (
-        <CommitmentSheet
-          key={planOpen}
-          commitmentId={planOpen}
-          onClose={() => setPlanOpen(null)}
-          onChanged={() => {
-            void load()
-            onChanged()
-          }}
-          onOpenOther={(pid) => setPlanOpen(pid)}
-        />
-      )}
     </div>
   )
 }

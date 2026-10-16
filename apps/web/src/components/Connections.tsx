@@ -54,7 +54,7 @@ export function Connections() {
     <Fold title={t('Email & calendars')} summary={summary} defaultOpen={arrivedToConnect()} onToggle={() => void load()}>
       <Integrations onChanged={() => void load()} />
       <div className="fold-divider" />
-      <CalendarFeeds pickerOnly />
+      <CalendarFeeds />
     </Fold>
   )
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { openPerson } from '../lib/open.ts'
 import { Link } from 'react-router-dom'
-import { KIND_LABELS, PRIORITY_LABELS, WINDOW_LABELS, hasWork, type CommitmentDTO } from '@cue/shared'
+import { KIND_LABELS, PRIORITY_LABELS, WINDOW_LABELS, hasWork, type CommitmentDTO, stripWaitingOn } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { useAuth } from '../lib/auth.tsx'
 import { locale, t } from '../lib/i18n.tsx'
@@ -284,7 +284,7 @@ export function CommitmentSheet({
                     <li key={o.id}>
                       <button className="prep-item" onClick={() => onOpenOther?.(o.id)}>
                         {o.waitingOn && <span className="waiting-who">{o.waitingOn}</span>}
-                        <span>{o.waitingOn ? o.title.replace(/^Waiting on [^:]+:\s*/i, '') : o.title}</span>
+                        <span>{o.waitingOn ? stripWaitingOn(o.title) : o.title}</span>
                         <span className="muted small">
                           {' '}
                           ·{' '}

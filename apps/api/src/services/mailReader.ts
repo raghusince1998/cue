@@ -375,8 +375,11 @@ async function readText(
 
   if (bookings.length > 0) {
     const said: string[] = []
+    // Looked up once for the email, and only if a booking needs it.
+    let places: string[] | null = null
+    const placesKnown = async () => (places ??= await knownPlaces(userId))
     for (const booking of bookings) {
-      const city = booking.city ?? (booking.type === 'hotel' || booking.type === 'bus' ? findCity(text, await knownPlaces(userId)) : null)
+      const city = booking.city ?? (booking.type === 'hotel' || booking.type === 'bus' ? findCity(text, await placesKnown()) : null)
       const saved = await saveFoundBooking(orgId, userId, booking, city, now)
       // Said in full where it is listed: which train, from where to where, when.
       const when = `${day(booking.startsAt)}${booking.timeKnown ? `, ${booking.startsAt.toLocaleTimeString(localeOf(lang), { hour: 'numeric', minute: '2-digit' })}` : ''}`

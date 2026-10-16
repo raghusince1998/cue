@@ -510,7 +510,19 @@ export default function Trips() {
             {upcoming.map((trip) => {
               const start = new Date(`${trip.startsOn}T00:00:00`)
               return (
-                <article key={trip.id} className="tile is-tappable" onClick={() => setOpenId(trip.id)}>
+                <article
+                  key={trip.id}
+                  className="tile is-tappable"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setOpenId(trip.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setOpenId(trip.id)
+                    }
+                  }}
+                >
                   <span className="tile-mark is-trip" aria-hidden>
                     <span className="mark-top">
                       {start.toLocaleDateString(locale(), { month: 'short' })}
@@ -553,7 +565,19 @@ export default function Trips() {
           <h2 className="section-title muted-title">{t('Been and gone')}</h2>
           <div className="tiles two-up">
             {past.map((trip) => (
-              <article key={trip.id} className="tile dimmed is-tappable" onClick={() => setOpenId(trip.id)}>
+              <article
+                  key={trip.id}
+                  className="tile dimmed is-tappable"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setOpenId(trip.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setOpenId(trip.id)
+                    }
+                  }}
+                >
                 <span className="tile-mark" aria-hidden>
                   <span className="mark-top">
                     {new Date(`${trip.startsOn}T00:00:00`).toLocaleDateString(locale(), { month: 'short' })}

@@ -165,6 +165,7 @@ export {
 } from './ics.ts'
 export { resolveZone, WINDOWS_ZONES } from './windowsZones.ts'
 export { normalizeHinglish, HINDI_LEFTOVER } from './hinglish.ts'
+export { stripWaitingOn } from './waiting.ts'
 
 import { z } from 'zod'
 // Re-exporting a name does not put it in scope here, so the ones used below in
@@ -514,9 +515,10 @@ export interface TripItemDTO {
 }
 
 /**
- * The statuses a person can set. The table also holds 'snoozed' (set by the
- * nag engine) and 'deleted' (set only by DELETE, never by an edit) — keeping
- * those out of here is what stops "delete" being a dropdown option.
+ * The statuses a person can set. The table also holds 'deleted' (set only by
+ * DELETE, never by an edit) — keeping it out of here is what stops "delete"
+ * being a dropdown option. Its enum still has 'snoozed' from early builds;
+ * nothing sets it now: snoozing moves the time and keeps the plan 'pending'.
  */
 export const COMMITMENT_STATUS = ['pending', 'done', 'cancelled'] as const
 export type CommitmentStatus = (typeof COMMITMENT_STATUS)[number]

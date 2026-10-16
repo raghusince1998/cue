@@ -1,20 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, api } from '../lib/api.ts'
-import { msg, rich, t } from '../lib/i18n.tsx'
-import { errorText } from '../lib/errors.ts'
+import { useCallback, useEffect, useState } from 'react'
+import { api } from '../lib/api.ts'
+import { t } from '../lib/i18n.tsx'
+import { connectionError } from '../lib/oauthOutcome.ts'
 
 /**
- * Connecting a Google or Microsoft account, and choosing what to mirror.
+ * Choosing which of a connected account's calendars Cue reads.
  *
- * This replaces hunting for the "secret address in iCal format" buried in the
- * provider's settings — an option an administrator can switch off entirely,
- * which is exactly where the old flow dead-ended on a work account.
+ * Connecting and removing the account happen once, in Integrations above, and
+ * so does reading the result of a sign-in. This lists what each account
+ * offers — a work account usually has several — and adds the ones chosen.
  */
 
 interface ProviderInfo {
   id: string
   label: string
-  configured: boolean
 }
 
 interface Account {
@@ -23,7 +22,6 @@ interface Account {
   email: string
   status: string
   lastError: string | null
-  createdAt: string
   /** How many of its calendars Cue is reading. */
   calendarCount: number
   /** False when it was connected only to read email. */
@@ -39,41 +37,6 @@ interface Calendar {
   added: boolean
 }
 
-/**
- * The callback can only hand back a fixed code, never free text — it arrives
- * in a URL the browser was sent to by a third party. The wording lives here.
- */
-const OUTCOME: Record<string, { text: string; bad: boolean }> = {
-  connected: { text: msg('Connected. Choose which calendars to mirror.'), bad: false },
-  cancelled: { text: msg('No change — you cancelled at the sign-in screen.'), bad: false },
-  access_denied: { text: msg('No change — you cancelled at the sign-in screen.'), bad: false },
-  no_refresh_token: {
-    text: msg('That account did not grant lasting access. Remove Cue from your account permissions, then connect again.'),
-    bad: true,
-  },
-  scope_missing: {
-    text: msg('Calendar permission was not granted, so there is nothing to read. Connect again and leave the calendar box ticked.'),
-    bad: true,
-  },
-  bad_state: { text: msg('That sign-in link had already been used. Start again.'), bad: true },
-  // You signed in, but the provider would not hand the connection over. With
-  // a sign-in that otherwise works, this is almost always the server's client
-  // id or secret for that provider being wrong or swapped.
-  exchange_failed: {
-    text: msg('You signed in, but the provider would not hand the connection to Cue. The client id or secret this server has for it is probably wrong.'),
-    bad: true,
-  },
-  expired_state: { text: msg('That sign-in took too long. Start again.'), bad: true },
-  not_configured: { text: msg('This server has no credentials for that provider.'), bad: true },
-}
-
-function messageOf(err: unknown): string {
-  if (err instanceof ApiError) {
-    return (err.data as { message?: string })?.message ?? err.message
-  }
-  return errorText(err)
-}
-
 function calendarsLine(n: number): string {
   if (n === 0) return t('no calendars chosen yet')
   return n === 1 ? t('reading 1 calendar') : t('reading {n} calendars', { n })
@@ -82,16 +45,10 @@ function calendarsLine(n: number): string {
 export function ConnectedCalendars({
   onChanged,
   refreshKey,
-  pickerOnly = false,
 }: {
   onChanged: () => void
   /** Changes when a calendar is added or removed below, so the counts follow. */
   refreshKey: string
-  /**
-   * Beside the accounts' own list (Integrations), only choosing calendars:
-   * connecting and removing an account happen there, once.
-   */
-  pickerOnly?: boolean
 }) {
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [accounts, setAccounts] = useState<Account[] | null>(null)
@@ -99,22 +56,16 @@ export function ConnectedCalendars({
   const [calendars, setCalendars] = useState<Calendar[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [outcome, setOutcome] = useState<{ text: string; bad: boolean } | null>(null)
-  const [note, setNote] = useState<string | null>(null)
-  const root = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async () => {
     try {
       const r = await api<{ providers: ProviderInfo[]; accounts: Account[] }>('/oauth/status')
       // An account connected only to read email has no calendars to offer.
-      const withCalendars = r.accounts.filter((a) => a.calendarAccess !== false)
       setProviders(r.providers)
-      setAccounts(withCalendars)
+      setAccounts(r.accounts.filter((a) => a.calendarAccess !== false))
       setError(null)
-      return withCalendars
     } catch (err) {
-      setError(messageOf(err))
-      return []
+      setError(connectionError(err))
     }
   }, [])
 
@@ -126,7 +77,7 @@ export function ConnectedCalendars({
       const r = await api<{ calendars: Calendar[] }>(`/oauth/accounts/${accountId}/calendars`)
       setCalendars(r.calendars)
     } catch (err) {
-      setError(messageOf(err))
+      setError(connectionError(err))
       setCalendars([])
     }
   }, [])
@@ -134,52 +85,6 @@ export function ConnectedCalendars({
   useEffect(() => {
     void load()
   }, [load, refreshKey])
-
-  // Read the result of a round trip exactly once, then take it out of the URL
-  // so a refresh does not replay a message about something that happened
-  // minutes ago.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const code = params.get('connected')
-    // Reading email has its own section and its own outcomes.
-    if (!code || code.startsWith('mail') || code.startsWith('all')) return
-
-    const known = OUTCOME[code]
-    setOutcome(
-      known
-        ? { text: t(known.text), bad: known.bad }
-        : { text: t('That did not work. Try connecting again.'), bad: true },
-    )
-    // The answer to "did it connect?" is the first thing to see, not
-    // something to scroll down a sheet for.
-    requestAnimationFrame(() => root.current?.scrollIntoView({ block: 'start' }))
-    params.delete('connected')
-    const rest = params.toString()
-    window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : ''))
-
-    // A fresh connection means a new account to show, and the calendar picker
-    // should already be open on it — that is the next thing to do.
-    if (code === 'connected') {
-      void load().then((list) => {
-        const newest = list[list.length - 1]
-        if (newest) void openCalendars(newest.id)
-      })
-    }
-  }, [load, openCalendars])
-
-  async function connect(provider: string) {
-    setBusy(true)
-    setError(null)
-    try {
-      const { url } = await api<{ url: string }>(`/oauth/${provider}/connect`, { method: 'POST' })
-      // A full navigation, not a popup: a popup here is the thing phone
-      // browsers block most reliably.
-      window.location.assign(url)
-    } catch (err) {
-      setError(messageOf(err))
-      setBusy(false)
-    }
-  }
 
   async function addCalendar(accountId: string, calendar: Calendar) {
     setBusy(true)
@@ -191,7 +96,7 @@ export function ConnectedCalendars({
       })
       await openCalendars(accountId)
     } catch (err) {
-      setError(messageOf(err))
+      setError(connectionError(err))
     } finally {
       // The feed is kept server-side with its error showing either way, so the
       // list is worth refreshing — "Read now" can retry it.
@@ -200,51 +105,11 @@ export function ConnectedCalendars({
     }
   }
 
-  async function disconnect(account: Account) {
-    const label = providers.find((p) => p.id === account.provider)?.label ?? account.provider
-    const n = account.calendarCount
-    if (
-      !window.confirm(
-        `${t('Remove {email} from Cue?', { email: account.email })}\n\n` +
-          (n > 0
-            ? `${
-                n === 1
-                  ? t('The 1 calendar read from it, and everything brought in from them, will be removed from Cue.')
-                  : t('The {n} calendars read from it, and everything brought in from them, will be removed from Cue.', { n })
-              } `
-            : '') +
-          t('Your {provider} calendar itself is not touched.', { provider: label }),
-      )
-    ) {
-      return
-    }
-    setBusy(true)
-    setNote(null)
-    try {
-      const r = await api<{ alsoRemoveAt: string | null }>(`/oauth/accounts/${account.id}`, {
-        method: 'DELETE',
-      })
-      // Microsoft publishes no revocation endpoint, so saying nothing here
-      // would imply Cue had been removed at their end too.
-      if (r.alsoRemoveAt) {
-        setNote(t('Removed here. {provider} keeps its own record — remove Cue at {url}.', { provider: label, url: r.alsoRemoveAt }))
-      }
-      setOpenFor(null)
-      await load()
-      onChanged()
-    } catch (err) {
-      setError(messageOf(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
   // Still loading, or it failed. Rendering nothing for both made a failure
-  // look like an empty account: no list, no Connect buttons, no reason.
+  // look like an empty account: no list, no reason.
   if (accounts === null) {
     return (
-      <div className="stack tight" ref={root}>
-        {outcome && <p className={outcome.bad ? 'error small' : 'muted small'}>{outcome.text}</p>}
+      <div className="stack tight">
         {error ? (
           <>
             <p className="error small">{t('Could not load your connected accounts: {error}', { error })}</p>
@@ -259,35 +124,21 @@ export function ConnectedCalendars({
     )
   }
 
-  const offerable = providers.filter((p) => p.configured)
-  const unconfigured = providers.filter((p) => !p.configured)
-
   return (
-    <div className="stack tight" ref={root}>
-      {outcome && <p className={outcome.bad ? 'error small' : 'muted small'}>{outcome.text}</p>}
-      {note && <p className="muted small">{note}</p>}
-
-      {/* Every account this user has connected, counted, each removable. The
-          list was there before but read like more calendar cards, with
-          nothing saying how many accounts there were or which was which. */}
+    <div className="stack tight">
       <div className="accounts-head">
-        <span className="label-text">{pickerOnly ? t('Choose calendars to read') : t('Connected accounts')}</span>
+        <span className="label-text">{t('Choose calendars to read')}</span>
         <span className="accounts-count">{accounts.length}</span>
       </div>
 
       {accounts.length === 0 && (
-        <p className="muted small">
-          {pickerOnly
-            ? t('Connect Google or Microsoft above, then choose which of its calendars to read.')
-            : t('None yet. Connect Google or Microsoft to bring your meetings in.')}
-        </p>
+        <p className="muted small">{t('Connect Google or Microsoft above, then choose which of its calendars to read.')}</p>
       )}
 
       {accounts.length > 0 && (
         <ul className="account-list">
           {accounts.map((account) => {
-            const label =
-              providers.find((p) => p.id === account.provider)?.label ?? account.provider
+            const label = providers.find((p) => p.id === account.provider)?.label ?? account.provider
             const open = openFor === account.id
             return (
               <li className="account-row" key={account.id}>
@@ -299,9 +150,7 @@ export function ConnectedCalendars({
                     <p className="account-address">{account.email}</p>
                     <p className="muted small">
                       {account.status === 'revoked' ? (
-                        <span className="error">
-                          {t('Access was withdrawn — connect again to keep reading it.')}
-                        </span>
+                        <span className="error">{t('Access was withdrawn — connect again to keep reading it.')}</span>
                       ) : account.lastError ? (
                         <span className="error">{account.lastError}</span>
                       ) : (
@@ -317,24 +166,13 @@ export function ConnectedCalendars({
                     >
                       {open ? t('Hide') : t('Calendars')}
                     </button>
-                    {!pickerOnly && (
-                      <button
-                        className="ghost small-btn danger"
-                        onClick={() => void disconnect(account)}
-                        disabled={busy}
-                      >
-                        {t('Remove')}
-                      </button>
-                    )}
                   </div>
                 </div>
 
                 {open && (
                   <div className="account-calendars">
                     {calendars === null && <p className="muted small">{t('Reading your calendars…')}</p>}
-                    {calendars?.length === 0 && (
-                      <p className="muted small">{t('No calendars this account can read.')}</p>
-                    )}
+                    {calendars?.length === 0 && <p className="muted small">{t('No calendars this account can read.')}</p>}
                     {calendars?.map((calendar) => (
                       <div className="account-calendar" key={calendar.id}>
                         <div>
@@ -363,38 +201,6 @@ export function ConnectedCalendars({
             )
           })}
         </ul>
-      )}
-
-      {!pickerOnly && offerable.length > 0 && (
-        <div className="row">
-          {offerable.map((provider) => (
-            <button
-              key={provider.id}
-              className="ghost small-btn"
-              onClick={() => void connect(provider.id)}
-              disabled={busy}
-            >
-              + {t('Connect {name}', { name: provider.label })}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {!pickerOnly && unconfigured.length > 0 && (
-        <p className="muted small">
-          {unconfigured.length > 1
-            ? rich(
-                '{names} sign-ins are not set up on this server — it needs that provider’s client id and secret, plus <code>ENCRYPTION_KEY</code>. All free to create, none of them billed.',
-                {
-                  names: unconfigured.map((p) => p.label).reduce((a, b) => t('{a} and {b}', { a, b })),
-                  code: (s) => <code>{s}</code>,
-                },
-              )
-            : rich(
-                '{names} sign-in is not set up on this server — it needs that provider’s client id and secret, plus <code>ENCRYPTION_KEY</code>. All free to create, none of them billed.',
-                { names: unconfigured[0]!.label, code: (s) => <code>{s}</code> },
-              )}
-        </p>
       )}
 
       {error && <p className="error small">{error}</p>}

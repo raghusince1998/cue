@@ -1,3 +1,4 @@
+import { stripWaitingOn } from '@cue/shared'
 import { useEffect, useState } from 'react'
 import type { CommitmentDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
@@ -216,7 +217,7 @@ export function YourDay({
               <span>
                 <span className="waiting-who">{c.waitingOn}</span>
                 <button className="plan-link" onClick={() => onOpen(c.id)}>
-                  {c.title.replace(/^Waiting on [^:]+:\s*/i, '')}
+                  {stripWaitingOn(c.title)}
                 </button>
               </span>
               <button className="ghost small-btn" onClick={() => onNudge(c)}>

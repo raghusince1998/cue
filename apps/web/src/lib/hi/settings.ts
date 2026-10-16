@@ -11,7 +11,6 @@ export const settings: Record<string, string> = {
   Profile: 'प्रोफ़ाइल',
   'Your name': 'आपका नाम',
   'Saved.': 'सहेज लिया।',
-  'Connected accounts': 'जुड़े हुए खाते',
   'What you use Cue for': 'आप Cue किस काम के लिए इस्तेमाल करते हैं',
   Language: 'भाषा',
   'Every screen, and the reminders and notices Cue sends you. What you type stays as you typed it.':
@@ -138,8 +137,6 @@ export const settings: Record<string, string> = {
 
   // ConnectedCalendars
   'Connected. Choose which calendars to mirror.': 'जुड़ गया। चुनें कि कौन-से कैलेंडर लाने हैं।',
-  'Calendar permission was not granted, so there is nothing to read. Connect again and leave the calendar box ticked.':
-    'कैलेंडर की अनुमति नहीं मिली, इसलिए पढ़ने को कुछ नहीं। फिर से जोड़ें और कैलेंडर वाला बॉक्स टिक रहने दें।',
   'That sign-in link had already been used. Start again.': 'वह साइन इन लिंक पहले ही इस्तेमाल हो चुका था। फिर से शुरू करें।',
   'You signed in, but the provider would not hand the connection to Cue. The client id or secret this server has for it is probably wrong.':
     'आपने साइन इन किया, पर प्रोवाइडर ने Cue को कनेक्शन नहीं दिया। इस सर्वर के पास उसका client id या secret शायद गलत है।',
@@ -148,16 +145,8 @@ export const settings: Record<string, string> = {
   'no calendars chosen yet': 'अभी कोई कैलेंडर नहीं चुना',
   'reading 1 calendar': '1 कैलेंडर पढ़ रहे हैं',
   'reading {n} calendars': '{n} कैलेंडर पढ़ रहे हैं',
-  'Remove {email} from Cue?': '{email} को Cue से हटाएँ?',
-  'The 1 calendar read from it, and everything brought in from them, will be removed from Cue.':
-    'इससे पढ़ा जा रहा 1 कैलेंडर, और उससे आई हर चीज़, Cue से हट जाएगी।',
-  'The {n} calendars read from it, and everything brought in from them, will be removed from Cue.':
-    'इससे पढ़े जा रहे {n} कैलेंडर, और उनसे आई हर चीज़, Cue से हट जाएगी।',
-  'Your {provider} calendar itself is not touched.': 'आपके {provider} कैलेंडर को कुछ नहीं होगा।',
-  'Removed here. {provider} keeps its own record — remove Cue at {url}.': 'यहाँ से हटा दिया। {provider} अपना रिकॉर्ड अलग रखता है — {url} पर Cue हटाएँ।',
   'Could not load your connected accounts: {error}': 'आपके जुड़े खाते लोड नहीं हो सके: {error}',
   'Loading your connected accounts…': 'आपके जुड़े खाते लोड हो रहे हैं…',
-  'None yet. Connect Google or Microsoft to bring your meetings in.': 'अभी कोई नहीं। अपनी मीटिंग लाने के लिए Google या Microsoft जोड़ें।',
   'Access was withdrawn — connect again to keep reading it.': 'अनुमति वापस ले ली गई — पढ़ते रहने के लिए फिर से जोड़ें।',
   Calendars: 'कैलेंडर',
   'Reading your calendars…': 'आपके कैलेंडर पढ़ रहे हैं…',
@@ -166,11 +155,6 @@ export const settings: Record<string, string> = {
   'hidden at the source': 'वहाँ छिपा हुआ',
   Reading: 'पढ़ रहे हैं',
   'Read this': 'इसे पढ़ें',
-  '{names} sign-ins are not set up on this server — it needs that provider’s client id and secret, plus <code>ENCRYPTION_KEY</code>. All free to create, none of them billed.':
-    'इस सर्वर पर {names} साइन इन सेट नहीं हैं — इसके लिए उस प्रोवाइडर का client id और secret, और <code>ENCRYPTION_KEY</code> चाहिए। सब मुफ़्त में बनते हैं, किसी का बिल नहीं आता।',
-  '{names} sign-in is not set up on this server — it needs that provider’s client id and secret, plus <code>ENCRYPTION_KEY</code>. All free to create, none of them billed.':
-    'इस सर्वर पर {names} साइन इन सेट नहीं है — इसके लिए उस प्रोवाइडर का client id और secret, और <code>ENCRYPTION_KEY</code> चाहिए। सब मुफ़्त में बनते हैं, किसी का बिल नहीं आता।',
-  '{a} and {b}': '{a} और {b}',
 
   // CalendarFeeds
   '{n} brought in': '{n} आए',

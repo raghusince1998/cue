@@ -300,28 +300,32 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [showAdd])
 
+  // Once per person signed in — not again each time their profile updates
+  // (a language or a use changed), which replaced `me` and re-ran all three.
+  const meId = me?.id
+
   // Drains anything captured offline as soon as there is a connection again.
   useEffect(() => {
-    if (!me) return
+    if (!meId) return
     return startSyncLoop()
-  }, [me])
+  }, [meId])
 
   // Make sure the server can still reach this device. See resyncPush.
   useEffect(() => {
-    if (!me) return
+    if (!meId) return
     void resyncPush()
-  }, [me])
+  }, [meId])
 
   // The evening nudge fires in the user's local time, so tell the server what
   // that is rather than making them pick a timezone from a list.
   useEffect(() => {
-    if (!me) return
+    if (!meId) return
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
     if (!zone) return
     void api('/me/preferences', { method: 'PATCH', body: { timezone: zone } }).catch(
       () => undefined,
     )
-  }, [me])
+  }, [meId])
 
   // The tab says Cue, in any language — not the website's English headline,
   // which index.html carries for link previews. The pages with a title of
@@ -446,7 +450,7 @@ export default function App() {
 
       {settingsOpen && (
         <Modal title={t('Settings')} onClose={() => setSettingsOpen(false)}>
-          <Settings onClose={() => setSettingsOpen(false)} />
+          <Settings />
         </Modal>
       )}
     </div>

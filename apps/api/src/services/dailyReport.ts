@@ -1,3 +1,4 @@
+import { stripWaitingOn } from '@cue/shared'
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, ne, notInArray, sql } from 'drizzle-orm'
 import type { Lang } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
@@ -52,7 +53,7 @@ export function dayStart(d: Date): Date {
 
 /** "Waiting on Vikram: signed contract" → "signed contract" */
 function waitingWhat(title: string): string {
-  return title.replace(/^Waiting on [^:]+:\s*/i, '')
+  return stripWaitingOn(title)
 }
 
 /** One line of notes, short enough for a message. */

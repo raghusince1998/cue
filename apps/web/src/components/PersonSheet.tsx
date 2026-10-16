@@ -10,14 +10,13 @@ import {
   type OccasionKind,
 } from '@cue/shared'
 import { api } from '../lib/api.ts'
-import { announceChange } from '../lib/changes.ts'
+import { announceChange, useOnChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
 import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
 import { locale, t } from '../lib/i18n.tsx'
 import { readNotes } from '../lib/sample.ts'
 import { Modal } from './Modal.tsx'
 import { CallLog } from './CallLog.tsx'
-import { CommitmentSheet } from './CommitmentSheet.tsx'
 import { QuickMessage } from './QuickMessage.tsx'
 import type { PendingCall } from '../lib/calls.ts'
 import { Nudge, waitingWhat } from './Nudge.tsx'
@@ -25,6 +24,7 @@ import { WaitingForm } from './WaitingForm.tsx'
 import { dueChoices } from './WrapUp.tsx'
 import { OwedRow, useUpiId, type OwedPerson } from './Owed.tsx'
 import { errorText } from '../lib/errors.ts'
+import { openPlan } from '../lib/open.ts'
 
 interface Contact {
   id: string
@@ -122,7 +122,6 @@ export function PersonSheet({
   const [partial, setPartial] = useState(false)
 
   /** A plan with this person, open over their page: the meeting, the thing they owe, a follow-up. */
-  const [planOpen, setPlanOpen] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -158,6 +157,8 @@ export function PersonSheet({
   useEffect(() => {
     void load()
   }, [load])
+  // A plan opened from here and changed: this follows.
+  useOnChange(() => void load())
 
   async function close(id: string) {
     setBusy(true)
@@ -286,7 +287,7 @@ export function PersonSheet({
           <span className="label-text">{t('Next meeting')}</span>
           {o.nextMeetings.map((m) => (
             <p key={m.id} className="person-line">
-              <button className="plan-link" onClick={() => setPlanOpen(m.id)}>
+              <button className="plan-link" onClick={() => openPlan(m.id)}>
                 <strong>{m.title}</strong>
               </button>
               <span className="muted small">
@@ -311,7 +312,7 @@ export function PersonSheet({
             return (
               <div className="your-day-line" key={c.id}>
                 <span>
-                  <button className="plan-link" onClick={() => setPlanOpen(c.id)}>
+                  <button className="plan-link" onClick={() => openPlan(c.id)}>
                     {waitingWhat(c)}
                   </button>
                   <span className={`small ${isDue ? 'due-now' : 'muted'}`}>
@@ -341,7 +342,7 @@ export function PersonSheet({
           o.youOwe.map((c) => (
             <div className="your-day-line" key={c.id}>
               <span>
-                <button className="plan-link" onClick={() => setPlanOpen(c.id)}>
+                <button className="plan-link" onClick={() => openPlan(c.id)}>
                   {c.title}
                 </button>
                 <span className="muted small"> · {t('due {day}', { day: dayLabel(c.dueAt) })}</span>
@@ -368,7 +369,7 @@ export function PersonSheet({
               {o.lastMeetingFollowUps.map((f) => (
                 <li key={f.id} className={f.status === 'done' ? 'is-done' : ''}>
                   {f.status === 'done' ? '✓ ' : '○ '}
-                  <button className="plan-link" onClick={() => setPlanOpen(f.id)}>
+                  <button className="plan-link" onClick={() => openPlan(f.id)}>
                     {f.waitingOn ? `${f.waitingOn}: ${waitingWhat(f)}` : f.title}
                   </button>
                 </li>
@@ -609,19 +610,6 @@ export function PersonSheet({
             }}
           />
         </Modal>
-      )}
-
-      {planOpen && (
-        <CommitmentSheet
-          key={planOpen}
-          commitmentId={planOpen}
-          onClose={() => setPlanOpen(null)}
-          onChanged={() => {
-            onChanged()
-            void load()
-          }}
-          onOpenOther={(id) => setPlanOpen(id)}
-        />
       )}
     </div>
   )

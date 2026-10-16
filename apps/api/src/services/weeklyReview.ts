@@ -1,3 +1,4 @@
+import { stripWaitingOn } from '@cue/shared'
 import { and, asc, desc, eq, gte, inArray, isNotNull, lt, lte, sql } from 'drizzle-orm'
 import { db, schema } from '../db/index.ts'
 import { sendToUser } from '../push.ts'
@@ -194,7 +195,7 @@ export async function weekReview(userId: string, now = new Date()): Promise<Week
       names,
       oldest: oldest
         ? {
-            title: oldest.title.replace(/^Waiting on [^:]+:\s*/i, ''),
+            title: stripWaitingOn(oldest.title),
             who: oldest.who ?? '',
             dueAt: oldest.dueAt.toISOString(),
           }

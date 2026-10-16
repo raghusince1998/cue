@@ -1,3 +1,4 @@
+import { stripWaitingOn } from '@cue/shared'
 import { useEffect, useMemo, useState } from 'react'
 import type { CommitmentDTO, ContactDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
@@ -9,7 +10,7 @@ import { errorText } from '../lib/errors.ts'
 
 /** "Waiting on Ravi: signed contract" → "signed contract". */
 export function waitingWhat(c: CommitmentDTO): string {
-  return c.title.replace(/^Waiting on [^:]+:\s*/i, '')
+  return stripWaitingOn(c.title)
 }
 
 /**

@@ -4,11 +4,11 @@ import type { RecurrenceDTO, ScheduleDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { rich, t } from '../lib/i18n.tsx'
 import { dayLabel, formatDateTime, relativeDay } from '../lib/time.ts'
-import { announceChange, useOnChange } from '../lib/changes.ts'
+import { useOnChange } from '../lib/changes.ts'
 import { openAdd } from '../lib/addSheet.ts'
-import { CommitmentSheet } from '../components/CommitmentSheet.tsx'
 import { Modal } from '../components/Modal.tsx'
 import { errorText } from '../lib/errors.ts'
+import { openPlan } from '../lib/open.ts'
 
 interface Occurrence {
   id: string
@@ -89,7 +89,6 @@ export default function Repeating() {
   const [note, setNote] = useState<string | null>(null)
   /** A series opened, and a single day of one (or a schedule's next step) open over it. */
   const [series, setSeries] = useState<RecurrenceDTO | null>(null)
-  const [planOpen, setPlanOpen] = useState<string | null>(null)
 
   async function load() {
     try {
@@ -306,7 +305,7 @@ export default function Repeating() {
                   </div>
                   <div className="tile-tags">
                     {item.next ? (
-                      <button className="tag is-live tag-button" onClick={() => setPlanOpen(item.next!.id)}>
+                      <button className="tag is-live tag-button" onClick={() => openPlan(item.next!.id)}>
                         {t('Next: {step} · {day} · {when}', {
                           step: item.next.title.replace(`${item.title} — `, ''),
                           day: dayLabel(item.next.dueAt),
@@ -360,23 +359,10 @@ export default function Repeating() {
             key={series.id}
             item={series}
             busy={busy === series.id}
-            onOpenPlan={setPlanOpen}
+            onOpenPlan={openPlan}
             onStop={() => void stop(series)}
           />
         </Modal>
-      )}
-
-      {planOpen && (
-        <CommitmentSheet
-          key={planOpen}
-          commitmentId={planOpen}
-          onClose={() => setPlanOpen(null)}
-          onChanged={() => {
-            announceChange()
-            void load()
-          }}
-          onOpenOther={(id) => setPlanOpen(id)}
-        />
       )}
     </div>
   )

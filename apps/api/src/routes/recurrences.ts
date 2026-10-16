@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { and, asc, count, eq, gte, sql } from 'drizzle-orm'
+import { and, asc, count, eq, gte, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   createRecurrenceInput,
@@ -55,26 +55,48 @@ function toDTO(
  * past the rolling window, where nothing is written yet (a yearly reminder
  * five months off), does the rule say when the next one is.
  */
-async function upcoming(row: RecurrenceRow, now: Date) {
-  const recurrenceId = row.id
-  const rows = await db
-    .select({ dueAt: schema.commitments.dueAt })
-    .from(schema.commitments)
-    .where(
-      and(
-        eq(schema.commitments.recurrenceId, recurrenceId),
-        eq(schema.commitments.status, 'pending'),
-        gte(schema.commitments.dueAt, now),
-      ),
-    )
-    .orderBy(asc(schema.commitments.dueAt))
+async function upcomingMany(list: RecurrenceRow[], now: Date) {
+  // One grouped query for every series on the page, not one per series.
+  const written = list.length
+    ? await db
+        .select({
+          id: schema.commitments.recurrenceId,
+          nextAt: sql<Date | string>`min(${schema.commitments.dueAt})`,
+          count: count(),
+        })
+        .from(schema.commitments)
+        .where(
+          and(
+            inArray(
+              schema.commitments.recurrenceId,
+              list.map((r) => r.id),
+            ),
+            eq(schema.commitments.status, 'pending'),
+            gte(schema.commitments.dueAt, now),
+          ),
+        )
+        .groupBy(schema.commitments.recurrenceId)
+    : []
+  const byId = new Map(written.map((w) => [w.id, w]))
 
-  if (rows.length > 0 || row.status !== 'active') return { nextAt: rows[0]?.dueAt ?? null, upcomingCount: rows.length }
-  const [y, m, d] = (row.materialisedTo ?? '').split('-').map(Number)
-  const written = row.materialisedTo ? new Date(y!, m! - 1, d! + 1) : now
-  const from = written > now ? written : now
-  const [next] = expandRecurrence(ruleOf(row), anchorOf(row), { from, to: new Date(from.getTime() + 400 * 86_400_000) })
-  return { nextAt: next ?? null, upcomingCount: 0 }
+  const out = new Map<string, { nextAt: Date | null; upcomingCount: number }>()
+  for (const row of list) {
+    const found = byId.get(row.id)
+    if (found || row.status !== 'active') {
+      out.set(row.id, { nextAt: found ? new Date(found.nextAt) : null, upcomingCount: found?.count ?? 0 })
+      continue
+    }
+    const [y, m, d] = (row.materialisedTo ?? '').split('-').map(Number)
+    const writtenTo = row.materialisedTo ? new Date(y!, m! - 1, d! + 1) : now
+    const from = writtenTo > now ? writtenTo : now
+    const [next] = expandRecurrence(ruleOf(row), anchorOf(row), { from, to: new Date(from.getTime() + 400 * 86_400_000) })
+    out.set(row.id, { nextAt: next ?? null, upcomingCount: 0 })
+  }
+  return out
+}
+
+async function upcoming(row: RecurrenceRow, now: Date) {
+  return (await upcomingMany([row], now)).get(row.id)!
 }
 
 export async function recurrenceRoutes(app: FastifyInstance) {
@@ -101,12 +123,12 @@ export async function recurrenceRoutes(app: FastifyInstance) {
       .where(eq(schema.recurrences.userId, userId))
       .orderBy(asc(schema.recurrences.createdAt))
 
+    const ahead = await upcomingMany(
+      rows.map((x) => x.r),
+      now,
+    )
     return {
-      recurrences: await Promise.all(
-        rows.map(async ({ r, placeName }) =>
-          toDTO(r, { placeName, ...(await upcoming(r, now)) }, lang),
-        ),
-      ),
+      recurrences: rows.map(({ r, placeName }) => toDTO(r, { placeName, ...ahead.get(r.id)! }, lang)),
     }
   })
 

@@ -89,16 +89,11 @@ function historyLabel(days: number | null | undefined): string {
 }
 
 /**
- * Subscribing to a Google (or Apple, or Outlook) calendar by its private iCal
- * address.
- *
- * Deliberately not an OAuth "Connect" button. That would mean a Google Cloud
- * project and, to offer it to anyone else, Google's app verification. A secret
- * URL needs none of that and works with every calendar that publishes one. The
- * price is freshness: Google regenerates that feed slowly, so this is for
- * "what does my week look like", not for something booked ten minutes ago.
+ * The calendars Cue reads: choosing them from a connected account (above),
+ * then each one's state — when it was last read, how far back, whether it
+ * failed — with Read now and Remove.
  */
-export function CalendarFeeds({ pickerOnly = false }: { pickerOnly?: boolean } = {}) {
+export function CalendarFeeds() {
   const [feeds, setFeeds] = useState<FeedDTO[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -266,7 +261,6 @@ export function CalendarFeeds({ pickerOnly = false }: { pickerOnly?: boolean } =
       <ConnectedCalendars
         onChanged={() => void load()}
         refreshKey={feeds.map((f) => f.id).join(',')}
-        pickerOnly={pickerOnly}
       />
 
       <div className="accounts-head">

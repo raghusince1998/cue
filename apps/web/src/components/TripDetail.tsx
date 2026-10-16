@@ -13,9 +13,10 @@ import { ApiError, api } from '../lib/api.ts'
 import { locale, msg, t } from '../lib/i18n.tsx'
 import { Checklist } from './Checklist.tsx'
 import { openAdd } from '../lib/addSheet.ts'
-import { CommitmentSheet } from './CommitmentSheet.tsx'
 import { errorText } from '../lib/errors.ts'
 import { LoadFailed } from './LoadFailed.tsx'
+import { openPlan } from '../lib/open.ts'
+import { useOnChange } from '../lib/changes.ts'
 
 interface TripDetailResponse {
   trip: TripDTO
@@ -95,7 +96,6 @@ export function TripDetail({
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   /** A plan on the trip, open over it: the ticket, the stay, the meeting there. */
-  const [planOpen, setPlanOpen] = useState<string | null>(null)
 
   const [failed, setFailed] = useState(false)
   const load = useCallback(async () => {
@@ -110,6 +110,8 @@ export function TripDetail({
   useEffect(() => {
     void load()
   }, [load])
+  // A plan opened from here and changed: this follows.
+  useOnChange(() => void load())
 
   /** Every wish for this place, together: one plan on one day, with a list. */
   async function planAll() {
@@ -391,7 +393,7 @@ export function TripDetail({
               <p className="trip-day-name">{t('Before you go')}</p>
               <ul className="plain">
                 {plan.before.map((p) => (
-                  <TripRow key={p.id} item={p} withDay onOpen={setPlanOpen} />
+                  <TripRow key={p.id} item={p} withDay onOpen={openPlan} />
                 ))}
               </ul>
             </div>
@@ -402,7 +404,7 @@ export function TripDetail({
               <ul className="plain">
                 {rows.map((r) =>
                   r.item ? (
-                    <TripRow key={r.key} item={r.item} onOpen={setPlanOpen} />
+                    <TripRow key={r.key} item={r.item} onOpen={openPlan} />
                   ) : (
                     <li key={r.key} className="trip-row">
                       <span className="trip-time">{clock(r.at)}</span>
@@ -422,19 +424,6 @@ export function TripDetail({
       {packingSection}
 
       {error && <p className="error small">{error}</p>}
-
-      {planOpen && (
-        <CommitmentSheet
-          key={planOpen}
-          commitmentId={planOpen}
-          onClose={() => setPlanOpen(null)}
-          onChanged={() => {
-            void load()
-            onChanged()
-          }}
-          onOpenOther={(id) => setPlanOpen(id)}
-        />
-      )}
 
       <div className="row">
         <button className="ghost" onClick={onClose}>
