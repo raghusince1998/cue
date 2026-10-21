@@ -374,7 +374,26 @@ export function QuickAdd({
           aria-label={t('What do you want to plan?')}
           autoFocus={autoFocus}
         />
-        <DictateButton value={text} onChange={setText} autoStart={listen} label={t('Speak')} />
+        {/* Start over: what was typed or said, and what it was read as. */}
+        {text && (
+          <button
+            type="button"
+            className="quick-clear"
+            aria-label={t('Clear')}
+            title={t('Clear')}
+            onClick={() => {
+              setText('')
+              setPlan(null)
+              setClash(null)
+              setError(null)
+              setChoices(NO_CHOICES)
+              inputRef.current?.focus()
+            }}
+          >
+            ×
+          </button>
+        )}
+        <DictateButton value={text} onChange={setText} autoStart={listen} label={t('Speak')} redo />
         <button className="primary" onClick={() => void save()} disabled={!ready || busy}>
           {busy ? t('Saving…') : t('Plan it')}
         </button>

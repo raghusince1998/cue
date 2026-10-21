@@ -606,7 +606,12 @@ ${original}` : original))
           />
         </label>
         <div className="row">
-          <DictateButton value={quick} onChange={setQuick} />
+          <DictateButton value={quick} onChange={setQuick} redo />
+          {quick && (
+            <button type="button" className="ghost small-btn" onClick={() => setQuick('')}>
+              {t('Clear')}
+            </button>
+          )}
         </div>
 
         {asIntention && (

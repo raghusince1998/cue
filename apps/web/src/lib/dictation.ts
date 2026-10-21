@@ -10,7 +10,8 @@
  * none, which is why every caller checks `dictationSupported()` first.
  */
 
-import { t } from './i18n.tsx'
+import { language, t } from './i18n.tsx'
+import { addPhrase, spoken } from './transcript.ts'
 
 interface SpeechRecognitionAlternativeLike {
   transcript: string
@@ -34,6 +35,7 @@ interface SpeechRecognitionLike {
   lang: string
   continuous: boolean
   interimResults: boolean
+  maxAlternatives: number
   start: () => void
   stop: () => void
   abort: () => void
@@ -56,8 +58,22 @@ export function dictationSupported(): boolean {
   return getCtor() !== null
 }
 
+/**
+ * Indian English, or Hindi when Cue is in Hindi. The phone's own setting is
+ * often US English, which turns Indian names, places and Hinglish into
+ * nonsense.
+ */
+export function speechLanguage(): string {
+  return language() === 'hi' ? 'hi-IN' : 'en-IN'
+}
+
+const onPhone = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+
 export interface DictationHandle {
+  /** Stop listening; what was already heard is kept. */
   stop: () => void
+  /** Stop at once; nothing more is written, not even what was mid-sentence. */
+  abort: () => void
 }
 
 /**
@@ -74,45 +90,65 @@ export function startDictation(options: {
   if (!Ctor) throw new Error(t('This browser has no built-in dictation.'))
 
   const recognition = new Ctor()
-  recognition.lang = options.lang ?? navigator.language ?? 'en-IN'
-  recognition.continuous = true
+  recognition.lang = options.lang ?? speechLanguage()
+  recognition.maxAlternatives = 1
   recognition.interimResults = true
+  // A phone repeats itself when asked to keep listening; there it hears one
+  // sentence per tap, and stops when you do. A computer listens until Stop.
+  const phone = onPhone()
+  recognition.continuous = !phone
 
-  let committed = ''
+  let parts: string[] = []
+  let done = false
   let stoppedByUser = false
 
   recognition.onresult = (event) => {
+    if (done) return
     let interim = ''
     for (let i = event.resultIndex; i < event.results.length; i += 1) {
       const result = event.results[i]
       if (!result) continue
       const text = result[0].transcript
-      if (result.isFinal) committed += text
+      if (result.isFinal) parts = addPhrase(parts, text)
       else interim += text
     }
-    options.onText((committed + interim).trim(), interim === '')
+    const text = spoken(parts, interim)
+    // An update with no words in it (Android sends some) must not empty the box.
+    if (!text) return
+    options.onText(text, interim === '')
   }
 
   recognition.onerror = (event) => {
+    // Stopped on purpose: nothing went wrong.
+    if (event.error === 'aborted') return
+    // Never started again after an error: a quiet restart kept writing into
+    // the box while the button said it had stopped.
+    done = true
+    // Silence after something was said is just the end of the sentence.
+    if (event.error === 'no-speech' && parts.length > 0) return
     const messages: Record<string, string> = {
       'not-allowed': t('Microphone permission was denied.'),
       'no-speech': t('Did not catch anything — try again.'),
       network: t('Dictation needs a network connection.'),
       'service-not-allowed': t('This browser blocked the speech service.'),
+      'audio-capture': t('No microphone was found.'),
     }
     options.onError(messages[event.error] ?? t('Dictation failed ({error}).', { error: event.error }))
   }
 
   recognition.onend = () => {
-    // Chrome ends the session on its own after a pause; restart unless the user
-    // actually pressed stop, otherwise long notes get cut off mid-sentence.
-    if (stoppedByUser) {
+    // A computer's browser ends the session on its own after a pause; carry on
+    // unless Stop was pressed, or long notes get cut off mid-sentence. A phone
+    // has heard its sentence.
+    if (done || stoppedByUser || phone) {
+      done = true
       options.onEnd()
       return
     }
     try {
       recognition.start()
     } catch {
+      done = true
       options.onEnd()
     }
   }
@@ -123,6 +159,11 @@ export function startDictation(options: {
     stop: () => {
       stoppedByUser = true
       recognition.stop()
+    },
+    abort: () => {
+      done = true
+      stoppedByUser = true
+      recognition.abort()
     },
   }
 }

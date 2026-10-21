@@ -264,6 +264,7 @@ export const add: Record<string, string> = {
   // Dictation and recording (lib/dictation.ts, lib/audio.ts)
   'This browser has no built-in dictation.': 'इस ब्राउज़र में बोलकर लिखने की सुविधा नहीं है।',
   'Microphone permission was denied.': 'माइक्रोफ़ोन की अनुमति नहीं मिली।',
+  'No microphone was found.': 'कोई माइक्रोफ़ोन नहीं मिला।',
   'Did not catch anything — try again.': 'कुछ सुनाई नहीं दिया — फिर कोशिश करें।',
   'Dictation needs a network connection.': 'बोलकर लिखने के लिए इंटरनेट चाहिए।',
   'This browser blocked the speech service.': 'इस ब्राउज़र ने बोली पहचानने की सेवा रोक दी।',

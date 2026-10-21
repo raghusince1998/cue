@@ -1800,6 +1800,51 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* × in the box: start over, what was typed or said. */
+.quick-clear {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 0 2px;
+  cursor: pointer;
+}
+
+.quick-clear:hover,
+.quick-clear:focus-visible {
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface-2));
+  color: var(--danger);
+  outline: none;
+}
+
+/* Listening: the button says so without needing to be read. */
+.is-listening {
+  animation: listening 1.4s ease-in-out infinite;
+}
+
+@keyframes listening {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-listening {
+    animation: none;
+  }
+}
+
 .quick-hint {
   line-height: 1.6;
 }
@@ -1946,6 +1991,10 @@ button:disabled {
   .quick-field input {
     flex: 1 1 100%;
     padding: 6px 4px;
+  }
+  /* With something in the box, the × sits at the end of its line. */
+  .quick-field input:has(+ .quick-clear) {
+    flex-basis: calc(100% - 42px);
   }
   .quick-field .primary {
     flex: 1;
