@@ -5,17 +5,20 @@ import type { FastifyInstance } from 'fastify'
 import { createTestDb, type Harness } from '../testing/harness.ts'
 
 /**
- * The admin portal: only admins get in; sign-ins and admin actions leave a
- * trail; guessing is slowed down; an account turned off or signed out
- * everywhere stops working at once; and a person's page shows how they use
- * Cue, never what they wrote.
+ * The admin portal: its own sign-in from .env, apart from every user account —
+ * a user's session cannot open it and its session cannot open the app.
+ * Sign-ins and admin actions leave a trail; guessing is slowed down; an
+ * account turned off or signed out everywhere stops working at once; and a
+ * person's page shows how they use Cue, never what they wrote.
  */
 
 let h: Harness
 let app: FastifyInstance
 let resetThrottle: () => void
+let env: { adminEmail: string; adminPassword: string }
 
-const ADMIN = 'boss@test.local'
+const ADMIN = 'boss@admin.local'
+const ADMIN_PASSWORD = 'a long admin password'
 const PASSWORD = 'correct horse battery'
 
 async function call(
@@ -39,6 +42,10 @@ async function register(email: string, name = 'Pat') {
   return { token: r.body.token as string, id: r.body.user.id as string }
 }
 
+async function adminSignIn(email = ADMIN, password = ADMIN_PASSWORD) {
+  return call('POST', '/admin/login', undefined, { email, password })
+}
+
 /** The trail is written without holding up the request; give it a moment. */
 async function eventually<T>(read: () => Promise<T>, ok: (v: T) => boolean): Promise<T> {
   let last = await read()
@@ -49,26 +56,30 @@ async function eventually<T>(read: () => Promise<T>, ok: (v: T) => boolean): Pro
   return last
 }
 
-let admin: { token: string; id: string }
+let admin: string
 
 before(async () => {
   h = await createTestDb('admin')
   process.env.DATABASE_URL = h.url
   const Fastify = (await import('fastify')).default
-  const { env } = await import('../env.ts')
-  env.adminEmails = [ADMIN]
+  env = (await import('../env.ts')).env
+  env.adminEmail = ADMIN
+  env.adminPassword = ADMIN_PASSWORD
   const { registerAuth } = await import('../auth.ts')
   const { handleError } = await import('../errors.ts')
   const { authRoutes } = await import('./auth.ts')
-  const { adminRoutes } = await import('./admin.ts')
+  const { adminRoutes, adminSessionRoutes } = await import('./admin.ts')
   resetThrottle = (await import('../services/throttle.ts')).resetThrottle
   app = Fastify()
   app.setErrorHandler(handleError)
   await registerAuth(app)
   await app.register(authRoutes)
+  await app.register(adminSessionRoutes)
   await app.register(adminRoutes)
   await app.ready()
-  admin = await register(ADMIN, 'Boss')
+  const signedIn = await adminSignIn()
+  assert.equal(signedIn.status, 200, JSON.stringify(signedIn.body))
+  admin = signedIn.body.token
 })
 
 beforeEach(() => resetThrottle())
@@ -78,24 +89,75 @@ after(async () => {
   await h.close()
 })
 
-test('only admins get in, and to anyone else there is nothing there', async () => {
+test('the portal and the app keep their sessions apart', async () => {
   const pat = await register('pat@test.local')
   assert.equal((await call('GET', '/admin/overview')).status, 401)
-  assert.equal((await call('GET', '/admin/overview', pat.token)).status, 404)
-  const ok = await call('GET', '/admin/overview', admin.token)
+  // A user's sign-in, even one using the admin's email, never opens the portal.
+  const lookalike = await register(ADMIN, 'Not the admin')
+  assert.equal((await call('GET', '/admin/overview', pat.token)).status, 401)
+  assert.equal((await call('GET', '/admin/overview', lookalike.token)).status, 401)
+  // And the admin's session is no use in the app.
+  assert.equal((await call('GET', '/auth/me', admin)).status, 401)
+
+  const ok = await call('GET', '/admin/overview', admin)
   assert.equal(ok.status, 200)
   assert.ok(ok.body.users.total >= 2)
   assert.equal(ok.body.days.length, 14)
+  assert.equal((await call('GET', '/admin/session', admin)).body.email, ADMIN)
 })
 
-test('sign-ins leave a trail, failures included', async () => {
+test('signing in to the portal: wrong details refused, guessing cut off, all of it recorded', async () => {
+  assert.equal((await adminSignIn(ADMIN, 'not the password')).status, 401)
+  assert.equal((await adminSignIn('someone@else.local', ADMIN_PASSWORD)).status, 401)
+  for (let i = 0; i < 3; i++) await adminSignIn(ADMIN, `guess ${i}`)
+  const held = await adminSignIn()
+  assert.equal(held.status, 429)
+  assert.equal(held.body.error, 'too_many_attempts')
+
+  resetThrottle()
+  const trail = await eventually(
+    async () => (await call('GET', '/admin/audit?action=admin.login', admin)).body.events as any[],
+    (e) => e.filter((x) => x.outcome === 'failed').length >= 5 && e.some((x) => x.outcome === 'blocked'),
+  )
+  assert.ok(trail.some((e) => e.outcome === 'ok' && e.actor_email === ADMIN))
+  assert.ok(trail.some((e) => e.outcome === 'failed' && e.email === 'someone@else.local'))
+})
+
+test('the portal stays shut until it is set up, and a short password does not count', async () => {
+  const saved = { ...env }
+  try {
+    env.adminPassword = ''
+    assert.equal((await adminSignIn()).body.error, 'admin_not_configured')
+    assert.equal((await call('GET', '/admin/overview', admin)).status, 401)
+    env.adminPassword = 'short'
+    const short = await adminSignIn(ADMIN, 'short')
+    assert.equal(short.status, 503)
+    assert.equal(short.body.error, 'admin_password_too_short')
+  } finally {
+    env.adminEmail = saved.adminEmail
+    env.adminPassword = saved.adminPassword
+  }
+  assert.equal((await call('GET', '/admin/overview', admin)).status, 200)
+})
+
+test('a new admin password ends every admin session', async () => {
+  const saved = env.adminPassword
+  try {
+    env.adminPassword = 'a different long password'
+    assert.equal((await call('GET', '/admin/overview', admin)).status, 401)
+  } finally {
+    env.adminPassword = saved
+  }
+})
+
+test('sign-ins to the app leave a trail, failures included', async () => {
   await register('sam@test.local')
   assert.equal((await call('POST', '/auth/login', undefined, { email: 'sam@test.local', password: PASSWORD })).status, 200)
   assert.equal((await call('POST', '/auth/login', undefined, { email: 'sam@test.local', password: 'nope-nope' })).status, 401)
   assert.equal((await call('POST', '/auth/login', undefined, { email: 'ghost@test.local', password: 'nope-nope' })).status, 401)
 
   const trail = await eventually(
-    async () => (await call('GET', '/admin/audit?action=auth.login', admin.token)).body.events as any[],
+    async () => (await call('GET', '/admin/audit?action=auth.login', admin)).body.events as any[],
     (e) => e.filter((x) => x.email === 'ghost@test.local').length > 0 && e.filter((x) => x.email === 'sam@test.local').length >= 2,
   )
   const sam = trail.filter((e) => e.email === 'sam@test.local')
@@ -106,7 +168,7 @@ test('sign-ins leave a trail, failures included', async () => {
   assert.equal(ghost.user_agent, 'AdminTest/1.0')
 })
 
-test('guessing a password is cut off, even when the guess is finally right', async () => {
+test('guessing a user’s password is cut off, even when the guess is finally right', async () => {
   await register('lee@test.local')
   for (let i = 0; i < 8; i++) {
     assert.equal((await call('POST', '/auth/login', undefined, { email: 'lee@test.local', password: `guess-${i}` })).status, 401)
@@ -115,7 +177,7 @@ test('guessing a password is cut off, even when the guess is finally right', asy
   assert.equal(held.status, 429)
   assert.equal(held.body.error, 'too_many_attempts')
 
-  const security = await call('GET', '/admin/security', admin.token)
+  const security = await call('GET', '/admin/security', admin)
   assert.ok((security.body.held as any[]).some((x) => x.rule === 'loginEmail' && x.subject === 'lee@test.local'))
 })
 
@@ -123,7 +185,7 @@ test('turned off: tokens stop working and so does signing in; turned on again, b
   const kim = await register('kim@test.local')
   assert.equal((await call('GET', '/auth/me', kim.token)).status, 200)
 
-  assert.equal((await call('POST', `/admin/users/${kim.id}/disable`, admin.token, { reason: 'abuse report' })).status, 200)
+  assert.equal((await call('POST', `/admin/users/${kim.id}/disable`, admin, { reason: 'abuse report' })).status, 200)
   const refused = await call('GET', '/auth/me', kim.token)
   assert.equal(refused.status, 401)
   assert.equal(refused.body.error, 'account_disabled')
@@ -133,11 +195,11 @@ test('turned off: tokens stop working and so does signing in; turned on again, b
   // A wrong password says nothing about the account being off.
   assert.equal((await call('POST', '/auth/login', undefined, { email: 'kim@test.local', password: 'wrong-one' })).status, 401)
 
-  assert.equal((await call('POST', `/admin/users/${kim.id}/enable`, admin.token)).status, 200)
+  assert.equal((await call('POST', `/admin/users/${kim.id}/enable`, admin)).status, 200)
   assert.equal((await call('GET', '/auth/me', kim.token)).status, 200)
 
   const actions = await eventually(
-    async () => (await call('GET', `/admin/audit?action=admin&userId=${kim.id}`, admin.token)).body.events as any[],
+    async () => (await call('GET', `/admin/audit?action=admin&userId=${kim.id}`, admin)).body.events as any[],
     (e) => e.length >= 2,
   )
   assert.deepEqual(actions.map((e) => e.action).sort(), ['admin.user_disabled', 'admin.user_enabled'])
@@ -147,19 +209,13 @@ test('turned off: tokens stop working and so does signing in; turned on again, b
 test('signed out everywhere: older tokens are refused, a new sign-in works', async () => {
   const jo = await register('jo@test.local')
   const old = app.jwt.sign({ sub: jo.id, orgId: 'x', email: 'jo@test.local', iat: Math.floor(Date.now() / 1000) - 120 })
-  assert.equal((await call('POST', `/admin/users/${jo.id}/sign-out`, admin.token)).status, 200)
+  assert.equal((await call('POST', `/admin/users/${jo.id}/sign-out`, admin)).status, 200)
   const refused = await call('GET', '/auth/me', old)
   assert.equal(refused.status, 401)
   assert.equal(refused.body.error, 'session_revoked')
   const fresh = await call('POST', '/auth/login', undefined, { email: 'jo@test.local', password: PASSWORD })
   assert.equal(fresh.status, 200)
   assert.equal((await call('GET', '/auth/me', fresh.body.token)).status, 200)
-})
-
-test('admins cannot switch themselves or each other off from here', async () => {
-  const self = await call('POST', `/admin/users/${admin.id}/disable`, admin.token)
-  assert.equal(self.status, 409)
-  assert.equal(self.body.error, 'protected_account')
 })
 
 test('a password reset signs out every device that had the old one', async () => {
@@ -180,7 +236,7 @@ test('a person’s page: how they use Cue, never what they wrote', async () => {
     insert into commitments (org_id, user_id, title, kind, due_at, notes)
     values (${u!.org_id}, ${max.id}, 'SECRET TITLE about the divorce', 'task', now() + interval '1 day', 'PRIVATE NOTE')`
 
-  const page = await call('GET', `/admin/users/${max.id}`, admin.token)
+  const page = await call('GET', `/admin/users/${max.id}`, admin)
   assert.equal(page.status, 200)
   assert.equal(page.body.counts.plans_open, 1)
   const raw = JSON.stringify(page.body)
@@ -189,26 +245,26 @@ test('a person’s page: how they use Cue, never what they wrote', async () => {
   assert.ok(!raw.includes('password'), 'nothing about the password')
 
   const viewed = await eventually(
-    async () => (await call('GET', `/admin/audit?action=admin.user_viewed&userId=${max.id}`, admin.token)).body.events as any[],
+    async () => (await call('GET', `/admin/audit?action=admin.user_viewed&userId=${max.id}`, admin)).body.events as any[],
     (e) => e.length > 0,
   )
   assert.equal(viewed[0].actor_email, ADMIN)
 })
 
 test('security and system pages answer, with their checks and jobs', async () => {
-  const security = await call('GET', '/admin/security', admin.token)
+  const security = await call('GET', '/admin/security', admin)
   assert.equal(security.status, 200)
   assert.ok(Array.isArray(security.body.checks) && security.body.checks.length > 0)
-  assert.deepEqual(security.body.admins.map((a: any) => a.email), [ADMIN])
-  assert.equal(security.body.admins[0].hasAccount, true)
+  assert.equal(security.body.admin.email, ADMIN)
+  assert.ok(security.body.checks.find((c: any) => c.key === 'admin').ok)
 
-  const system = await call('GET', '/admin/system', admin.token)
+  const system = await call('GET', '/admin/system', admin)
   assert.equal(system.status, 200)
   assert.ok(Number(system.body.database.size_bytes) > 0)
   assert.ok(Array.isArray(system.body.jobs))
   assert.ok(system.body.server.uptimeSeconds >= 0)
 
-  const people = await call('GET', '/admin/users?filter=all&q=test.local', admin.token)
+  const people = await call('GET', '/admin/users?filter=all&q=test.local', admin)
   assert.equal(people.status, 200)
-  assert.ok(people.body.users.some((u: any) => u.email === ADMIN && u.isAdmin))
+  assert.ok(people.body.users.some((u: any) => u.email === 'pat@test.local'))
 })

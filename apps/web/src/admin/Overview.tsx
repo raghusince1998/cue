@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { USES } from '@cue/shared'
-import { api } from '../../lib/api.ts'
-import { errorText } from '../../lib/errors.ts'
-import { LoadFailed } from '../../components/LoadFailed.tsx'
-import type { AdminTab } from './AdminPortal.tsx'
+import { adminApi as api } from './api.ts'
+import { errorText } from '../lib/errors.ts'
+import { LoadFailed } from '../components/LoadFailed.tsx'
+import type { AdminTab } from './AdminApp.tsx'
 import { DayBars, num, Section, Stat } from './shared.tsx'
 
 interface OverviewData {

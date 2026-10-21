@@ -168,6 +168,8 @@ export const auditEvents = pgTable(
     at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
     userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
     actorId: uuid('actor_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+    /** The admin portal's sign-in email, for what an admin did. */
+    actor: text('actor'),
     email: text('email'),
     action: text('action').notNull(),
     outcome: text('outcome').notNull().default('ok'),

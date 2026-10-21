@@ -67,7 +67,6 @@ export const common: Record<string, string> = {
   Undo: 'वापस लें',
   Retry: 'फिर कोशिश करें',
   'Open it': 'खोलें',
-  'Admin portal': 'एडमिन पोर्टल',
   'Too many wrong passwords. Wait 15 minutes, or reset your password.': 'बहुत बार गलत पासवर्ड डाला गया। 15 मिनट रुकें, या पासवर्ड रीसेट करें।',
   'This account has been turned off. Write to support to have it turned back on.': 'यह अकाउंट बंद कर दिया गया है। इसे फिर से चालू करवाने के लिए सपोर्ट को लिखें।',
 

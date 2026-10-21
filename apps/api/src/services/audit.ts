@@ -26,6 +26,8 @@ export type AuditAction =
   | 'mail.off'
   | 'device.added'
   | 'device.removed'
+  | 'admin.login'
+  | 'admin.logout'
   | 'admin.user_viewed'
   | 'admin.user_disabled'
   | 'admin.user_enabled'
@@ -38,6 +40,8 @@ export interface AuditEntry {
   userId?: string | null
   /** An admin acting on someone else's account. */
   actorId?: string | null
+  /** The admin portal's sign-in email, for what an admin did. */
+  actor?: string | null
   /** The address typed, for a sign-in against no account. */
   email?: string | null
   outcome?: AuditOutcome
@@ -69,6 +73,7 @@ export function audit(req: FastifyRequest | null, entry: AuditEntry): void {
       action: entry.action,
       userId: entry.userId ?? null,
       actorId: entry.actorId ?? null,
+      actor: entry.actor ?? null,
       email: entry.email?.toLowerCase().slice(0, 254) ?? null,
       outcome: entry.outcome ?? 'ok',
       ip: req ? clientIp(req).slice(0, 64) : null,

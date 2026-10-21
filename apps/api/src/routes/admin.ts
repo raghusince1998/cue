@@ -6,17 +6,24 @@ import { fileURLToPath } from 'node:url'
 import { eq, sql, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, schema } from '../db/index.ts'
-import { forgetAccountState, scope } from '../auth.ts'
-import { isAdmin } from '../admins.ts'
+import { forgetAccountState } from '../auth.ts'
 import { env, pushConfigured } from '../env.ts'
-import { audit, AUDIT_KEEP_DAYS } from '../services/audit.ts'
-import { heldNow, RULES } from '../services/throttle.ts'
+import { audit, AUDIT_KEEP_DAYS, clientIp } from '../services/audit.ts'
+import { clear, count, heldNow, isLimited, RULES } from '../services/throttle.ts'
+import {
+  ADMIN_MIN_PASSWORD,
+  adminSetup,
+  credentialsMatch,
+  signAdminToken,
+  verifyAdminToken,
+} from '../services/adminSession.ts'
 import { jobStates, pushStats, recentErrors, startedAt } from '../services/health.ts'
 import { mailConfigured } from '../services/mail.ts'
 
 /**
  * The admin portal: people, what happened to their accounts, security and
- * the running system — for the accounts in ADMIN_EMAILS only.
+ * the running system — behind its own sign-in (ADMIN_EMAIL / ADMIN_PASSWORD
+ * in .env), never a user's session.
  *
  * What it shows about a person is how they use Cue, never what they wrote:
  * counts, dates, settings, connections and the account trail. No plan
@@ -47,6 +54,52 @@ function release(): { sha: string | null; builtAt: string | null } {
 
 const VIEW_EVERY_MS = 10 * 60_000
 const viewed = new Map<string, number>()
+
+/**
+ * Signing in to the portal. Five wrong tries from an address, or thirty from
+ * anywhere, in fifteen minutes and it stops answering for a while.
+ */
+export async function adminSessionRoutes(app: FastifyInstance) {
+  app.post('/admin/login', async (req, reply) => {
+    const body = z
+      .object({ email: z.string().trim().max(254), password: z.string().max(500) })
+      .parse(req.body ?? {})
+    const setup = adminSetup()
+    if (setup !== 'ok') {
+      return reply.code(503).send({
+        error: setup === 'password_too_short' ? 'admin_password_too_short' : 'admin_not_configured',
+        minLength: ADMIN_MIN_PASSWORD,
+      })
+    }
+    const ip = clientIp(req)
+    if (isLimited('adminIp', ip) || isLimited('adminAll', 'all')) {
+      audit(req, { action: 'admin.login', email: body.email, outcome: 'blocked', detail: { reason: 'too_many_attempts' } })
+      return reply.code(429).send({ error: 'too_many_attempts' })
+    }
+    if (!credentialsMatch(body.email, body.password)) {
+      count('adminIp', ip)
+      count('adminAll', 'all')
+      audit(req, { action: 'admin.login', email: body.email, outcome: 'failed', detail: { reason: 'wrong_credentials' } })
+      return reply.code(401).send({ error: 'invalid_credentials' })
+    }
+    clear('adminIp', ip)
+    audit(req, { action: 'admin.login', actor: env.adminEmail })
+    return { ...signAdminToken(), email: env.adminEmail }
+  })
+
+  /** Is this session still good? The portal asks on opening. */
+  app.get('/admin/session', async (req, reply) => {
+    const header = String(req.headers.authorization ?? '')
+    const email = header.startsWith('Bearer ') ? verifyAdminToken(header.slice(7)) : null
+    if (!email) return reply.code(401).send({ error: 'unauthorized', setup: adminSetup() })
+    return { email }
+  })
+
+  app.post('/admin/logout', { onRequest: app.requireAdmin }, async (req) => {
+    audit(req, { action: 'admin.logout', actor: req.adminEmail })
+    return { ok: true }
+  })
+}
 
 export async function adminRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.requireAdmin)
@@ -165,7 +218,7 @@ export async function adminRoutes(app: FastifyInstance) {
       total,
       page: q.page,
       pageSize: PAGE,
-      users: list.map((u) => ({ ...u, isAdmin: isAdmin(u.email as string) })),
+      users: list,
     }
   })
 
@@ -221,7 +274,8 @@ export async function adminRoutes(app: FastifyInstance) {
       order by d.day`)
 
     const events = await rows<Record<string, unknown>>(sql`
-      select a.id, a.at, a.action, a.outcome, a.ip, a.user_agent, a.detail, actor.email as actor_email
+      select a.id, a.at, a.action, a.outcome, a.ip, a.user_agent, a.detail,
+             coalesce(a.actor, actor.email) as actor_email
       from audit_events a
       left join users actor on actor.id = a.actor_id
       where a.user_id = ${id}
@@ -230,13 +284,13 @@ export async function adminRoutes(app: FastifyInstance) {
 
     // Who looked at whose account goes in the trail — once per sitting, not
     // on every refresh after a change.
-    const viewKey = `${scope(req).sub}:${id}`
+    const viewKey = `${req.adminEmail}:${id}`
     if (Date.now() - (viewed.get(viewKey) ?? 0) > VIEW_EVERY_MS) {
       viewed.set(viewKey, Date.now())
-      audit(req, { action: 'admin.user_viewed', userId: id, actorId: scope(req).sub })
+      audit(req, { action: 'admin.user_viewed', userId: id, actor: req.adminEmail })
     }
     return {
-      user: { ...user, isAdmin: isAdmin(user.email as string) },
+      user,
       counts,
       connections,
       devices,
@@ -245,56 +299,40 @@ export async function adminRoutes(app: FastifyInstance) {
     }
   })
 
-  /** An admin's own account, or another admin's, is not theirs to switch off from here. */
-  async function target(
-    adminId: string,
-    id: string,
-  ): Promise<{ error: 'not_found' | 'protected_account'; status: number } | { row: { id: string; email: string } }> {
-    const [row] = await db
-      .select({ id: schema.users.id, email: schema.users.email })
-      .from(schema.users)
-      .where(eq(schema.users.id, id))
-      .limit(1)
-    if (!row) return { error: 'not_found' as const, status: 404 }
-    if (row.id === adminId || isAdmin(row.email)) return { error: 'protected_account' as const, status: 409 }
-    return { row }
+  async function exists(id: string): Promise<boolean> {
+    const [row] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.id, id)).limit(1)
+    return Boolean(row)
   }
 
   app.post('/admin/users/:id/disable', async (req, reply) => {
     const { id } = idParam.parse(req.params)
     const { reason } = z.object({ reason: z.string().trim().max(300).optional() }).parse(req.body ?? {})
-    const adminId = scope(req).sub
-    const found = await target(adminId, id)
-    if ('error' in found) return reply.code(found.status).send({ error: found.error })
+    if (!(await exists(id))) return reply.code(404).send({ error: 'not_found' })
     await db
       .update(schema.users)
       .set({ disabledAt: new Date(), disabledReason: reason || null })
       .where(eq(schema.users.id, id))
     forgetAccountState(id)
-    audit(req, { action: 'admin.user_disabled', userId: id, actorId: adminId, detail: reason ? { reason } : undefined })
+    audit(req, { action: 'admin.user_disabled', userId: id, actor: req.adminEmail, detail: reason ? { reason } : undefined })
     return { ok: true }
   })
 
   app.post('/admin/users/:id/enable', async (req, reply) => {
     const { id } = idParam.parse(req.params)
-    const adminId = scope(req).sub
-    const found = await target(adminId, id)
-    if ('error' in found) return reply.code(found.status).send({ error: found.error })
+    if (!(await exists(id))) return reply.code(404).send({ error: 'not_found' })
     await db.update(schema.users).set({ disabledAt: null, disabledReason: null }).where(eq(schema.users.id, id))
     forgetAccountState(id)
-    audit(req, { action: 'admin.user_enabled', userId: id, actorId: adminId })
+    audit(req, { action: 'admin.user_enabled', userId: id, actor: req.adminEmail })
     return { ok: true }
   })
 
   /** Sign out everywhere: every token out there stops working; signing in again works. */
   app.post('/admin/users/:id/sign-out', async (req, reply) => {
     const { id } = idParam.parse(req.params)
-    const adminId = scope(req).sub
-    const found = await target(adminId, id)
-    if ('error' in found) return reply.code(found.status).send({ error: found.error })
+    if (!(await exists(id))) return reply.code(404).send({ error: 'not_found' })
     await db.update(schema.users).set({ sessionsFrom: new Date() }).where(eq(schema.users.id, id))
     forgetAccountState(id)
-    audit(req, { action: 'admin.sessions_revoked', userId: id, actorId: adminId })
+    audit(req, { action: 'admin.sessions_revoked', userId: id, actor: req.adminEmail })
     return { ok: true }
   })
 
@@ -324,7 +362,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const events = await rows<Record<string, unknown>>(sql`
       select a.id, a.at, a.action, a.outcome, a.ip, a.user_agent, a.detail, a.user_id,
-             coalesce(u.email, a.email) as email, actor.email as actor_email
+             coalesce(u.email, a.email) as email, coalesce(a.actor, actor.email) as actor_email
       from audit_events a
       left join users u on u.id = a.user_id
       left join users actor on actor.id = a.actor_id
@@ -374,24 +412,24 @@ export async function adminRoutes(app: FastifyInstance) {
       limit 15`)
 
     const adminActions = await rows<Record<string, unknown>>(sql`
-      select a.id, a.at, a.action, actor.email as actor_email, u.email as email, a.detail
+      select a.id, a.at, a.action, coalesce(a.actor, actor.email) as actor_email, u.email as email, a.detail
       from audit_events a
       left join users actor on actor.id = a.actor_id
       left join users u on u.id = a.user_id
-      where a.action like 'admin.%' and a.action <> 'admin.user_viewed'
+      where a.action in ('admin.user_disabled', 'admin.user_enabled', 'admin.sessions_revoked')
       order by a.at desc
       limit 15`)
 
     const disabled = await rows<Record<string, unknown>>(sql`
       select id, email, disabled_at, disabled_reason from users where disabled_at is not null order by disabled_at desc`)
 
-    const adminAccounts = await rows<{ email: string; last_seen_at: string | null }>(sql`
-      select lower(email) as email, last_seen_at from users
-      where lower(email) in (${sql.join(env.adminEmails.length ? env.adminEmails.map((e) => sql`${e}`) : [sql`''`], sql`, `)})`)
-    const admins = env.adminEmails.map((email) => {
-      const found = adminAccounts.find((a) => a.email === email)
-      return { email, hasAccount: Boolean(found), lastSeenAt: found?.last_seen_at ?? null }
-    })
+    // The portal's own sign-ins: who, when, from where — and the failures.
+    const adminSignIns = await rows<Record<string, unknown>>(sql`
+      select id, at, action, outcome, ip, user_agent, coalesce(actor, email) as email, detail
+      from audit_events
+      where action in ('admin.login', 'admin.logout')
+      order by at desc
+      limit 12`)
 
     const dbUrl = env.databaseUrl
     const local = /@(localhost|127\.0\.0\.1)[:/]/.test(dbUrl)
@@ -421,10 +459,10 @@ export async function adminRoutes(app: FastifyInstance) {
         note: local ? 'Local database.' : 'Add ?sslmode=require to DATABASE_URL.',
       },
       {
-        key: 'admins',
-        label: 'Admins are named',
-        ok: env.adminEmails.length > 0,
-        note: 'ADMIN_EMAILS lists who can open this portal.',
+        key: 'admin',
+        label: 'The admin password is long',
+        ok: adminSetup() === 'ok',
+        note: `ADMIN_PASSWORD should be at least ${ADMIN_MIN_PASSWORD} characters.`,
       },
       {
         key: 'mail',
@@ -462,7 +500,7 @@ export async function adminRoutes(app: FastifyInstance) {
       resets,
       adminActions,
       disabled,
-      admins,
+      admin: { email: env.adminEmail, signIns: adminSignIns },
       checks,
       manual,
     }

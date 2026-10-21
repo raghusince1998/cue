@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '../../lib/api.ts'
-import { errorText } from '../../lib/errors.ts'
-import { LoadFailed } from '../../components/LoadFailed.tsx'
+import { adminApi as api } from './api.ts'
+import { errorText } from '../lib/errors.ts'
+import { LoadFailed } from '../components/LoadFailed.tsx'
 import { ago, describe, device, Empty, Outcome, when, type AuditEvent } from './shared.tsx'
 
 const GROUPS = [
@@ -10,7 +10,7 @@ const GROUPS = [
   { key: 'auth', label: 'Accounts and passwords' },
   { key: 'oauth', label: 'Connected accounts' },
   { key: 'device', label: 'Devices' },
-  { key: 'admin', label: 'Admin actions' },
+  { key: 'admin', label: 'Admin portal' },
 ] as const
 
 const OUTCOMES = [

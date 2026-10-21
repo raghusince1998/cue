@@ -153,6 +153,13 @@ export const env = {
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean),
+  /**
+   * The admin portal's own sign-in (/admin): not a Cue account, so it works
+   * without email and cannot be reached from a user's session. Both empty,
+   * the portal stays shut. The password must be at least 12 characters.
+   */
+  adminEmail: (process.env.ADMIN_EMAIL ?? '').trim().toLowerCase(),
+  adminPassword: process.env.ADMIN_PASSWORD ?? '',
   /** Whether exam boards' public notice pages are read on a timer ("off" to stop). */
   noticeWatch: (process.env.NOTICE_WATCH ?? 'on') !== 'off',
 

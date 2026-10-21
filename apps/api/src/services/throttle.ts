@@ -21,6 +21,10 @@ export const RULES = {
   resetEmail: { limit: 3, windowMs: 60 * 60_000 },
   /** Reset links asked from one address. */
   resetIp: { limit: 10, windowMs: 60 * 60_000 },
+  /** Wrong admin sign-ins from one address. */
+  adminIp: { limit: 5, windowMs: 15 * 60_000 },
+  /** Wrong admin sign-ins from anywhere: many addresses cannot share the work. */
+  adminAll: { limit: 30, windowMs: 15 * 60_000 },
 } satisfies Record<string, Rule>
 
 export type RuleName = keyof typeof RULES

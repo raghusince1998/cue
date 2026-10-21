@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { USES } from '@cue/shared'
-import { api } from '../../lib/api.ts'
-import { errorText } from '../../lib/errors.ts'
-import { toast } from '../../lib/toast.ts'
-import { LoadFailed } from '../../components/LoadFailed.tsx'
-import { Modal } from '../../components/Modal.tsx'
+import { adminApi as api } from './api.ts'
+import { errorText } from '../lib/errors.ts'
+import { toast } from '../lib/toast.ts'
+import { LoadFailed } from '../components/LoadFailed.tsx'
+import { Modal } from '../components/Modal.tsx'
 import { ago, day, describe, device, Empty, num, Outcome, Section, when, type AuditEvent, DayBars } from './shared.tsx'
 
 interface Row {
@@ -21,7 +21,6 @@ interface Row {
   people: number
   connections: number
   devices: number
-  isAdmin: boolean
 }
 
 const FILTERS = [
@@ -35,10 +34,9 @@ const FILTERS = [
 
 const useLabel = (key: string) => USES.find((u) => u.key === key)?.label ?? key
 
-function Badges({ u }: { u: { isAdmin?: boolean; is_demo?: boolean; disabled_at?: string | null } }) {
+function Badges({ u }: { u: { is_demo?: boolean; disabled_at?: string | null } }) {
   return (
     <>
-      {u.isAdmin && <span className="admin-pill is-admin">admin</span>}
       {u.is_demo && <span className="admin-pill">demo</span>}
       {u.disabled_at && <span className="admin-pill is-blocked">off</span>}
     </>
@@ -225,8 +223,7 @@ export function PersonDetail({ id, onClose }: { id: string; onClose: () => void 
       toast(done)
       load()
     } catch (err) {
-      const code = (err as { code?: string }).code
-      toast(code === 'protected_account' ? 'Admins cannot be changed from here.' : errorText(err), 'error')
+      toast(errorText(err), 'error')
     } finally {
       setBusy(false)
     }
@@ -256,39 +253,37 @@ export function PersonDetail({ id, onClose }: { id: string; onClose: () => void 
                 </p>
               )}
             </div>
-            {!u.isAdmin && (
-              <div className="row admin-actions">
+            <div className="row admin-actions">
+              <button
+                className="ghost small-btn"
+                disabled={busy}
+                onClick={() => {
+                  if (window.confirm(`Sign ${u.email} out on every device? They can sign in again.`)) {
+                    void act('sign-out', 'Signed out everywhere.')
+                  }
+                }}
+              >
+                Sign out everywhere
+              </button>
+              {u.disabled_at ? (
+                <button className="ghost small-btn" disabled={busy} onClick={() => void act('enable', 'Turned back on.')}>
+                  Turn back on
+                </button>
+              ) : (
                 <button
-                  className="ghost small-btn"
+                  className="ghost small-btn danger-text"
                   disabled={busy}
                   onClick={() => {
-                    if (window.confirm(`Sign ${u.email} out on every device? They can sign in again.`)) {
-                      void act('sign-out', 'Signed out everywhere.')
-                    }
+                    const reason = window.prompt(
+                      `Turn off ${u.email}? They will be signed out and cannot sign in until it is turned back on. Nothing is deleted.\n\nReason (kept in the activity log):`,
+                    )
+                    if (reason !== null) void act('disable', 'Turned off.', { reason })
                   }}
                 >
-                  Sign out everywhere
+                  Turn off
                 </button>
-                {u.disabled_at ? (
-                  <button className="ghost small-btn" disabled={busy} onClick={() => void act('enable', 'Turned back on.')}>
-                    Turn back on
-                  </button>
-                ) : (
-                  <button
-                    className="ghost small-btn danger-text"
-                    disabled={busy}
-                    onClick={() => {
-                      const reason = window.prompt(
-                        `Turn off ${u.email}? They will be signed out and cannot sign in until it is turned back on. Nothing is deleted.\n\nReason (kept in the activity log):`,
-                      )
-                      if (reason !== null) void act('disable', 'Turned off.', { reason })
-                    }}
-                  >
-                    Turn off
-                  </button>
-                )}
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           <p className="muted small">

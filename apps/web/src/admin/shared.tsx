@@ -117,6 +117,7 @@ const REASONS: Record<string, string> = {
   too_many_requests: 'asked too often',
   account_disabled: 'account is turned off',
   invalid_token: 'link not valid',
+  wrong_credentials: 'wrong email or password',
 }
 
 const PROVIDERS: Record<string, string> = { google: 'Google', microsoft: 'Microsoft' }
@@ -156,6 +157,10 @@ export function describe(e: AuditEvent): string {
       return 'Added a device for reminders'
     case 'device.removed':
       return 'Removed a device'
+    case 'admin.login':
+      return e.outcome === 'ok' ? 'Admin signed in' : e.outcome === 'blocked' ? with_('Admin sign-in refused') : with_('Admin sign-in failed')
+    case 'admin.logout':
+      return 'Admin signed out'
     case 'admin.user_viewed':
       return 'Account opened in the admin portal'
     case 'admin.user_disabled':

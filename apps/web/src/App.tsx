@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './lib/auth.tsx'
 import { language, msg, t } from './lib/i18n.tsx'
@@ -31,9 +31,6 @@ import { PrivacyPage, TermsPage } from './pages/Legal.tsx'
 import Bills from './pages/Bills.tsx'
 import Exams from './pages/Exams.tsx'
 import NoticeReview from './pages/NoticeReview.tsx'
-
-/** Only admins ever open it, so nobody else downloads it. */
-const AdminPortal = lazy(() => import('./pages/admin/AdminPortal.tsx'))
 import ExamsHome from './pages/ExamsHome.tsx'
 import { appMode } from './lib/appMode.ts'
 import { groupSections, tabsFor, type Section } from '@cue/shared'
@@ -97,11 +94,6 @@ function MoreMenu({ sections, onChangeUses, admin }: { sections: Section[]; onCh
               ))}
             </div>
           ))}
-          {admin && (
-            <NavLink to="/admin" end role="menuitem" className="tabs-menu-admin">
-              {t('Admin portal')}
-            </NavLink>
-          )}
           {admin && (
             <NavLink to="/admin/notices" role="menuitem" className="tabs-menu-admin">
               {t('Review exam notices')}
@@ -419,24 +411,6 @@ export default function App() {
           <Route path="/reset" element={<ResetPassword />} />
           <Route path="/exams" element={<Exams />} />
           <Route path="/admin/notices" element={me?.isAdmin ? <NoticeReview /> : <Navigate to="/" replace />} />
-          <Route
-            path="/admin"
-            element={
-              me?.isAdmin ? (
-                <Suspense
-                  fallback={
-                    <div className="boot">
-                      <span className="spinner" />
-                    </div>
-                  }
-                >
-                  <AdminPortal />
-                </Suspense>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
           {/* Just signed in or up: Cue Exams opens on the exams. */}
           <Route path="/login" element={<Navigate to={appMode() === 'exams' ? '/exams' : '/'} replace />} />
           <Route path="/register" element={<Navigate to={appMode() === 'exams' ? '/exams' : '/'} replace />} />

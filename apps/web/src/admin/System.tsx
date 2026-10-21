@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '../../lib/api.ts'
-import { errorText } from '../../lib/errors.ts'
-import { LoadFailed } from '../../components/LoadFailed.tsx'
+import { adminApi as api } from './api.ts'
+import { errorText } from '../lib/errors.ts'
+import { LoadFailed } from '../components/LoadFailed.tsx'
 import { ago, bytes, Empty, num, Section, span, Stat, uptime, when } from './shared.tsx'
 
 interface Job {

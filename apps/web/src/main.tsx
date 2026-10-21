@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { registerSW } from 'virtual:pwa-register'
@@ -15,12 +15,32 @@ catchShare()
 const container = document.getElementById('root')
 if (!container) throw new Error('#root missing from index.html')
 
+/**
+ * The admin portal is a separate app: its own sign-in, session and layout.
+ * Opened at /admin, the user app — and the user's session — never loads; only
+ * this page downloads its code.
+ */
+const isAdmin = window.location.pathname === '/admin' || window.location.pathname.startsWith('/admin/portal')
+const AdminApp = lazy(() => import('./admin/AdminApp.tsx'))
+
 createRoot(container).render(
   <React.StrictMode>
     <BrowserRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
+      {isAdmin ? (
+        <Suspense
+          fallback={
+            <div className="boot">
+              <span className="spinner" />
+            </div>
+          }
+        >
+          <AdminApp />
+        </Suspense>
+      ) : (
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      )}
     </BrowserRouter>
   </React.StrictMode>,
 )

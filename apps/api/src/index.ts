@@ -23,7 +23,7 @@ import { owedRoutes } from './routes/owed.ts'
 import { trackerRoutes } from './routes/trackers.ts'
 import { examRoutes } from './routes/exams.ts'
 import { noticeRoutes } from './routes/notices.ts'
-import { adminRoutes } from './routes/admin.ts'
+import { adminRoutes, adminSessionRoutes } from './routes/admin.ts'
 import { assetLinks } from './assetLinks.ts'
 import { billRoutes } from './routes/bills.ts'
 import { deliveryRoutes } from './routes/deliveries.ts'
@@ -97,6 +97,7 @@ await app.register(owedRoutes, { prefix: '/api' })
 await app.register(trackerRoutes, { prefix: '/api' })
 await app.register(examRoutes, { prefix: '/api' })
 await app.register(noticeRoutes, { prefix: '/api' })
+await app.register(adminSessionRoutes, { prefix: '/api' })
 await app.register(adminRoutes, { prefix: '/api' })
 await app.register(billRoutes, { prefix: '/api' })
 await app.register(deliveryRoutes, { prefix: '/api' })

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '../../lib/api.ts'
-import { errorText } from '../../lib/errors.ts'
-import { LoadFailed } from '../../components/LoadFailed.tsx'
-import { ago, describe, Empty, num, Outcome, Section, Stat, when, type AuditEvent } from './shared.tsx'
+import { adminApi as api } from './api.ts'
+import { errorText } from '../lib/errors.ts'
+import { LoadFailed } from '../components/LoadFailed.tsx'
+import { ago, describe, device, Empty, num, Outcome, Section, Stat, when, type AuditEvent } from './shared.tsx'
 
 interface SecurityData {
   signIns: Record<string, number>
@@ -13,7 +13,7 @@ interface SecurityData {
   resets: (AuditEvent & { email: string | null })[]
   adminActions: (AuditEvent & { email: string | null })[]
   disabled: { id: string; email: string; disabled_at: string; disabled_reason: string | null }[]
-  admins: { email: string; hasAccount: boolean; lastSeenAt: string | null }[]
+  admin: { email: string; signIns: (AuditEvent & { email: string | null })[] }
   checks: { key: string; label: string; ok: boolean; note: string }[]
   manual: string[]
 }
@@ -23,6 +23,8 @@ const RULE_LABELS: Record<string, string> = {
   loginEmail: 'Sign-ins to this account',
   resetEmail: 'Reset links for this account',
   resetIp: 'Reset links from this address',
+  adminIp: 'Admin sign-ins from this address',
+  adminAll: 'Admin sign-ins from anywhere',
 }
 
 export function Security({ onOpenPerson }: { onOpenPerson: (id: string) => void }) {
@@ -195,18 +197,31 @@ export function Security({ onOpenPerson }: { onOpenPerson: (id: string) => void 
       </div>
 
       <div className="admin-columns">
-        <Section title="Admins">
-          <ul className="admin-list">
-            {data.admins.length === 0 && <Empty>None set — ADMIN_EMAILS is empty.</Empty>}
-            {data.admins.map((a) => (
-              <li key={a.email}>
-                <strong>{a.email}</strong>{' '}
-                <span className="muted small">
-                  {a.hasAccount ? `· last active ${ago(a.lastSeenAt)}` : '· no account with this email yet'}
-                </span>
-              </li>
-            ))}
-          </ul>
+        <Section title="Admin sign-ins">
+          <p className="muted small">
+            The portal signs in as <strong>{data.admin.email}</strong> (ADMIN_EMAIL on the server).
+          </p>
+          {data.admin.signIns.length === 0 ? (
+            <Empty>None yet.</Empty>
+          ) : (
+            <ul className="admin-events">
+              {data.admin.signIns.map((e) => (
+                <li key={e.id}>
+                  <span className="admin-event-when" title={when(e.at)}>
+                    {ago(e.at)}
+                  </span>
+                  <span>
+                    {describe(e)} <Outcome outcome={e.outcome} />
+                    <span className="muted small">
+                      {e.outcome !== 'ok' && e.email ? ` · as ${e.email}` : ''}
+                      {e.ip ? ` · ${e.ip}` : ''}
+                      {e.user_agent ? ` · ${device(e.user_agent)}` : ''}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </Section>
 
         <Section title="Turned off">

@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import fastifyJwt from '@fastify/jwt'
 import { eq } from 'drizzle-orm'
 import { env } from './env.ts'
-import { isAdmin } from './admins.ts'
+import { verifyAdminToken } from './services/adminSession.ts'
 
 export interface AuthClaims {
   sub: string
@@ -22,8 +22,12 @@ declare module '@fastify/jwt' {
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>
-    /** Signed in, and an admin (ADMIN_EMAILS). Anyone else gets a plain 404. */
+    /** The admin portal's own session (ADMIN_EMAIL / ADMIN_PASSWORD); a user's token does not count. */
     requireAdmin: (req: FastifyRequest, reply: FastifyReply) => Promise<void>
+  }
+  interface FastifyRequest {
+    /** Set by requireAdmin: who is using the admin portal. */
+    adminEmail?: string
   }
 }
 
@@ -118,12 +122,12 @@ export async function registerAuth(app: FastifyInstance) {
     noteSeen(req.user.sub)
   })
 
+  app.decorateRequest('adminEmail', undefined)
   app.decorate('requireAdmin', async (req: FastifyRequest, reply: FastifyReply) => {
-    await app.authenticate(req, reply)
-    if (reply.sent) return
-    const state = await accountState(req.user.sub).catch(() => null)
-    // Not "forbidden": to anyone else, there is nothing here.
-    if (!state || !isAdmin(state.email)) return reply.code(404).send({ error: 'not_found' })
+    const header = String(req.headers.authorization ?? '')
+    const email = header.startsWith('Bearer ') ? verifyAdminToken(header.slice(7)) : null
+    if (!email) return reply.code(401).send({ error: 'unauthorized' })
+    req.adminEmail = email
   })
 }
 
