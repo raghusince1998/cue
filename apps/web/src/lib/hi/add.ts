@@ -265,6 +265,14 @@ export const add: Record<string, string> = {
   'This browser has no built-in dictation.': 'इस ब्राउज़र में बोलकर लिखने की सुविधा नहीं है।',
   'Microphone permission was denied.': 'माइक्रोफ़ोन की अनुमति नहीं मिली।',
   'No microphone was found.': 'कोई माइक्रोफ़ोन नहीं मिला।',
+
+  // Changing the preview, or a saved plan's time, by hand
+  'Pick a day and time…': 'दिन और समय चुनें…',
+  'Changed by you': 'आपने बदला',
+  'Undo changes': 'बदलाव हटाएँ',
+  'At a set time': 'तय समय पर',
+  'Morning, evening…': 'सुबह, शाम…',
+  Time: 'समय',
   'Did not catch anything — try again.': 'कुछ सुनाई नहीं दिया — फिर कोशिश करें।',
   'Dictation needs a network connection.': 'बोलकर लिखने के लिए इंटरनेट चाहिए।',
   'This browser blocked the speech service.': 'इस ब्राउज़र ने बोली पहचानने की सेवा रोक दी।',

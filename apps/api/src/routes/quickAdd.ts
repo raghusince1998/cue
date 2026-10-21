@@ -66,6 +66,7 @@ import {
   trackerStageLabel,
   type CommitmentKind,
   type Lang,
+  TIME_WINDOWS,
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { langOf, msg, t } from '../i18n.ts'
@@ -155,6 +156,19 @@ const quickInput = z.object({
   accept: z.array(z.enum(['start-early', 'gift', 'prepare', 'move-after-trip', 'book-cab'])).max(5).optional(),
   /** Work or personal, flipped by the person from what the preview read. */
   sphere: z.enum(['work', 'personal']).optional(),
+  /**
+   * What the person changed in the preview before saving — the title, the day
+   * and time, how long. It wins over what the words said.
+   */
+  edits: z
+    .object({
+      title: z.string().trim().min(1).max(300).optional(),
+      dueAt: z.string().datetime().optional(),
+      durationMinutes: z.number().int().min(5).max(480).optional(),
+      flexibility: z.enum(['fixed', 'flexible']).optional(),
+      preferredWindow: z.enum(TIME_WINDOWS).nullable().optional(),
+    })
+    .optional(),
 })
 
 export type QuickKind =
@@ -223,6 +237,7 @@ export async function quickAddRoutes(app: FastifyInstance) {
       plan.dueAt = moved.moveTo!
       plan.summary = `${plan.title} — ${new Date(plan.dueAt).toLocaleString(inLocale(lang, []), WHEN)}`
     }
+    if (body.edits) applyEdits(plan, body.edits, lang)
 
     // What the person chose about what the preview offered.
     if (body.contactId === null) {
@@ -651,6 +666,28 @@ export async function quickAddRoutes(app: FastifyInstance) {
     }
     return { ok: true }
   })
+}
+
+/**
+ * The preview, changed by the person before saving: their title, day, time
+ * and length win over the words. A plan the words gave no time to becomes an
+ * ordinary plan once a time is set; a day moved off the trip it was read
+ * against is no longer that trip's.
+ */
+export function applyEdits(plan: QuickPlan, edits: NonNullable<z.infer<typeof quickInput>['edits']>, lang: Lang): void {
+  if (plan.kind !== 'commitment' && plan.kind !== 'needsTime') return
+  if (edits.title) plan.title = edits.title
+  if (edits.durationMinutes) plan.durationMinutes = edits.durationMinutes
+  if (edits.dueAt) {
+    const before = plan.dueAt ? new Date(plan.dueAt) : null
+    const at = new Date(edits.dueAt)
+    plan.kind = 'commitment'
+    plan.dueAt = at.toISOString()
+    plan.flexibility = edits.flexibility ?? 'fixed'
+    plan.preferredWindow = plan.flexibility === 'flexible' ? (edits.preferredWindow ?? plan.preferredWindow ?? null) : null
+    if (plan.trip && (!before || before.toDateString() !== at.toDateString())) plan.trip = null
+  }
+  if (plan.dueAt) plan.summary = `${plan.title} — ${new Date(plan.dueAt).toLocaleString(inLocale(lang, []), WHEN)}`
 }
 
 export interface QuickPlan {

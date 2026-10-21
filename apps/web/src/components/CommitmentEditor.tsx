@@ -8,11 +8,13 @@ import {
   type CommitmentStatus,
   type ConflictReport,
   type PlaceDTO,
+  type TimeWindow,
 } from '@cue/shared'
 import { ApiError, api } from '../lib/api.ts'
 import { msg, rich, t } from '../lib/i18n.tsx'
-import { formatDateTime, toLocalInputValue } from '../lib/time.ts'
+import { formatDateTime } from '../lib/time.ts'
 import { ConflictWarning } from './ConflictWarning.tsx'
+import { WhenPicker } from './WhenPicker.tsx'
 import { errorText } from '../lib/errors.ts'
 
 const STATUSES: { value: CommitmentStatus; label: string }[] = [
@@ -39,6 +41,9 @@ export function CommitmentEditor({
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState<(typeof COMMITMENT_KIND)[number]>('callback')
   const [dueAt, setDueAt] = useState<Date>(new Date())
+  /** "The evening" until a time is set: then it is that time. */
+  const [flexibility, setFlexibility] = useState<'fixed' | 'flexible'>('fixed')
+  const [window, setWindow] = useState<TimeWindow | null>(null)
   const [durationMinutes, setDurationMinutes] = useState(15)
   const [status, setStatus] = useState<CommitmentStatus>('pending')
   const [placeId, setPlaceId] = useState<string | null>(null)
@@ -62,6 +67,8 @@ export function CommitmentEditor({
       setTitle(c.title)
       setKind(c.kind)
       setDueAt(new Date(c.dueAt))
+      setFlexibility(c.flexibility === 'flexible' && c.preferredWindow ? 'flexible' : 'fixed')
+      setWindow(c.flexibility === 'flexible' ? c.preferredWindow : null)
       setDurationMinutes(c.durationMinutes)
       setStatus(c.status)
       setPlaceId(c.placeId)
@@ -127,6 +134,9 @@ export function CommitmentEditor({
           kind,
           dueAt: dueAt.toISOString(),
           durationMinutes,
+          // Set to a time, it is that time — no longer "some time in the evening".
+          flexibility,
+          preferredWindow: flexibility === 'flexible' ? window : null,
           status,
           placeId,
           ...(placeLabel.trim() !== savedLabel.trim() ? { placeLabel: placeLabel.trim() || null } : {}),
@@ -191,17 +201,15 @@ export function CommitmentEditor({
         ))}
       </div>
 
-      <label>
-        {t('When?')}
-        <input
-          type="datetime-local"
-          value={toLocalInputValue(dueAt)}
-          onChange={(e) => {
-            const next = new Date(e.target.value)
-            if (!Number.isNaN(next.getTime())) setDueAt(next)
-          }}
-        />
-      </label>
+      <span className="label-text">{t('When?')}</span>
+      <WhenPicker
+        value={{ at: dueAt, flexibility, window }}
+        onChange={(next) => {
+          setDueAt(next.at)
+          setFlexibility(next.flexibility)
+          setWindow(next.window)
+        }}
+      />
 
       <span className="label-text">{t('How long will it block?')}</span>
       <div className="chips">

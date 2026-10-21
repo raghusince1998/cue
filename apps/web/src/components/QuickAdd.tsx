@@ -3,8 +3,9 @@ import { openPlan, openTrip } from '../lib/open.ts'
 import { useNavigate } from 'react-router-dom'
 import { ApiError, api } from '../lib/api.ts'
 import { DictateButton } from './DictateButton.tsx'
+import { WhenPicker, type When } from './WhenPicker.tsx'
 import { announceChange } from '../lib/changes.ts'
-import { examplesFor, hasWork, type Sphere } from '@cue/shared'
+import { DURATION_CHOICES, examplesFor, hasWork, type Sphere, type TimeWindow } from '@cue/shared'
 import { useAuth } from '../lib/auth.tsx'
 import { language, locale, msg, t } from '../lib/i18n.tsx'
 import {
@@ -58,6 +59,10 @@ interface Plan {
     | 'unclear'
   title: string
   summary: string
+  /** When, as read: what the Edit panel starts from. */
+  dueAt?: string | null
+  flexibility?: 'fixed' | 'flexible'
+  preferredWindow?: TimeWindow | null
   assumptions: string[]
   problem: string | null
   placeLabel: string | null
@@ -92,6 +97,25 @@ interface Choice {
   label: string
   line: string
 }
+
+/** The preview, changed by hand before saving: it wins over the words. */
+interface Edits {
+  title: string
+  when: When
+  durationMinutes: number
+}
+
+/** "Fri 24 Oct, 7:30 pm", or "Fri 24 Oct · Evening". */
+function whenWords(w: When): string {
+  const day = w.at.toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })
+  if (w.flexibility === 'flexible' && w.window) {
+    const label = { morning: msg('Morning'), afternoon: msg('Afternoon'), evening: msg('Evening'), night: msg('Night') }[w.window]
+    return `${day} · ${t(label)}`
+  }
+  return `${day}, ${w.at.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })}`
+}
+
+const lengthWords = (minutes: number) => (minutes < 60 ? t('{n} min', { n: minutes }) : t('{n}h', { n: minutes / 60 }))
 
 interface Suggestion {
   id: string
@@ -173,6 +197,9 @@ export function QuickAdd({
   const [text, setText] = useState(initialText)
   const [focused, setFocused] = useState(false)
   const [plan, setPlan] = useState<Plan | null>(null)
+  /** Changed by hand in the preview; a new line starts over. */
+  const [edits, setEdits] = useState<Edits | null>(null)
+  const [editing, setEditing] = useState(false)
   const [saved, setSaved] = useState<Saved | null>(null)
 
   /** What "Open it" does for what was just saved: the thing itself, or its page. */
@@ -214,6 +241,26 @@ export function QuickAdd({
       .then((r) => setFrequent(r.frequent))
       .catch(() => undefined)
   }, [])
+
+  // A different line is a different plan: what was changed for the old one goes.
+  useEffect(() => {
+    setEdits(null)
+    setEditing(false)
+  }, [text])
+
+  // Opened but left as it was read: nothing to say, nothing to send.
+  const changed =
+    edits !== null &&
+    plan !== null &&
+    (plan.kind === 'needsTime' ||
+      edits.title.trim() !== plan.title ||
+      edits.durationMinutes !== plan.durationMinutes ||
+      !plan.dueAt ||
+      edits.when.at.getTime() !== new Date(plan.dueAt).getTime() ||
+      edits.when.flexibility !== (plan.flexibility === 'flexible' && plan.preferredWindow ? 'flexible' : 'fixed') ||
+      (edits.when.flexibility === 'flexible' && edits.when.window !== plan.preferredWindow))
+  // One plan with a day and time: the preview can be changed by hand.
+  const editable = plan !== null && !plan.problem && (plan.kind === 'commitment' || plan.kind === 'needsTime')
 
   // Debounced, because a preview on every keystroke is a request per character
   // and the interpretation only settles once someone stops typing anyway.
@@ -285,6 +332,15 @@ export function QuickAdd({
         const offered = (plan?.suggestions ?? []).filter((s) => accepted.includes(s.id))
         if (offered.length) body.accept = offered.map((s) => s.id)
         if (sphere && sphere !== plan?.sphere) body.sphere = sphere
+        if (edits && changed) {
+          body.edits = {
+            title: edits.title.trim() || undefined,
+            dueAt: edits.when.at.toISOString(),
+            durationMinutes: edits.durationMinutes,
+            flexibility: edits.when.flexibility,
+            preferredWindow: edits.when.flexibility === 'flexible' ? edits.when.window : null,
+          }
+        }
         const result = await api<Saved>('/quick', { method: 'POST', body })
         setSaved({ ...result, typed: text, acceptedActions: offered.map((s) => s.action) })
         setText('')
@@ -313,7 +369,7 @@ export function QuickAdd({
         setBusy(false)
       }
     },
-    [text, onSaved, plan, choices, accepted, sphere],
+    [text, onSaved, plan, choices, accepted, sphere, edits, changed],
   )
 
   async function undo() {
@@ -342,12 +398,32 @@ export function QuickAdd({
   const ready =
     plan !== null &&
     plan.kind !== 'unclear' &&
-    plan.kind !== 'needsTime' &&
+    (plan.kind !== 'needsTime' || edits !== null) &&
     plan.kind !== 'needsPerson' &&
     !plan.problem
   // Everything was understood except when. Asking one short question is
   // honest; inventing an hour and hoping is not.
-  const needsTime = plan?.kind === 'needsTime'
+  const needsTime = plan?.kind === 'needsTime' && !edits
+  function startEditing() {
+    if (!plan) return
+    if (!edits) {
+      const read = plan.dueAt ? new Date(plan.dueAt) : null
+      const fallback = new Date()
+      fallback.setDate(fallback.getDate() + 1)
+      fallback.setHours(10, 0, 0, 0)
+      const flexible = plan.flexibility === 'flexible' && plan.preferredWindow
+      setEdits({
+        title: plan.title,
+        when: {
+          at: read ?? fallback,
+          flexibility: flexible ? 'flexible' : 'fixed',
+          window: flexible ? plan.preferredWindow! : null,
+        },
+        durationMinutes: plan.durationMinutes,
+      })
+    }
+    setEditing(true)
+  }
   // More than one person answers to that word. One tap settles it; guessing
   // puts the plan against a stranger and offers their phone number.
   const needsPerson = plan?.kind === 'needsPerson'
@@ -500,6 +576,9 @@ export function QuickAdd({
                   {c.label}
                 </button>
               ))}
+              <button className="chip" onClick={startEditing}>
+                {t('Pick a day and time…')}
+              </button>
             </div>
           </div>
         </div>
@@ -518,9 +597,16 @@ export function QuickAdd({
           ) : (
             <>
               <div>
-                <span className="quick-kind">{plan.booking ? t('Booking') : t(KIND_WORD[plan.kind])}</span>
+                <span className="quick-kind">
+                  {plan.booking ? t('Booking') : t(KIND_WORD[edits && plan.kind === 'needsTime' ? 'commitment' : plan.kind])}
+                  {changed && <span className="quick-edited">{t('Changed by you')}</span>}
+                </span>
                 {reading && <span className="quick-reading">{t('Reading it more carefully…')}</span>}
-                <strong>{plan.summary}</strong>
+                <strong>
+                  {changed && edits
+                    ? `${edits.title.trim() || plan.title} — ${whenWords(edits.when)} · ${lengthWords(edits.durationMinutes)}`
+                    : plan.summary}
+                </strong>
                 {plan.assumptions.length > 0 && (
                   <ul className="quick-assumptions">
                     {plan.assumptions.map((a) => (
@@ -542,9 +628,55 @@ export function QuickAdd({
                   </div>
                 )}
               </div>
-              <kbd>Enter</kbd>
+              {editable && !editing ? (
+                <button className="ghost small-btn quick-edit-btn" onClick={startEditing}>
+                  {t('Edit')}
+                </button>
+              ) : (
+                <kbd>Enter</kbd>
+              )}
             </>
           )}
+        </div>
+      )}
+
+      {/* The preview, changed by hand: what, when and how long. */}
+      {editing && edits && plan && !saved && (
+        <div className="quick-edit">
+          <label>
+            {t('What exactly?')}
+            <input value={edits.title} onChange={(e) => setEdits({ ...edits, title: e.target.value })} />
+          </label>
+          <span className="label-text">{t('When?')}</span>
+          <WhenPicker value={edits.when} onChange={(when) => setEdits({ ...edits, when })} />
+          <span className="label-text">{t('How long will it block?')}</span>
+          <div className="chips">
+            {DURATION_CHOICES.map((minutes) => (
+              <button
+                key={minutes}
+                type="button"
+                className={`chip${edits.durationMinutes === minutes ? ' selected' : ''}`}
+                aria-pressed={edits.durationMinutes === minutes}
+                onClick={() => setEdits({ ...edits, durationMinutes: minutes })}
+              >
+                {lengthWords(minutes)}
+              </button>
+            ))}
+          </div>
+          <div className="row">
+            <button className="primary small-btn" onClick={() => setEditing(false)}>
+              {t('Done')}
+            </button>
+            <button
+              className="ghost small-btn"
+              onClick={() => {
+                setEdits(null)
+                setEditing(false)
+              }}
+            >
+              {t('Undo changes')}
+            </button>
+          </div>
         </div>
       )}
 

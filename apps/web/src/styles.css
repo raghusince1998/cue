@@ -1800,6 +1800,62 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* The preview, changed by hand: what, when and how long, before saving. */
+.quick-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--surface);
+}
+
+.quick-edit label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quick-edited {
+  display: inline-block;
+  margin-left: 8px;
+  text-transform: none;
+  letter-spacing: 0;
+  vertical-align: 1px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.quick-edit-btn {
+  align-self: flex-start;
+  flex: 0 0 auto;
+}
+
+/* When: at a set time, or a part of the day. */
+.when-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.when-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.when-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 140px;
+}
+
 /* × in the box: start over, what was typed or said. */
 .quick-clear {
   flex: 0 0 auto;
