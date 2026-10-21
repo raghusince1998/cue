@@ -30,6 +30,7 @@ import { knownPlaces } from './captureLinks.ts'
 import { rowsToText } from './layout.ts'
 import { pdfText } from './pdfText.ts'
 import { examFromEmail } from './exams.ts'
+import { tracked } from './health.ts'
 
 /**
  * Reading email for what Cue can act on: a train or flight booked, a parcel
@@ -583,7 +584,7 @@ export function startMailWorker(intervalMs = 15 * 60_000) {
     if (running) return
     running = true
     try {
-      const n = await runMailReading()
+      const n = await tracked('mail-reader', intervalMs, runMailReading)
       if (n > 0) console.log(`[mail] found ${n} thing(s) in email`)
     } catch (err) {
       console.error('[mail] tick failed:', (err as Error).message)

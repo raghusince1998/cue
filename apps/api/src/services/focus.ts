@@ -4,6 +4,7 @@ import type { Executor } from '../db/util.ts'
 import { checkConflicts } from './scheduling.ts'
 import { cancelPendingReminders, scheduleFirstReminder } from './reminders.ts'
 import { meetingEnd } from './overdue.ts'
+import { tracked } from './health.ts'
 
 /**
  * Focus time: protected blocks for real work.
@@ -174,7 +175,7 @@ export function startFocusWorker(intervalMs = 2 * 60_000) {
     if (running) return
     running = true
     try {
-      await closeFinishedFocus()
+      await tracked('focus', intervalMs, closeFinishedFocus)
     } catch (err) {
       console.error('[focus] tick failed:', (err as Error).message)
     } finally {

@@ -5,6 +5,7 @@ import { langOf, langsOf, localeOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
 import { managedByCue, meetingEnd } from './overdue.ts'
 import { cancelPendingReminders, scheduleFirstReminder } from './reminders.ts'
+import { tracked } from './health.ts'
 
 /**
  * Closing a meeting, and keeping what came out of it.
@@ -149,7 +150,7 @@ export function startFollowUpWorker(intervalMs = 2 * 60_000) {
     if (running) return
     running = true
     try {
-      const n = await promptFollowUps()
+      const n = await tracked('follow-ups', intervalMs, promptFollowUps)
       if (n > 0) console.log(`[followups] asked about ${n} meeting(s)`)
     } catch (err) {
       console.error('[followups] tick failed:', (err as Error).message)

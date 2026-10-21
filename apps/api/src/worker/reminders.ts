@@ -6,6 +6,7 @@ import { env } from '../env.ts'
 import { sendToUser } from '../push.ts'
 import { activeFocus } from '../services/focus.ts'
 import { holdUntil, planSphere, workLifeOf } from '../services/workLife.ts'
+import { tracked } from '../services/health.ts'
 
 interface ClaimedReminder {
   id: string
@@ -280,7 +281,7 @@ export function startReminderWorker() {
     if (running) return
     running = true
     try {
-      await runOnce()
+      await tracked('reminders', env.reminderPollMs, runOnce)
     } catch (err) {
       // Message only — a full stack every 20s just buries the real cause, which
       // at this level is almost always the database being unreachable.

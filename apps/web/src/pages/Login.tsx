@@ -38,6 +38,8 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
     } catch (err) {
       const messages: Record<string, string> = {
         invalid_credentials: t('That email and password do not match.'),
+        too_many_attempts: t('Too many wrong passwords. Wait 15 minutes, or reset your password.'),
+        account_disabled: t('This account has been turned off. Write to support to have it turned back on.'),
         email_taken: t('An account already exists for that email.'),
         invalid_input: t('Check the fields — password must be at least 8 characters.'),
         mail_not_configured: t(

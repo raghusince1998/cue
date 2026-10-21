@@ -4,6 +4,7 @@ import type { Lang } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { langOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
+import { tracked } from './health.ts'
 
 /**
  * The daily report: what happened today, written up for whoever you report to.
@@ -348,7 +349,7 @@ export function startReportWorker(intervalMs = 5 * 60_000) {
     if (running) return
     running = true
     try {
-      const sent = await runReportReminders()
+      const sent = await tracked('daily-report', intervalMs, runReportReminders)
       if (sent > 0) console.log(`[report] sent ${sent} report reminder(s)`)
     } catch (err) {
       console.error('[report] tick failed:', (err as Error).message)

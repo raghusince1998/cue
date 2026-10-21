@@ -8,6 +8,7 @@ import { orgOf } from './keepInTouch.ts'
 import { weekTargets } from './targets.ts'
 import type { Lang, TargetProgress } from '@cue/shared'
 import { langOf, localeOf, t } from '../i18n.ts'
+import { tracked } from './health.ts'
 
 /**
  * The weekly review.
@@ -329,7 +330,7 @@ export function startWeeklyReviewWorker(intervalMs = 10 * 60_000) {
     if (running) return
     running = true
     try {
-      const sent = await runWeeklyReviews()
+      const sent = await tracked('weekly-review', intervalMs, runWeeklyReviews)
       if (sent > 0) console.log(`[review] sent ${sent} weekly review prompt(s)`)
     } catch (err) {
       console.error('[review] tick failed:', (err as Error).message)

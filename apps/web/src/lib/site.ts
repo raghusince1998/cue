@@ -8,5 +8,5 @@ export const SITE = {
   /** Where questions about the service and about personal data go. */
   supportEmail: 'support@vitelio.in',
   /** When the privacy policy and terms last changed (YYYY-MM-DD; each language writes it its own way). */
-  updated: '2026-10-14',
+  updated: '2026-10-21',
 }

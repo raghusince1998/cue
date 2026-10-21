@@ -3,6 +3,7 @@ import { categoryOfBill, daysToDue, dueLabel, formatRupees, nextDue, type BillDT
 import { db, schema } from '../db/index.ts'
 import { langsOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
+import { tracked } from './health.ts'
 
 /**
  * Bills and renewals. Paying one moves it on to its next due date, and the
@@ -318,7 +319,7 @@ export function startBillWorker(intervalMs = 15 * 60_000) {
     if (running) return
     running = true
     try {
-      const sent = await runBillReminders()
+      const sent = await tracked('bills', intervalMs, runBillReminders)
       if (sent > 0) console.log(`[bills] sent ${sent} bill reminder(s)`)
     } catch (err) {
       console.error('[bills] tick failed:', (err as Error).message)

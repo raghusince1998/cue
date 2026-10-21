@@ -563,9 +563,9 @@ export async function runNoticeWatch(
 
 // ── Review ───────────────────────────────────────────────────────────────
 
-export function isAdmin(email: string | null | undefined): boolean {
-  return Boolean(email && env.adminEmails.includes(email.toLowerCase()))
-}
+// Who reviews: the admins (ADMIN_EMAILS), the same people as the admin portal.
+export { isAdmin } from '../admins.ts'
+import { tracked } from './health.ts'
 
 const sourceName = (id: string) => NOTICE_SOURCES.find((s) => s.id === id)?.name ?? (id === MANUAL.id ? MANUAL.name : id)
 
@@ -996,7 +996,7 @@ export function startNoticeWatch(intervalMs = 12 * 60 * 60_000) {
     if (running) return
     running = true
     try {
-      const runs = await runNoticeWatch()
+      const runs = await tracked('exam-notices', intervalMs, runNoticeWatch)
       const added = runs.reduce((s, r) => s + r.added, 0)
       if (added > 0) console.log(`[notices] ${added} new notice(s) to review`)
       await tellReviewers(runs)

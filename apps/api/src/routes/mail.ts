@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { db, schema } from '../db/index.ts'
 import { scope } from '../auth.ts'
 import { checkMailFor, recentFinds } from '../services/mailReader.ts'
+import { audit } from '../services/audit.ts'
 
 export async function mailRoutes(app: FastifyInstance) {
   app.addHook('onRequest', app.authenticate)
@@ -25,6 +26,8 @@ export async function mailRoutes(app: FastifyInstance) {
       .set({ mailEnabled: false, mailError: null })
       .where(and(eq(schema.oauthAccounts.id, id), eq(schema.oauthAccounts.userId, scope(req).sub)))
       .returning({ id: schema.oauthAccounts.id })
-    return rows.length ? { ok: true } : reply.code(404).send({ error: 'not_found' })
+    if (!rows.length) return reply.code(404).send({ error: 'not_found' })
+    audit(req, { action: 'mail.off', userId: scope(req).sub })
+    return { ok: true }
   })
 }

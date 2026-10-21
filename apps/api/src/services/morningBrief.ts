@@ -9,6 +9,7 @@ import { canBeOverdue, isAwaitingWrapUp, managedByCue, meetingEnd } from './over
 import { formatRupees, hasWork, type Lang, type TargetMetric, type TargetProgress } from '@cue/shared'
 import { planSphere } from './workLife.ts'
 import { langOf, localeOf, msg, t } from '../i18n.ts'
+import { tracked } from './health.ts'
 
 /**
  * The morning brief.
@@ -367,7 +368,7 @@ export function startMorningBriefWorker(intervalMs = 5 * 60_000) {
     if (running) return
     running = true
     try {
-      const sent = await runMorningBriefs()
+      const sent = await tracked('morning-brief', intervalMs, runMorningBriefs)
       if (sent > 0) console.log(`[brief] sent ${sent} morning brief(s)`)
     } catch (err) {
       console.error('[brief] tick failed:', (err as Error).message)

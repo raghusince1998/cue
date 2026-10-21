@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { pushSubscribeInput } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { env, pushConfigured } from '../env.ts'
 import { scope } from '../auth.ts'
 import { sendToUser } from '../push.ts'
+import { audit } from '../services/audit.ts'
 import { langOf, t } from '../i18n.ts'
 
 export async function pushRoutes(app: FastifyInstance) {
@@ -21,7 +22,7 @@ export async function pushRoutes(app: FastifyInstance) {
 
     // Endpoints are stable per browser install, so re-subscribing moves the row
     // to the current user instead of piling up duplicates.
-    await db
+    const [row] = await db
       .insert(schema.pushSubscriptions)
       .values({
         orgId,
@@ -35,14 +36,18 @@ export async function pushRoutes(app: FastifyInstance) {
         target: schema.pushSubscriptions.endpoint,
         set: { orgId, userId, p256dh: body.keys.p256dh, auth: body.keys.auth },
       })
+      // xmax is 0 on a row just inserted: a new device, not the same one again.
+      .returning({ added: sql<boolean>`(xmax = 0)` })
 
+    // Every sign-in re-registers the device; only a new one is worth a line.
+    if (row?.added) audit(req, { action: 'device.added', userId })
     return { ok: true }
   })
 
   app.post('/push/unsubscribe', { onRequest: [app.authenticate] }, async (req) => {
     const { sub: userId } = scope(req)
     const { endpoint } = z.object({ endpoint: z.string().url() }).parse(req.body)
-    await db
+    const gone = await db
       .delete(schema.pushSubscriptions)
       .where(
         and(
@@ -50,6 +55,8 @@ export async function pushRoutes(app: FastifyInstance) {
           eq(schema.pushSubscriptions.userId, userId),
         ),
       )
+      .returning({ id: schema.pushSubscriptions.id })
+    if (gone.length) audit(req, { action: 'device.removed', userId })
     return { ok: true }
   })
 

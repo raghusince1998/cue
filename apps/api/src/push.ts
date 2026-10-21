@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import type { Lang } from '@cue/shared'
 import { db, schema } from './db/index.ts'
 import { env, pushConfigured } from './env.ts'
+import { pushStats } from './services/health.ts'
 
 if (pushConfigured) {
   webpush.setVapidDetails(env.vapidSubject, env.vapidPublicKey, env.vapidPrivateKey)
@@ -78,13 +79,16 @@ export async function sendToUser(userId: string, payload: PushPayload): Promise<
           SEND_OPTIONS,
         )
         delivered += 1
+        pushStats.sent += 1
       } catch (err) {
         const status = (err as { statusCode?: number }).statusCode
         if (status === 404 || status === 410) {
+          pushStats.expired += 1
           await db
             .delete(schema.pushSubscriptions)
             .where(eq(schema.pushSubscriptions.id, sub.id))
         } else {
+          pushStats.failed += 1
           console.error('[push] send failed', status, (err as Error).message)
         }
       }

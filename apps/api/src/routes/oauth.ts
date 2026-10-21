@@ -18,6 +18,7 @@ import { GoogleCalendarError, listCalendars } from '../services/googleCalendar.t
 import { listMicrosoftCalendars, MicrosoftCalendarError } from '../services/microsoftCalendar.ts'
 import { FeedError, syncFeed } from '../services/calendarFeed.ts'
 import { readMail } from '../services/mailReader.ts'
+import { audit } from '../services/audit.ts'
 
 /**
  * Connecting Google and Microsoft calendars.
@@ -164,6 +165,7 @@ export async function oauthRoutes(app: FastifyInstance) {
 
     try {
       const done = await completeConsent(provider, query.data.state, query.data.code)
+      audit(req, { action: 'oauth.connected', userId: done.userId, detail: { provider, purpose: done.purpose } })
       return reply.redirect(
         back(done.purpose === 'mail' ? 'mail_connected' : done.purpose === 'all' ? `all_connected:${done.accountId}` : 'connected'),
       )
@@ -390,6 +392,7 @@ export async function oauthRoutes(app: FastifyInstance) {
 
     await revokeAccount(account)
     await db.delete(schema.oauthAccounts).where(eq(schema.oauthAccounts.id, id))
+    audit(req, { action: 'oauth.disconnected', userId, detail: { provider: account.provider } })
 
     const config = configFor(account.provider as Provider)
     return {

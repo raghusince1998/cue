@@ -1,5 +1,6 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify'
 import { ZodError } from 'zod'
+import { noteServerError } from './services/health.ts'
 
 /** Postgres: a value that cannot be read as its column's type — "abc" as a uuid. */
 const BAD_TEXT = '22P02'
@@ -33,6 +34,12 @@ export function handleError(
   const status = (err as FastifyError).statusCode ?? 500
   if (status >= 500) {
     req.log.error(err)
+    noteServerError({
+      method: req.method,
+      route: req.routeOptions?.url ?? req.url.split('?')[0]!,
+      status,
+      message: err.message || 'internal_error',
+    })
     return reply.code(status).send({ error: 'internal_error' })
   }
   return reply.code(status).send({ error: err.message || 'request_failed' })

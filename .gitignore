@@ -18,3 +18,4 @@ build/
 
 # Word and Office lock files
 ~$*
+apps/api/release.json

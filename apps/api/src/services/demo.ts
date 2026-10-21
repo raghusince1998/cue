@@ -8,6 +8,7 @@ import { recordDelivery } from './deliveries.ts'
 import { createItem } from './trackers.ts'
 import { addOwed } from './owed.ts'
 import { loadExamsDemo } from './examsDemo.ts'
+import { tracked } from './health.ts'
 
 /**
  * Trying Cue without signing up: an account of its own, filled with a
@@ -116,7 +117,7 @@ export async function removeOldDemos(now = new Date()): Promise<number> {
 
 export function startDemoCleanup(intervalMs = 60 * 60_000) {
   const run = () =>
-    void removeOldDemos()
+    void tracked('demo-cleanup', intervalMs, removeOldDemos)
       .then((n) => n > 0 && console.log(`[demo] removed ${n} old demo account(s)`))
       .catch((err) => console.error('[demo] cleanup failed:', (err as Error).message))
   run()

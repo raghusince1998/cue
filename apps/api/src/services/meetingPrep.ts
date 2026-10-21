@@ -4,6 +4,7 @@ import { db, schema } from '../db/index.ts'
 import { langsOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
 import { managedByCue } from './overdue.ts'
+import { tracked } from './health.ts'
 
 /**
  * Meeting prep: what is still open from last time.
@@ -172,7 +173,7 @@ export function startPrepWorker(intervalMs = 2 * 60_000) {
     if (running) return
     running = true
     try {
-      const n = await promptPrep()
+      const n = await tracked('meeting-prep', intervalMs, promptPrep)
       if (n > 0) console.log(`[prep] sent ${n} meeting prep notification(s)`)
     } catch (err) {
       console.error('[prep] tick failed:', (err as Error).message)

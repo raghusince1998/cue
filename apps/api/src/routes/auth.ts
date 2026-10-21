@@ -13,10 +13,12 @@ import {
 } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { takeFirst } from '../db/util.ts'
-import { scope } from '../auth.ts'
+import { forgetAccountState, scope } from '../auth.ts'
+import { isAdmin } from '../admins.ts'
 import { createDemo, demoAllowed } from '../services/demo.ts'
 import { filledSections } from '../services/sections.ts'
-import { isAdmin } from '../services/noticeWatch.ts'
+import { audit, clientIp } from '../services/audit.ts'
+import { clear, count, isLimited } from '../services/throttle.ts'
 import { revokeAccount } from '../services/oauthConnect.ts'
 import { env } from '../env.ts'
 import { mailConfigured, MailError, resetEmail, sendMail } from '../services/mail.ts'
@@ -26,6 +28,12 @@ const RESET_TTL_MINUTES = 60
 
 /** Stored hashed, so a copy of the table is not a stack of working resets. */
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex')
+
+/**
+ * Compared against when there is no such account, so a wrong email takes as
+ * long as a wrong password and the timing does not say which addresses exist.
+ */
+const NO_ACCOUNT_HASH = bcrypt.hashSync(randomBytes(16).toString('hex'), 10)
 
 export async function authRoutes(app: FastifyInstance) {
   app.post('/auth/register', async (req, reply) => {
@@ -66,6 +74,7 @@ export async function authRoutes(app: FastifyInstance) {
       return { org, user }
     })
 
+    audit(req, { action: 'auth.register', userId: user.id })
     const token = app.jwt.sign({ sub: user.id, orgId: org.id, email })
     return { token, user: { id: user.id, name: user.name, email }, org: { id: org.id, name: org.name } }
   })
@@ -76,16 +85,13 @@ export async function authRoutes(app: FastifyInstance) {
    * open door is not leaned on.
    */
   app.post('/auth/demo', async (req, reply) => {
-    // Behind Caddy, the visitor is the last address it appended; earlier ones
-    // can be anything the visitor sent.
-    const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-    const address = forwarded.at(-1) ?? req.ip
-    if (!demoAllowed(address)) return reply.code(429).send({ error: 'too_many_demos' })
+    if (!demoAllowed(clientIp(req))) return reply.code(429).send({ error: 'too_many_demos' })
     // The everyday week, or — from Cue Exams — an aspirant's; in the visitor's language.
     const opts = z
       .object({ kind: z.enum(['everyday', 'exams']).optional(), language: z.enum(['en', 'hi']).optional() })
       .parse(req.body ?? {})
     const demo = await createDemo(new Date(), opts)
+    audit(req, { action: 'auth.demo', userId: demo.userId, detail: { kind: opts.kind ?? 'everyday' } })
     const token = app.jwt.sign({ sub: demo.userId, orgId: demo.orgId, email: demo.email })
     return reply.code(201).send({ token })
   })
@@ -101,6 +107,7 @@ export async function authRoutes(app: FastifyInstance) {
     const [user] = await db.select().from(schema.users).where(eq(schema.users.id, sub)).limit(1)
     if (!user) return reply.code(404).send({ error: 'not_found' })
     if (!user.isDemo && !(password && (await bcrypt.compare(password, user.passwordHash)))) {
+      audit(req, { action: 'auth.account_deleted', userId: sub, outcome: 'failed', detail: { reason: 'wrong_password' } })
       return reply.code(403).send({ error: 'wrong_password' })
     }
     const accounts = await db.select().from(schema.oauthAccounts).where(eq(schema.oauthAccounts.userId, sub))
@@ -113,24 +120,53 @@ export async function authRoutes(app: FastifyInstance) {
     // Alone in the account: all of it goes. Otherwise only what was theirs.
     if ((others?.n ?? 0) === 0) await db.delete(schema.orgs).where(eq(schema.orgs.id, orgId))
     else await db.delete(schema.users).where(eq(schema.users.id, sub))
+    // The account is gone, so the trail names the address it had.
+    audit(req, { action: 'auth.account_deleted', email: user.email, detail: { demo: user.isDemo } })
     return { ok: true }
   })
 
   app.post('/auth/login', async (req, reply) => {
     const body = loginInput.parse(req.body)
     const email = body.email.toLowerCase().trim()
+    const ip = clientIp(req)
 
     const rows = await db
       .select()
       .from(schema.users)
       .where(eq(schema.users.email, email))
       .limit(1)
-
     const user = rows[0]
-    if (!user || !(await bcrypt.compare(body.password, user.passwordHash))) {
+
+    // Too many wrong passwords lately, from here or against this account:
+    // refused without even checking, so guessing gets nowhere.
+    if (isLimited('loginIp', ip) || isLimited('loginEmail', email)) {
+      audit(req, { action: 'auth.login', userId: user?.id, email, outcome: 'blocked', detail: { reason: 'too_many_attempts' } })
+      return reply.code(429).send({ error: 'too_many_attempts' })
+    }
+
+    const matches = await bcrypt.compare(body.password, user?.passwordHash ?? NO_ACCOUNT_HASH)
+    if (!user || !matches) {
+      count('loginIp', ip)
+      count('loginEmail', email)
+      audit(req, {
+        action: 'auth.login',
+        userId: user?.id,
+        email,
+        outcome: 'failed',
+        detail: { reason: user ? 'wrong_password' : 'no_account' },
+      })
       return reply.code(401).send({ error: 'invalid_credentials' })
     }
 
+    // Only after the right password: otherwise this would tell a stranger the
+    // account exists.
+    if (user.disabledAt) {
+      audit(req, { action: 'auth.login', userId: user.id, outcome: 'blocked', detail: { reason: 'account_disabled' } })
+      return reply.code(403).send({ error: 'account_disabled' })
+    }
+
+    clear('loginEmail', email)
+    audit(req, { action: 'auth.login', userId: user.id })
     const token = app.jwt.sign({ sub: user.id, orgId: user.orgId, email })
     return { token, user: { id: user.id, name: user.name, email } }
   })
@@ -187,6 +223,17 @@ export async function authRoutes(app: FastifyInstance) {
       .where(eq(schema.users.email, email))
       .limit(1)
 
+    // Asked too often: the same answer, and no mail — a mailbox must not be
+    // flooded with reset links by someone who only knows the address.
+    const ip = clientIp(req)
+    if (isLimited('resetEmail', email) || isLimited('resetIp', ip)) {
+      audit(req, { action: 'auth.reset_requested', userId: user?.id, email, outcome: 'blocked', detail: { reason: 'too_many_requests' } })
+      return { ok: true }
+    }
+    count('resetEmail', email)
+    count('resetIp', ip)
+    audit(req, { action: 'auth.reset_requested', userId: user?.id, email, detail: { account: Boolean(user) } })
+
     if (user) {
       // Housekeeping, and it means an older link stops working the moment a
       // newer one is asked for.
@@ -201,7 +248,7 @@ export async function authRoutes(app: FastifyInstance) {
         userId: user.id,
         tokenHash: hashToken(token),
         expiresAt: new Date(Date.now() + RESET_TTL_MINUTES * 60_000),
-        requestedIp: req.ip,
+        requestedIp: ip,
       })
 
       const base = (env.webOrigin || '').replace(/\/$/, '')
@@ -234,6 +281,7 @@ export async function authRoutes(app: FastifyInstance) {
       .limit(1)
 
     if (!row) {
+      audit(req, { action: 'auth.reset', outcome: 'failed', detail: { reason: 'invalid_token' } })
       return reply.code(400).send({ error: 'invalid_token' })
     }
     if (row.usedAt) {
@@ -248,15 +296,19 @@ export async function authRoutes(app: FastifyInstance) {
 
     const passwordHash = await bcrypt.hash(body.password, 10)
     await db.transaction(async (tx) => {
+      // A reset means the old password may be known to someone else, so every
+      // device signed in with it is signed out.
       await tx
         .update(schema.users)
-        .set({ passwordHash })
+        .set({ passwordHash, sessionsFrom: new Date() })
         .where(eq(schema.users.id, row.userId))
       await tx
         .update(schema.passwordResets)
         .set({ usedAt: new Date() })
         .where(eq(schema.passwordResets.id, row.id))
     })
+    forgetAccountState(row.userId)
+    audit(req, { action: 'auth.reset', userId: row.userId })
 
     return { ok: true }
   })
@@ -274,6 +326,7 @@ export async function authRoutes(app: FastifyInstance) {
     if (!user) return reply.code(404).send({ error: 'not_found' })
 
     if (!(await bcrypt.compare(body.currentPassword, user.passwordHash))) {
+      audit(req, { action: 'auth.password_changed', userId, outcome: 'failed', detail: { reason: 'wrong_password' } })
       return reply.code(403).send({ error: 'wrong_password' })
     }
 
@@ -282,6 +335,7 @@ export async function authRoutes(app: FastifyInstance) {
       .set({ passwordHash: await bcrypt.hash(body.password, 10) })
       .where(eq(schema.users.id, userId))
 
+    audit(req, { action: 'auth.password_changed', userId })
     return { ok: true }
   })
 

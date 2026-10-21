@@ -23,6 +23,7 @@ import { owedRoutes } from './routes/owed.ts'
 import { trackerRoutes } from './routes/trackers.ts'
 import { examRoutes } from './routes/exams.ts'
 import { noticeRoutes } from './routes/notices.ts'
+import { adminRoutes } from './routes/admin.ts'
 import { assetLinks } from './assetLinks.ts'
 import { billRoutes } from './routes/bills.ts'
 import { deliveryRoutes } from './routes/deliveries.ts'
@@ -63,6 +64,8 @@ import { startFocusWorker } from './services/focus.ts'
 import { startReminderWorker } from './worker/reminders.ts'
 import { sweep } from './services/recurrence.ts'
 import { syncAllFeeds } from './services/calendarFeed.ts'
+import { tracked } from './services/health.ts'
+import { purgeOldAudit } from './services/audit.ts'
 
 const app = Fastify({ logger: { level: 'info' } })
 
@@ -94,6 +97,7 @@ await app.register(owedRoutes, { prefix: '/api' })
 await app.register(trackerRoutes, { prefix: '/api' })
 await app.register(examRoutes, { prefix: '/api' })
 await app.register(noticeRoutes, { prefix: '/api' })
+await app.register(adminRoutes, { prefix: '/api' })
 await app.register(billRoutes, { prefix: '/api' })
 await app.register(deliveryRoutes, { prefix: '/api' })
 await app.register(mailRoutes, { prefix: '/api' })
@@ -206,7 +210,7 @@ const stopDemos = startDemoCleanup()
 // for a 120-day horizon, and it runs once at boot so a series created while the
 // server was down still gets its reminders queued.
 const sweepRecurrences = () => {
-  void sweep()
+  void tracked('repeating-sweep', 60 * 60_000, sweep)
     .then((n) => n > 0 && app.log.info(`generated ${n} recurring occurrence(s)`))
     .catch((err) => app.log.warn({ err }, 'recurrence sweep failed'))
 }
@@ -217,7 +221,7 @@ const recurrenceTimer = setInterval(sweepRecurrences, 60 * 60_000)
 // feed slowly — often hours behind — so polling faster than this would only
 // burn requests without seeing anything new.
 const syncFeeds = () => {
-  void syncAllFeeds()
+  void tracked('calendar-sync', 30 * 60_000, syncAllFeeds)
     .then((n) => n > 0 && app.log.info(`synced ${n} calendar feed(s)`))
     .catch((err) => app.log.warn({ err }, 'calendar sync failed'))
 }
@@ -227,9 +231,13 @@ const feedTimer = setInterval(syncFeeds, 30 * 60_000)
 // Audio recorded for a visit that was never saved has nothing pointing at it.
 const purgeTimer = setInterval(
   () => {
-    void purgeOrphanedVoiceNotes()
+    void tracked('voice-note-purge', 60 * 60_000, purgeOrphanedVoiceNotes)
       .then((n) => n > 0 && app.log.info(`purged ${n} orphaned voice note(s)`))
       .catch((err) => app.log.warn({ err }, 'voice note purge failed'))
+    // The account trail is kept 90 days, as the privacy policy says.
+    void tracked('audit-purge', 60 * 60_000, () => purgeOldAudit())
+      .then((n) => n > 0 && app.log.info(`purged ${n} audit event(s) past keeping`))
+      .catch((err) => app.log.warn({ err }, 'audit purge failed'))
   },
   60 * 60_000,
 )

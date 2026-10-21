@@ -14,6 +14,7 @@ import {
   jsonb,
   primaryKey,
   bigint,
+  bigserial,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
@@ -143,9 +144,42 @@ export const users = pgTable(
     lastNudgeOn: date('last_nudge_on'),
     /** Personal definitions of "evening"; null means the shared defaults. */
     timeWindows: jsonb('time_windows'),
+    /** Turned off by an admin: no sign-in, and tokens already out stop working. */
+    disabledAt: timestamp('disabled_at', { withTimezone: true }),
+    disabledReason: text('disabled_reason'),
+    /** "Sign out everywhere": tokens issued before this are refused. */
+    sessionsFrom: timestamp('sessions_from', { withTimezone: true }),
+    /** Last time the app was used, to the nearest few minutes. */
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('users_email_unique').on(t.email)],
+)
+
+/**
+ * What happened to accounts — sign-ins, password changes, connections,
+ * devices, admin actions — for the admin portal, kept 90 days. Who, from
+ * where and how it went; never what anyone wrote.
+ */
+export const auditEvents = pgTable(
+  'audit_events',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+    actorId: uuid('actor_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+    email: text('email'),
+    action: text('action').notNull(),
+    outcome: text('outcome').notNull().default('ok'),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    detail: jsonb('detail').$type<Record<string, unknown>>(),
+  },
+  (t) => [
+    index('audit_events_at_idx').on(t.at),
+    index('audit_events_user_idx').on(t.userId, t.at),
+    index('audit_events_action_idx').on(t.action, t.at),
+  ],
 )
 
 /**

@@ -3,6 +3,7 @@ import { DELIVERY_STATUS_RANK, formatRupees, type DeliveryDTO, type DeliveryStat
 import { db, schema } from '../db/index.ts'
 import { langsOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
+import { tracked } from './health.ts'
 
 /**
  * Parcels on their way, from the messages shops and couriers send. A second
@@ -232,7 +233,7 @@ export function startDeliveryWorker(intervalMs = 15 * 60_000) {
     if (running) return
     running = true
     try {
-      const sent = await runDeliveryReminders()
+      const sent = await tracked('deliveries', intervalMs, runDeliveryReminders)
       if (sent > 0) console.log(`[deliveries] sent ${sent} delivery reminder(s)`)
     } catch (err) {
       console.error('[deliveries] tick failed:', (err as Error).message)

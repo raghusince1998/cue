@@ -4,6 +4,7 @@ import { db, schema } from '../db/index.ts'
 import { langOf, t } from '../i18n.ts'
 import { sendToUser } from '../push.ts'
 import { planTomorrow, type TomorrowPlan } from './planTomorrow.ts'
+import { tracked } from './health.ts'
 
 /**
  * The end-of-day prompt.
@@ -196,7 +197,7 @@ export function startNudgeWorker(intervalMs = 5 * 60_000) {
     if (running) return
     running = true
     try {
-      const sent = await runDailyNudges()
+      const sent = await tracked('evening-nudge', intervalMs, runDailyNudges)
       if (sent > 0) console.log(`[nudge] sent ${sent} evening nudge(s)`)
     } catch (err) {
       console.error('[nudge] tick failed:', (err as Error).message)

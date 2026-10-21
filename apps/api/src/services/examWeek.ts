@@ -4,6 +4,7 @@ import { db, schema } from '../db/index.ts'
 import { sendToUser } from '../push.ts'
 import { langOf, localeOf, t } from '../i18n.ts'
 import { mondayOf } from './weeklyReview.ts'
+import { tracked } from './health.ts'
 
 /**
  * The Sunday prep report, for whoever tracks an exam: the study sessions done
@@ -176,7 +177,7 @@ export function startExamWeekWorker(intervalMs = 10 * 60_000) {
     if (running) return
     running = true
     try {
-      const sent = await runExamWeeks()
+      const sent = await tracked('exam-week', intervalMs, runExamWeeks)
       if (sent > 0) console.log(`[exam-week] sent ${sent} Sunday prep report(s)`)
     } catch (err) {
       console.error('[exam-week] tick failed:', (err as Error).message)
