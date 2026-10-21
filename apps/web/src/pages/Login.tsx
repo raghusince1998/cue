@@ -20,6 +20,8 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
   // Came in by Cue Exams: its name, its mark, and an account that starts with exams.
   const exams = appMode() === 'exams'
   const hindi = exams && signupLanguage() === 'hi'
+  // Sent back here from the admin portal when its session ran out.
+  const adminEnded = new URLSearchParams(window.location.search).get('admin') === 'ended'
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -83,6 +85,7 @@ export default function Login({ initialMode = 'login' }: { initialMode?: 'login'
               ? t('Free to use. Plans, reminders, bills and bookings — say it once, Cue remembers the rest.')
               : t('Welcome back. Your plans, reminders and everything Cue found for you are waiting.')}
         </p>
+        {adminEnded && mode === 'login' && <p className="muted small">{t('Your admin session ended. Sign in again.')}</p>}
 
         {mode === 'register' && (
           <label>

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Toasts } from '../components/Toasts.tsx'
 import { adminApi, adminSession, onAdminSignedOut, setAdminSession, type AdminSession } from './api.ts'
-import { AdminLogin } from './Login.tsx'
 import { Overview } from './Overview.tsx'
 import { People, PersonDetail } from './People.tsx'
 import { Activity } from './Activity.tsx'
@@ -10,10 +9,10 @@ import { Security } from './Security.tsx'
 import { System } from './System.tsx'
 
 /**
- * The admin portal (/admin): a separate app from the one people use — its own
- * sign-in (ADMIN_EMAIL / ADMIN_PASSWORD on the server), its own session and
- * its own layout. The user app is never loaded here, and a user's session is
- * never used.
+ * The admin portal (/admin): a separate view from the app people use, with
+ * its own session and layout. Signing in is the same page as everyone's: the
+ * admin's email and password (ADMIN_EMAIL / ADMIN_PASSWORD on the server)
+ * bring you here. A user's session is never used.
  *
  * It shows how people use Cue, never what they wrote: counts, dates,
  * settings, connections and the account trail.
@@ -59,26 +58,17 @@ export default function AdminApp() {
     [],
   )
 
-  if (!checked) {
+  // No admin session: the one sign-in page everyone uses, which brings the
+  // admin back here.
+  useEffect(() => {
+    if (checked && !session) window.location.replace(ended ? '/login?admin=ended' : '/login?admin')
+  }, [checked, session, ended])
+
+  if (!checked || !session) {
     return (
       <div className="boot">
         <span className="spinner" />
       </div>
-    )
-  }
-
-  if (!session) {
-    return (
-      <>
-        <AdminLogin
-          ended={ended}
-          onSignedIn={(s) => {
-            setSession(s)
-            setEnded(false)
-          }}
-        />
-        <Toasts />
-      </>
     )
   }
 
@@ -87,9 +77,12 @@ export default function AdminApp() {
       <Portal
         email={session.email}
         onSignOut={() => {
-          void adminApi('/admin/logout', { method: 'POST' }).catch(() => undefined)
-          setAdminSession(null)
-          setSession(null)
+          void adminApi('/admin/logout', { method: 'POST' })
+            .catch(() => undefined)
+            .finally(() => {
+              setAdminSession(null)
+              window.location.assign('/login')
+            })
         }}
       />
       <Toasts />

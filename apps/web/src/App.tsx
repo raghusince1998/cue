@@ -412,7 +412,17 @@ export default function App() {
           <Route path="/exams" element={<Exams />} />
           <Route path="/admin/notices" element={me?.isAdmin ? <NoticeReview /> : <Navigate to="/" replace />} />
           {/* Just signed in or up: Cue Exams opens on the exams. */}
-          <Route path="/login" element={<Navigate to={appMode() === 'exams' ? '/exams' : '/'} replace />} />
+          {/* Signed in here as someone, and asked to sign in as the admin: the same page. */}
+          <Route
+            path="/login"
+            element={
+              new URLSearchParams(location.search).has('admin') ? (
+                <Login initialMode="login" />
+              ) : (
+                <Navigate to={appMode() === 'exams' ? '/exams' : '/'} replace />
+              )
+            }
+          />
           <Route path="/register" element={<Navigate to={appMode() === 'exams' ? '/exams' : '/'} replace />} />
           <Route path="/exams-app" element={<Navigate to="/exams" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />

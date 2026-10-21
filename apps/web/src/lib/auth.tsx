@@ -5,6 +5,7 @@ import { FILLABLE, sectionsFor } from '@cue/shared'
 import { ApiError, api, getToken, setToken } from './api.ts'
 import { useOnChange } from './changes.ts'
 import { stopPushHere } from './push.ts'
+import { setAdminSession, type AdminSession } from '../admin/api.ts'
 
 const ME_KEY = 'cue.me'
 
@@ -102,11 +103,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      const res = await api<{ token: string }>('/auth/login', {
+      const res = await api<{ token?: string; admin?: AdminSession }>('/auth/login', {
         method: 'POST',
         body: { email, password },
       })
-      setToken(res.token)
+      // The admin's details: the admin portal, in a session of its own.
+      if (res.admin) {
+        setAdminSession(res.admin)
+        window.location.assign('/admin')
+        return
+      }
+      setToken(res.token!)
       await refresh()
     },
     [refresh],

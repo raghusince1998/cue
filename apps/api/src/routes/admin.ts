@@ -8,15 +8,9 @@ import { z } from 'zod'
 import { db, schema } from '../db/index.ts'
 import { forgetAccountState } from '../auth.ts'
 import { env, pushConfigured } from '../env.ts'
-import { audit, AUDIT_KEEP_DAYS, clientIp } from '../services/audit.ts'
-import { clear, count, heldNow, isLimited, RULES } from '../services/throttle.ts'
-import {
-  ADMIN_MIN_PASSWORD,
-  adminSetup,
-  credentialsMatch,
-  signAdminToken,
-  verifyAdminToken,
-} from '../services/adminSession.ts'
+import { audit, AUDIT_KEEP_DAYS } from '../services/audit.ts'
+import { heldNow, RULES } from '../services/throttle.ts'
+import { ADMIN_MIN_PASSWORD, adminSetup, verifyAdminToken } from '../services/adminSession.ts'
 import { jobStates, pushStats, recentErrors, startedAt } from '../services/health.ts'
 import { mailConfigured } from '../services/mail.ts'
 
@@ -56,37 +50,10 @@ const VIEW_EVERY_MS = 10 * 60_000
 const viewed = new Map<string, number>()
 
 /**
- * Signing in to the portal. Five wrong tries from an address, or thirty from
- * anywhere, in fifteen minutes and it stops answering for a while.
+ * The portal's session: still good, and signing out. Signing in is the same
+ * page as everyone's (POST /auth/login), which hands the admin this session.
  */
 export async function adminSessionRoutes(app: FastifyInstance) {
-  app.post('/admin/login', async (req, reply) => {
-    const body = z
-      .object({ email: z.string().trim().max(254), password: z.string().max(500) })
-      .parse(req.body ?? {})
-    const setup = adminSetup()
-    if (setup !== 'ok') {
-      return reply.code(503).send({
-        error: setup === 'password_too_short' ? 'admin_password_too_short' : 'admin_not_configured',
-        minLength: ADMIN_MIN_PASSWORD,
-      })
-    }
-    const ip = clientIp(req)
-    if (isLimited('adminIp', ip) || isLimited('adminAll', 'all')) {
-      audit(req, { action: 'admin.login', email: body.email, outcome: 'blocked', detail: { reason: 'too_many_attempts' } })
-      return reply.code(429).send({ error: 'too_many_attempts' })
-    }
-    if (!credentialsMatch(body.email, body.password)) {
-      count('adminIp', ip)
-      count('adminAll', 'all')
-      audit(req, { action: 'admin.login', email: body.email, outcome: 'failed', detail: { reason: 'wrong_credentials' } })
-      return reply.code(401).send({ error: 'invalid_credentials' })
-    }
-    clear('adminIp', ip)
-    audit(req, { action: 'admin.login', actor: env.adminEmail })
-    return { ...signAdminToken(), email: env.adminEmail }
-  })
-
   /** Is this session still good? The portal asks on opening. */
   app.get('/admin/session', async (req, reply) => {
     const header = String(req.headers.authorization ?? '')

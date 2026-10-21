@@ -5,8 +5,10 @@ import type { FastifyInstance } from 'fastify'
 import { createTestDb, type Harness } from '../testing/harness.ts'
 
 /**
- * The admin portal: its own sign-in from .env, apart from every user account —
- * a user's session cannot open it and its session cannot open the app.
+ * The admin portal: signed in on the same page as everyone, with the email and
+ * password from .env — which hands out a session of its own, apart from every
+ * user account: a user's session cannot open it and its session cannot open
+ * the app.
  * Sign-ins and admin actions leave a trail; guessing is slowed down; an
  * account turned off or signed out everywhere stops working at once; and a
  * person's page shows how they use Cue, never what they wrote.
@@ -42,8 +44,9 @@ async function register(email: string, name = 'Pat') {
   return { token: r.body.token as string, id: r.body.user.id as string }
 }
 
+/** The one sign-in page; the admin's details come back as an admin session. */
 async function adminSignIn(email = ADMIN, password = ADMIN_PASSWORD) {
-  return call('POST', '/admin/login', undefined, { email, password })
+  return call('POST', '/auth/login', undefined, { email, password })
 }
 
 /** The trail is written without holding up the request; give it a moment. */
@@ -79,7 +82,8 @@ before(async () => {
   await app.ready()
   const signedIn = await adminSignIn()
   assert.equal(signedIn.status, 200, JSON.stringify(signedIn.body))
-  admin = signedIn.body.token
+  assert.equal(signedIn.body.token, undefined, 'no user token for the admin')
+  admin = signedIn.body.admin.token
 })
 
 beforeEach(() => resetThrottle())
@@ -92,10 +96,15 @@ after(async () => {
 test('the portal and the app keep their sessions apart', async () => {
   const pat = await register('pat@test.local')
   assert.equal((await call('GET', '/admin/overview')).status, 401)
-  // A user's sign-in, even one using the admin's email, never opens the portal.
+  // A user's sign-in, even an account with the admin's email, never opens the portal.
   const lookalike = await register(ADMIN, 'Not the admin')
   assert.equal((await call('GET', '/admin/overview', pat.token)).status, 401)
   assert.equal((await call('GET', '/admin/overview', lookalike.token)).status, 401)
+  // On the same page, that account's own password signs in to the account...
+  const asUser = await adminSignIn(ADMIN, PASSWORD)
+  assert.ok(asUser.body.token && !asUser.body.admin)
+  // ...and the admin password opens the portal.
+  assert.ok((await adminSignIn()).body.admin.token)
   // And the admin's session is no use in the app.
   assert.equal((await call('GET', '/auth/me', admin)).status, 401)
 
@@ -106,10 +115,13 @@ test('the portal and the app keep their sessions apart', async () => {
   assert.equal((await call('GET', '/admin/session', admin)).body.email, ADMIN)
 })
 
-test('signing in to the portal: wrong details refused, guessing cut off, all of it recorded', async () => {
-  assert.equal((await adminSignIn(ADMIN, 'not the password')).status, 401)
+test('signing in as the admin: wrong details refused, guessing cut off, all of it recorded', async () => {
+  const wrong = await adminSignIn(ADMIN, 'not the password')
+  assert.equal(wrong.status, 401)
+  assert.equal(wrong.body.error, 'invalid_credentials')
+  // The admin password with another email is just a wrong sign-in.
   assert.equal((await adminSignIn('someone@else.local', ADMIN_PASSWORD)).status, 401)
-  for (let i = 0; i < 3; i++) await adminSignIn(ADMIN, `guess ${i}`)
+  for (let i = 0; i < 4; i++) await adminSignIn(ADMIN, `guess ${i}`)
   const held = await adminSignIn()
   assert.equal(held.status, 429)
   assert.equal(held.body.error, 'too_many_attempts')
@@ -120,19 +132,20 @@ test('signing in to the portal: wrong details refused, guessing cut off, all of 
     (e) => e.filter((x) => x.outcome === 'failed').length >= 5 && e.some((x) => x.outcome === 'blocked'),
   )
   assert.ok(trail.some((e) => e.outcome === 'ok' && e.actor_email === ADMIN))
-  assert.ok(trail.some((e) => e.outcome === 'failed' && e.email === 'someone@else.local'))
+  assert.ok(trail.some((e) => e.outcome === 'failed' && e.email === ADMIN))
 })
 
 test('the portal stays shut until it is set up, and a short password does not count', async () => {
   const saved = { ...env }
   try {
+    // Not set up: the admin's details are just a wrong sign-in, and old sessions stop.
     env.adminPassword = ''
-    assert.equal((await adminSignIn()).body.error, 'admin_not_configured')
+    assert.equal((await adminSignIn(ADMIN, ADMIN_PASSWORD)).status, 401)
     assert.equal((await call('GET', '/admin/overview', admin)).status, 401)
     env.adminPassword = 'short'
     const short = await adminSignIn(ADMIN, 'short')
-    assert.equal(short.status, 503)
-    assert.equal(short.body.error, 'admin_password_too_short')
+    assert.equal(short.status, 401)
+    assert.equal(short.body.admin, undefined)
   } finally {
     env.adminEmail = saved.adminEmail
     env.adminPassword = saved.adminPassword

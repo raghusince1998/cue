@@ -19,6 +19,7 @@ import { createDemo, demoAllowed } from '../services/demo.ts'
 import { filledSections } from '../services/sections.ts'
 import { audit, clientIp } from '../services/audit.ts'
 import { clear, count, isLimited } from '../services/throttle.ts'
+import { adminSetup, credentialsMatch, signAdminToken } from '../services/adminSession.ts'
 import { revokeAccount } from '../services/oauthConnect.ts'
 import { env } from '../env.ts'
 import { mailConfigured, MailError, resetEmail, sendMail } from '../services/mail.ts'
@@ -144,10 +145,32 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(429).send({ error: 'too_many_attempts' })
     }
 
+    // The same sign-in page for everyone. The admin's email and password (from
+    // the server's .env, not an account) open the admin portal — a session of
+    // its own that the app never sees. Held back harder than anyone's.
+    const adminTry = adminSetup() === 'ok' && email === env.adminEmail
+    if (adminTry) {
+      if (isLimited('adminIp', ip) || isLimited('adminAll', 'all')) {
+        audit(req, { action: 'admin.login', email, outcome: 'blocked', detail: { reason: 'too_many_attempts' } })
+        return reply.code(429).send({ error: 'too_many_attempts' })
+      }
+      if (credentialsMatch(email, body.password)) {
+        clear('adminIp', ip)
+        clear('loginEmail', email)
+        audit(req, { action: 'admin.login', actor: env.adminEmail })
+        return { admin: { ...signAdminToken(), email: env.adminEmail } }
+      }
+    }
+
     const matches = await bcrypt.compare(body.password, user?.passwordHash ?? NO_ACCOUNT_HASH)
     if (!user || !matches) {
       count('loginIp', ip)
       count('loginEmail', email)
+      if (adminTry) {
+        count('adminIp', ip)
+        count('adminAll', 'all')
+        audit(req, { action: 'admin.login', email, outcome: 'failed', detail: { reason: 'wrong_credentials' } })
+      }
       audit(req, {
         action: 'auth.login',
         userId: user?.id,
