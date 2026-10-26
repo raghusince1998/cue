@@ -5650,19 +5650,6 @@ a.link-btn:hover {
 
 /* ---- Trackers: applications, candidates, deals ----------------------- */
 
-.tracker-add {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-}
-
-@media (min-width: 760px) {
-  .tracker-add {
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 0.8fr) auto;
-    align-items: center;
-  }
-}
-
 .tracker-quiet {
   padding: 10px 14px;
   border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--border));
@@ -5830,6 +5817,420 @@ a.link-btn:hover {
 
   .tracker-fields .tracker-wide {
     grid-column: 1 / -1;
+  }
+}
+
+/* ---- Deals: what it adds up to, open / won / lost, people picked or added -- */
+
+.tracker-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tracker-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.tracker-stats span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.tracker-stats strong {
+  font-size: 20px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.tracker-stats small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tracker-stats .is-won {
+  border-color: color-mix(in srgb, var(--good) 45%, var(--border));
+  background: var(--good-soft);
+}
+
+.tracker-stats .is-won strong {
+  color: var(--good);
+}
+
+.tracker-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tracker-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tracker-tabs button {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 8px 14px;
+  border-radius: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tracker-tabs button.is-on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.tracker-tabs button.is-won.is-on {
+  color: var(--good);
+}
+
+.tracker-tabs button.is-lost.is-on {
+  color: var(--danger);
+}
+
+.tracker-tab-count {
+  display: inline-block;
+  min-width: 20px;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 12px;
+  text-align: center;
+}
+
+.tracker-tabs button.is-on .tracker-tab-count {
+  background: var(--accent-soft);
+}
+
+.tracker-column-value {
+  float: right;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+}
+
+.tracker-card-person {
+  font-size: 13px;
+  color: var(--accent);
+}
+
+/* Won and lost, each on their own. */
+.closed-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+.closed-summary.is-won {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.closed-summary.is-lost {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.closed-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.closed-reason {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+}
+
+.closed-reason strong {
+  margin-left: 4px;
+  color: var(--danger);
+}
+
+.closed-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.closed-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.closed-card.is-won {
+  border-left-color: var(--good);
+}
+
+.closed-card.is-lost {
+  border-left-color: var(--danger);
+}
+
+.closed-card:hover,
+.closed-card:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.closed-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.closed-card-value {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.closed-card.is-won .closed-card-value {
+  color: var(--good);
+}
+
+.closed-card.is-lost .closed-card-value {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.closed-card-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.closed-card-reason {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* A deal's outcome, at the top of its sheet. */
+.tracker-outcome {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.tracker-outcome.is-won {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.tracker-outcome.is-lost {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.tracker-sheet-facts {
+  margin: 4px 0 0;
+}
+
+.lost-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: var(--danger-soft);
+}
+
+.tracker-new label,
+.tracker-new-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tracker-new-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+/* Who it is with: picked from People, typed in new, or from the phone. */
+.person-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.person-search {
+  display: flex;
+  gap: 8px;
+}
+
+.person-search input {
+  flex: 1;
+  min-width: 0;
+}
+
+.person-options {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.person-options button {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.person-options button:hover,
+.person-options button:focus-visible {
+  background: var(--surface-2);
+  outline: none;
+}
+
+.person-options .person-option-new {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.person-chosen,
+.contact-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.contact-card {
+  flex-wrap: wrap;
+}
+
+.person-avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.person-chosen-text,
+.contact-card-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.contact-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.person-new {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 12px;
+}
+
+.person-new label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.person-new p,
+.person-new button {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .tracker-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tracker-stats > div:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .tracker-stats strong {
+    font-size: 18px;
+  }
+
+  .tracker-tabs {
+    width: 100%;
+  }
+
+  .tracker-tabs button {
+    flex: 1 1 auto;
+    padding: 8px 6px;
+  }
+
+  .contact-card-actions {
+    width: 100%;
   }
 }
 

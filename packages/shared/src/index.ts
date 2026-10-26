@@ -775,6 +775,21 @@ const trackerFields = {
     .nullable()
     .optional(),
   notes: z.string().max(4000).nullable().optional(),
+  /** Why it closed: "price too high", "went with a competitor". */
+  closeReason: z.string().trim().max(200).nullable().optional(),
+  /** When a deal is expected to close. */
+  expectedCloseOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  /**
+   * Someone not yet in People: saved there as the item is (matched by phone,
+   * then by name, so the same person is never added twice).
+   */
+  person: z
+    .object({
+      name: z.string().trim().min(1).max(200),
+      phone: z.string().trim().max(40).optional(),
+      email: z.string().trim().email().max(200).optional().or(z.literal('')),
+    })
+    .optional(),
 }
 
 const ymdString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -852,7 +867,11 @@ export interface TrackerItemDTO {
   stage: string
   contactId: string | null
   contactName: string | null
+  contactPhone: string | null
+  contactEmail: string | null
   valuePaise: number | null
+  closeReason: string | null
+  expectedCloseOn: string | null
   link: string | null
   notes: string | null
   stageChangedAt: string

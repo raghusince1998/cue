@@ -432,6 +432,10 @@ export const trackerItems = pgTable(
     notes: text('notes'),
     stageChangedAt: timestamp('stage_changed_at', { withTimezone: true }).notNull().defaultNow(),
     closedAt: timestamp('closed_at', { withTimezone: true }),
+    /** Why it closed, as the person said: "price too high", "went with a competitor". */
+    closeReason: text('close_reason'),
+    /** When it is expected to close (deals). */
+    expectedCloseOn: date('expected_close_on'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('tracker_items_user_board_idx').on(t.userId, t.board)],

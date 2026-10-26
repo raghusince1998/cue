@@ -1,6 +1,8 @@
 import { and, asc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm'
 import { BOARDS, isOpenStage, mentions, quietFor, stageOf, type BoardKey, type TrackerItemDTO } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
+import { phoneKey } from './calls.ts'
+import { canonicalWorkplace } from './workplace.ts'
 
 /**
  * Trackers: job applications, candidates, deals. Each item's next step is an
@@ -38,7 +40,11 @@ function select() {
       stage: t.stage,
       contactId: t.contactId,
       contactName: schema.contacts.name,
+      contactPhone: schema.contacts.phone,
+      contactEmail: schema.contacts.email,
       valuePaise: t.valuePaise,
+      closeReason: t.closeReason,
+      expectedCloseOn: t.expectedCloseOn,
       link: t.link,
       notes: t.notes,
       stageChangedAt: t.stageChangedAt,
@@ -118,6 +124,63 @@ interface Fields {
   valuePaise?: number | null
   link?: string | null
   notes?: string | null
+  closeReason?: string | null
+  expectedCloseOn?: string | null
+  person?: { name: string; phone?: string; email?: string }
+}
+
+/**
+ * The person an item is with, when they are not picked from People: found
+ * there by phone, then by name, or saved there now — so a deal never needs
+ * the contact made first, and the same person is never added twice. For a
+ * client or a company, they are saved as working there.
+ */
+async function personFor(
+  orgId: string,
+  workplace: string | null,
+  person: NonNullable<Fields['person']>,
+): Promise<{ id: string; created: boolean }> {
+  const name = person.name.trim().replace(/\s+/g, ' ')
+  const phone = person.phone?.trim() || null
+  const email = person.email?.trim() || null
+
+  if (phone && phoneKey(phone).length >= 6) {
+    const [byPhone] = await db
+      .select({ id: schema.contacts.id })
+      .from(schema.contacts)
+      .where(
+        and(
+          eq(schema.contacts.orgId, orgId),
+          sql`right(regexp_replace(coalesce(${schema.contacts.phone}, ''), '[^0-9]', '', 'g'), 10) = ${phoneKey(phone)}`,
+        ),
+      )
+      .limit(1)
+    if (byPhone) return { id: byPhone.id, created: false }
+  }
+
+  const byName = await db
+    .select({ id: schema.contacts.id, phone: schema.contacts.phone, email: schema.contacts.email })
+    .from(schema.contacts)
+    .where(and(eq(schema.contacts.orgId, orgId), sql`lower(btrim(${schema.contacts.name})) = ${name.toLowerCase()}`))
+    .limit(2)
+  // Exactly one with that name and no phone that says otherwise: the same person.
+  if (byName.length === 1 && (!phone || !byName[0]!.phone)) {
+    const found = byName[0]!
+    const fill: Partial<typeof schema.contacts.$inferInsert> = {}
+    if (phone && !found.phone) fill.phone = phone
+    if (email && !found.email) fill.email = email
+    if (Object.keys(fill).length) await db.update(schema.contacts).set(fill).where(eq(schema.contacts.id, found.id))
+    return { id: found.id, created: false }
+  }
+
+  // Their workplace, unless the item is named after them (a candidate, a client who is a person).
+  const organization =
+    workplace && workplace.trim().toLowerCase() !== name.toLowerCase() ? await canonicalWorkplace(orgId, workplace) : null
+  const [made] = await db
+    .insert(schema.contacts)
+    .values({ orgId, name, phone, email, organization: organization ?? null })
+    .returning({ id: schema.contacts.id })
+  return { id: made!.id, created: true }
 }
 
 /** A contact of this org's, or nothing. */
@@ -135,10 +198,17 @@ export async function createItem(
   userId: string,
   board: BoardKey,
   input: Fields & { title: string },
-): Promise<TrackerItemDTO | 'unknown_stage'> {
+): Promise<(TrackerItemDTO & { contactCreated: boolean }) | 'unknown_stage'> {
   const stage = input.stage ?? BOARDS[board].startStage
   if (!stageOf(board, stage)) return 'unknown_stage'
   const closed = !isOpenStage(board, stage)
+  let contactId = await ownContact(orgId, input.contactId)
+  let contactCreated = false
+  if (!contactId && input.person) {
+    const found = await personFor(orgId, board === 'hiring' ? null : input.title, input.person)
+    contactId = found.id
+    contactCreated = found.created
+  }
   const [row] = await db
     .insert(t)
     .values({
@@ -148,15 +218,17 @@ export async function createItem(
       title: input.title.trim(),
       detail: input.detail?.trim() || null,
       stage,
-      contactId: await ownContact(orgId, input.contactId),
+      contactId,
       valuePaise: input.valuePaise ?? null,
       link: input.link?.trim() || null,
       notes: input.notes?.trim() || null,
       closedAt: closed ? new Date() : null,
+      closeReason: closed ? input.closeReason?.trim() || null : null,
+      expectedCloseOn: input.expectedCloseOn ?? null,
     })
     .returning({ id: t.id })
   await db.insert(schema.trackerEvents).values({ itemId: row!.id, fromStage: null, toStage: stage })
-  return (await itemById(userId, row!.id))!
+  return { ...(await itemById(userId, row!.id))!, contactCreated }
 }
 
 export async function updateItem(
@@ -164,9 +236,9 @@ export async function updateItem(
   userId: string,
   id: string,
   input: Fields,
-): Promise<TrackerItemDTO | 'not_found' | 'unknown_stage'> {
+): Promise<(TrackerItemDTO & { contactCreated: boolean }) | 'not_found' | 'unknown_stage'> {
   const [current] = await db
-    .select({ board: t.board, stage: t.stage })
+    .select({ board: t.board, stage: t.stage, title: t.title })
     .from(t)
     .where(and(eq(t.id, id), eq(t.userId, userId)))
   if (!current) return 'not_found'
@@ -175,7 +247,15 @@ export async function updateItem(
   const set: Partial<typeof t.$inferInsert> = {}
   if (input.title !== undefined) set.title = input.title.trim()
   if (input.detail !== undefined) set.detail = input.detail?.trim() || null
+  let contactCreated = false
   if (input.contactId !== undefined) set.contactId = await ownContact(orgId, input.contactId)
+  if (input.person && !set.contactId) {
+    const found = await personFor(orgId, board === 'hiring' ? null : (input.title ?? current.title), input.person)
+    set.contactId = found.id
+    contactCreated = found.created
+  }
+  if (input.expectedCloseOn !== undefined) set.expectedCloseOn = input.expectedCloseOn
+  if (input.closeReason !== undefined) set.closeReason = input.closeReason?.trim() || null
   if (input.valuePaise !== undefined) set.valuePaise = input.valuePaise
   if (input.link !== undefined) set.link = input.link?.trim() || null
   if (input.notes !== undefined) set.notes = input.notes?.trim() || null
@@ -186,12 +266,14 @@ export async function updateItem(
     set.stage = input.stage!
     set.stageChangedAt = new Date()
     set.closedAt = isOpenStage(board, input.stage!) ? null : new Date()
+    // Opened again: why it closed no longer stands.
+    if (isOpenStage(board, input.stage!)) set.closeReason = null
   }
   await db.transaction(async (tx) => {
     if (Object.keys(set).length) await tx.update(t).set(set).where(and(eq(t.id, id), eq(t.userId, userId)))
     if (moved) await tx.insert(schema.trackerEvents).values({ itemId: id, fromStage: current.stage, toStage: input.stage! })
   })
-  return (await itemById(userId, id))!
+  return { ...(await itemById(userId, id))!, contactCreated }
 }
 
 export async function deleteItem(userId: string, id: string): Promise<boolean> {
