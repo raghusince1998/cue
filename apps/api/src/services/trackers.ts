@@ -1,7 +1,20 @@
-import { and, asc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm'
-import { BOARDS, isOpenStage, mentions, quietFor, stageOf, type BoardKey, type TrackerItemDTO } from '@cue/shared'
+import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm'
+import {
+  BOARDS,
+  isOpenStage,
+  mentions,
+  quietFor,
+  stageOf,
+  type BoardKey,
+  type TrackerItemDTO,
+  type TrackerSuggestions,
+  type TrackerUpdateDTO,
+  type TrackerUpdateInput,
+  type TrackerUpdateKind,
+} from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { phoneKey } from './calls.ts'
+import { distanceExpr } from './nearby.ts'
 import { canonicalWorkplace } from './workplace.ts'
 
 /**
@@ -12,6 +25,8 @@ import { canonicalWorkplace } from './workplace.ts'
 
 const t = schema.trackerItems
 const c = schema.commitments
+const i = schema.interactions
+const p = schema.places
 /** Plans that are still to happen or be done. */
 const OPEN_PLAN = ['pending']
 
@@ -26,6 +41,21 @@ async function nextSteps(itemIds: string[]) {
     .orderBy(asc(c.dueAt))
   for (const r of rows) {
     if (r.itemId && !out.has(r.itemId)) out.set(r.itemId, { id: r.id, title: r.title, dueAt: r.dueAt.toISOString() })
+  }
+  return out
+}
+
+/** The latest visit or call logged on each item. */
+async function lastUpdates(itemIds: string[]) {
+  const out = new Map<string, NonNullable<TrackerItemDTO['lastUpdate']>>()
+  if (itemIds.length === 0) return out
+  const rows = await db
+    .selectDistinctOn([i.trackerItemId], { itemId: i.trackerItemId, kind: i.channel, outcome: i.outcome, at: i.startedAt })
+    .from(i)
+    .where(inArray(i.trackerItemId, itemIds))
+    .orderBy(i.trackerItemId, desc(i.startedAt))
+  for (const r of rows) {
+    if (r.itemId) out.set(r.itemId, { kind: r.kind as TrackerUpdateKind, outcome: r.outcome, at: r.at.toISOString() })
   }
   return out
 }
@@ -45,6 +75,11 @@ function select() {
       valuePaise: t.valuePaise,
       closeReason: t.closeReason,
       expectedCloseOn: t.expectedCloseOn,
+      placeId: t.placeId,
+      placeName: p.name,
+      placeAddress: p.address,
+      placeLat: p.lat,
+      placeLng: p.lng,
       link: t.link,
       notes: t.notes,
       stageChangedAt: t.stageChangedAt,
@@ -53,23 +88,33 @@ function select() {
     })
     .from(t)
     .leftJoin(schema.contacts, eq(schema.contacts.id, t.contactId))
+    .leftJoin(p, eq(p.id, t.placeId))
 }
 
 type Row = Awaited<ReturnType<ReturnType<typeof select>['where']>>[number]
 
 async function toDTOs(rows: Row[], now = new Date()): Promise<TrackerItemDTO[]> {
-  const next = await nextSteps(rows.map((r) => r.id))
-  return rows.map((r) => {
+  const ids = rows.map((r) => r.id)
+  const [next, last] = await Promise.all([nextSteps(ids), lastUpdates(ids)])
+  return rows.map(({ placeId, placeName, placeAddress, placeLat, placeLng, ...r }) => {
     const board = r.board as BoardKey
     const step = next.get(r.id) ?? null
+    const update = last.get(r.id) ?? null
+    // A visit or a call is a step too: quiet counts from whichever came later.
+    const since = update && Date.parse(update.at) > r.stageChangedAt.getTime() ? update.at : r.stageChangedAt
     return {
       ...r,
       board,
       stageChangedAt: r.stageChangedAt.toISOString(),
       closedAt: r.closedAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
+      place:
+        placeId && placeName !== null && placeLat !== null && placeLng !== null
+          ? { id: placeId, name: placeName, address: placeAddress, lat: placeLat, lng: placeLng }
+          : null,
+      lastUpdate: update,
       next: step,
-      quietDays: quietFor(board, { stage: r.stage, stageChangedAt: r.stageChangedAt, hasNextStep: Boolean(step) }, now),
+      quietDays: quietFor(board, { stage: r.stage, stageChangedAt: since, hasNextStep: Boolean(step) }, now),
     }
   })
 }
@@ -94,11 +139,11 @@ export async function itemById(userId: string, id: string): Promise<TrackerItemD
   return row ? (await toDTOs([row]))[0]! : null
 }
 
-/** How it got here, and every plan that was part of it. */
+/** How it got here, every plan that was part of it, and every visit and call. */
 export async function itemHistory(userId: string, id: string) {
   const [owned] = await db.select({ id: t.id }).from(t).where(and(eq(t.id, id), eq(t.userId, userId)))
   if (!owned) return null
-  const [events, plans] = await Promise.all([
+  const [events, plans, updates] = await Promise.all([
     db
       .select({ from: schema.trackerEvents.fromStage, to: schema.trackerEvents.toStage, at: schema.trackerEvents.at })
       .from(schema.trackerEvents)
@@ -109,10 +154,25 @@ export async function itemHistory(userId: string, id: string) {
       .from(c)
       .where(and(eq(c.trackerItemId, id), notInArray(c.status, ['deleted'])))
       .orderBy(asc(c.dueAt)),
+    db
+      .select({
+        id: i.id,
+        kind: i.channel,
+        outcome: i.outcome,
+        notes: i.notes,
+        at: i.startedAt,
+        contactId: i.contactId,
+        contactName: schema.contacts.name,
+      })
+      .from(i)
+      .leftJoin(schema.contacts, eq(schema.contacts.id, i.contactId))
+      .where(and(eq(i.trackerItemId, id), eq(i.userId, userId)))
+      .orderBy(desc(i.startedAt)),
   ])
   return {
     events: events.map((e) => ({ ...e, at: e.at.toISOString() })),
     plans: plans.map((p) => ({ ...p, dueAt: p.dueAt.toISOString() })),
+    updates: updates.map((u): TrackerUpdateDTO => ({ ...u, kind: u.kind as TrackerUpdateKind, at: u.at.toISOString() })),
   }
 }
 
@@ -127,6 +187,14 @@ interface Fields {
   closeReason?: string | null
   expectedCloseOn?: string | null
   person?: { name: string; phone?: string; email?: string }
+  placeId?: string | null
+  here?: Here
+}
+
+interface Here {
+  lat: number
+  lng: number
+  address?: string
 }
 
 /**
@@ -183,6 +251,38 @@ async function personFor(
   return { id: made!.id, created: true }
 }
 
+/**
+ * Where an item is, from where you stand: a place of the same name already
+ * saved close by is that place; otherwise it is saved now, named after the
+ * item — so it is in Places, with directions, for the next visit.
+ */
+async function placeFor(orgId: string, name: string, here: Here): Promise<string> {
+  const distance = distanceExpr(here.lat, here.lng)
+  const address = here.address?.trim() || null
+  const [near] = await db
+    .select({ id: p.id, address: p.address })
+    .from(p)
+    .where(and(eq(p.orgId, orgId), sql`lower(btrim(${p.name})) = ${name.trim().toLowerCase()}`, sql`${distance} <= 500`))
+    .orderBy(sql`${distance} asc`)
+    .limit(1)
+  if (near) {
+    if (address && !near.address) await db.update(p).set({ address }).where(eq(p.id, near.id))
+    return near.id
+  }
+  const [made] = await db
+    .insert(p)
+    .values({ orgId, name: name.trim(), address, lat: here.lat, lng: here.lng })
+    .returning({ id: p.id })
+  return made!.id
+}
+
+/** A place of this org's, or nothing. */
+async function ownPlace(orgId: string, id: string | null | undefined): Promise<string | null> {
+  if (!id) return null
+  const [row] = await db.select({ id: p.id }).from(p).where(and(eq(p.id, id), eq(p.orgId, orgId)))
+  return row?.id ?? null
+}
+
 /** A contact of this org's, or nothing. */
 async function ownContact(orgId: string, id: string | null | undefined): Promise<string | null> {
   if (!id) return null
@@ -209,6 +309,8 @@ export async function createItem(
     contactId = found.id
     contactCreated = found.created
   }
+  const placeId =
+    (await ownPlace(orgId, input.placeId)) ?? (input.here ? await placeFor(orgId, input.title, input.here) : null)
   const [row] = await db
     .insert(t)
     .values({
@@ -225,6 +327,7 @@ export async function createItem(
       closedAt: closed ? new Date() : null,
       closeReason: closed ? input.closeReason?.trim() || null : null,
       expectedCloseOn: input.expectedCloseOn ?? null,
+      placeId,
     })
     .returning({ id: t.id })
   await db.insert(schema.trackerEvents).values({ itemId: row!.id, fromStage: null, toStage: stage })
@@ -255,6 +358,8 @@ export async function updateItem(
     contactCreated = found.created
   }
   if (input.expectedCloseOn !== undefined) set.expectedCloseOn = input.expectedCloseOn
+  if (input.placeId !== undefined) set.placeId = await ownPlace(orgId, input.placeId)
+  if (input.here) set.placeId = await placeFor(orgId, input.title ?? current.title, input.here)
   if (input.closeReason !== undefined) set.closeReason = input.closeReason?.trim() || null
   if (input.valuePaise !== undefined) set.valuePaise = input.valuePaise
   if (input.link !== undefined) set.link = input.link?.trim() || null
@@ -274,6 +379,109 @@ export async function updateItem(
     if (moved) await tx.insert(schema.trackerEvents).values({ itemId: id, fromStage: current.stage, toStage: input.stage! })
   })
   return { ...(await itemById(userId, id))!, contactCreated }
+}
+
+/**
+ * A visit or a call on an item: saved with the rest of the visits and calls,
+ * linked to it. The first person met becomes who it is with, and where you
+ * stood — when asked — where it is.
+ */
+export async function addUpdate(
+  orgId: string,
+  userId: string,
+  itemId: string,
+  input: TrackerUpdateInput,
+): Promise<{ update: TrackerUpdateDTO; contactCreated: boolean; placeSaved: boolean } | 'not_found'> {
+  const [item] = await db
+    .select({ board: t.board, title: t.title, contactId: t.contactId, placeId: t.placeId })
+    .from(t)
+    .where(and(eq(t.id, itemId), eq(t.userId, userId)))
+  if (!item) return 'not_found'
+  const board = item.board as BoardKey
+
+  // Nobody said: whoever the item is with.
+  let contactId = input.contactId === undefined && !input.person ? item.contactId : await ownContact(orgId, input.contactId)
+  let contactCreated = false
+  if (!contactId && input.person) {
+    const found = await personFor(orgId, board === 'hiring' ? null : item.title, input.person)
+    contactId = found.id
+    contactCreated = found.created
+  }
+
+  const fix = input.lat != null && input.lng != null ? { lat: input.lat, lng: input.lng } : null
+  let placeId = item.placeId
+  let placeSaved = false
+  if (!placeId && input.savePlace && fix && board !== 'hiring') {
+    placeId = await placeFor(orgId, item.title, fix)
+    placeSaved = true
+  }
+
+  const [row] = await db
+    .insert(i)
+    .values({
+      orgId,
+      userId,
+      trackerItemId: itemId,
+      placeId: input.kind === 'visit' ? placeId : null,
+      contactId,
+      purpose: board === 'jobs' ? 'personal' : 'business',
+      channel: input.kind,
+      connected: input.connected ?? true,
+      outcome: input.outcome?.trim() || null,
+      notes: input.note?.trim() || null,
+      lat: fix?.lat ?? null,
+      lng: fix?.lng ?? null,
+      accuracyM: input.accuracyM ?? null,
+      startedAt: input.at ? new Date(input.at) : new Date(),
+    })
+    .returning({ id: i.id, kind: i.channel, outcome: i.outcome, notes: i.notes, at: i.startedAt, contactId: i.contactId })
+
+  const set: Partial<typeof t.$inferInsert> = {}
+  if (contactId && !item.contactId) set.contactId = contactId
+  if (placeSaved) set.placeId = placeId
+  if (Object.keys(set).length) await db.update(t).set(set).where(eq(t.id, itemId))
+
+  const [who] = contactId
+    ? await db.select({ name: schema.contacts.name }).from(schema.contacts).where(eq(schema.contacts.id, contactId))
+    : []
+  return {
+    update: { ...row!, kind: row!.kind as TrackerUpdateKind, at: row!.at.toISOString(), contactName: who?.name ?? null },
+    contactCreated,
+    placeSaved,
+  }
+}
+
+export async function removeUpdate(userId: string, itemId: string, updateId: string): Promise<boolean> {
+  const rows = await db
+    .delete(i)
+    .where(and(eq(i.id, updateId), eq(i.userId, userId), eq(i.trackerItemId, itemId)))
+    .returning({ id: i.id })
+  return rows.length > 0
+}
+
+/**
+ * What is typed most on a board — what deals are for, what the next step
+ * usually is — most used first, so the next one is a tap.
+ */
+export async function suggestions(userId: string, board: BoardKey): Promise<TrackerSuggestions> {
+  const [details, steps] = await Promise.all([
+    db
+      .select({ text: sql<string>`(array_agg(${t.detail} order by ${t.createdAt} desc))[1]` })
+      .from(t)
+      .where(and(eq(t.userId, userId), eq(t.board, board), sql`btrim(coalesce(${t.detail}, '')) <> ''`))
+      .groupBy(sql`lower(btrim(${t.detail}))`)
+      .orderBy(sql`count(*) desc`, sql`max(${t.createdAt}) desc`)
+      .limit(8),
+    db
+      .select({ text: sql<string>`(array_agg(${c.title} order by ${c.createdAt} desc))[1]` })
+      .from(c)
+      .innerJoin(t, eq(t.id, c.trackerItemId))
+      .where(and(eq(t.userId, userId), eq(t.board, board), notInArray(c.status, ['deleted'])))
+      .groupBy(sql`lower(btrim(${c.title}))`)
+      .orderBy(sql`count(*) desc`, sql`max(${c.createdAt}) desc`)
+      .limit(6),
+  ])
+  return { details: details.map((r) => r.text.trim()), nextSteps: steps.map((r) => r.text.trim()) }
 }
 
 export async function deleteItem(userId: string, id: string): Promise<boolean> {

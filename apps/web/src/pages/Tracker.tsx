@@ -8,6 +8,9 @@ import {
   type BoardKey,
   type ContactDTO,
   type TrackerItemDTO,
+  type TrackerSuggestions,
+  type TrackerUpdateDTO,
+  type TrackerUpdateKind,
 } from '@cue/shared'
 import { api } from '../lib/api.ts'
 import { announceChange, useOnChange } from '../lib/changes.ts'
@@ -21,10 +24,22 @@ import { errorText } from '../lib/errors.ts'
 import { openPerson, openPlan } from '../lib/open.ts'
 import { toast } from '../lib/toast.ts'
 import { saveToPhone } from '../lib/vcard.ts'
+import {
+  NEXT_WHEN,
+  PlaceBlock,
+  Suggest,
+  UpdateForm,
+  UpdateList,
+  bookNext,
+  dueIn,
+  fresh,
+  lastUpdateLine,
+} from '../components/TrackerLog.tsx'
 
 interface Detail extends TrackerItemDTO {
   events: { from: string | null; to: string; at: string }[]
   plans: { id: string; title: string; dueAt: string; status: string }[]
+  updates: TrackerUpdateDTO[]
 }
 
 type Saved = TrackerItemDTO & { contactCreated?: boolean }
@@ -82,7 +97,16 @@ const LOST_REASONS: string[] = [
   msg('Bad timing'),
   msg('Stopped replying'),
   msg('Did not need it'),
+  msg('Already uses one'),
 ]
+
+/** A visit or call that ended in no: the deal is offered as lost, for this reason. */
+const LOST_FROM: Record<string, string> = {
+  [msg('Not interested')]: msg('Did not need it'),
+  [msg('Already uses one')]: msg('Already uses one'),
+}
+
+const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
 /** A reason said with t() when it is one of ours; what the person typed, as typed. */
 const reasonText = (reason: string) => (LOST_REASONS.includes(reason) ? t(reason) : reason)
@@ -117,6 +141,7 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
   const [params, setParams] = useSearchParams()
   const [items, setItems] = useState<TrackerItemDTO[] | null>(null)
   const [people, setPeople] = useState<PersonOption[]>([])
+  const [hints, setHints] = useState<TrackerSuggestions>({ details: [], nextSteps: [] })
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const openId = params.get('item')
@@ -124,7 +149,12 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
 
   const load = useCallback(async () => {
     try {
-      setItems(await api<TrackerItemDTO[]>(`/trackers/${key}`))
+      const [list, suggested] = await Promise.all([
+        api<TrackerItemDTO[]>(`/trackers/${key}`),
+        api<TrackerSuggestions>(`/trackers/${key}/suggestions`).catch(() => null),
+      ])
+      setItems(list)
+      if (suggested) setHints(suggested)
       setError(null)
     } catch (err) {
       setError(errorText(err))
@@ -149,9 +179,16 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
   const lost = useMemo(() => (items ?? []).filter((i) => outcome(key, i) === 'lost'), [items, key])
   const quiet = open.filter((i) => i.quietDays !== null)
   const openStages = board.stages.filter((s) => !s.closed)
+  // Clients typed before, and where People work: one tap in the first box.
   const workplaces = useMemo(
-    () => [...new Set(people.map((p) => p.organization?.trim()).filter((o): o is string => Boolean(o)))].sort(),
-    [people],
+    () =>
+      [
+        ...new Set([
+          ...(items ?? []).map((i) => i.title.trim()),
+          ...people.map((p) => p.organization?.trim()).filter((o): o is string => Boolean(o)),
+        ]),
+      ].sort(),
+    [items, people],
   )
 
   const show = (id: string | null) => {
@@ -289,8 +326,15 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
         <Modal title={t(WORDS[key].fresh)} onClose={() => setAdding(false)} closeOnBackdrop={false}>
           <NewItem
             board={key}
+            items={items ?? []}
+            details={hints.details}
             people={people}
             workplaces={workplaces}
+            onOpenExisting={(id) => {
+              setAdding(false)
+              setView('open')
+              show(id)
+            }}
             onCreated={(saved) => {
               setAdding(false)
               setView('open')
@@ -309,6 +353,7 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
             id={openId}
             board={key}
             people={people}
+            nextSteps={hints.nextSteps}
             onChanged={() => {
               void load()
               loadPeople()
@@ -327,13 +372,19 @@ export default function Tracker({ board: key }: { board: BoardKey }) {
 /** Adding one: who, what, with whom (picked or new), what it is worth and when. */
 function NewItem({
   board: key,
+  items,
+  details,
   people,
   workplaces,
+  onOpenExisting,
   onCreated,
 }: {
   board: BoardKey
+  items: TrackerItemDTO[]
+  details: string[]
   people: PersonOption[]
   workplaces: string[]
+  onOpenExisting: (id: string) => void
   onCreated: (saved: Saved) => void
 }) {
   const board = BOARDS[key]
@@ -348,6 +399,13 @@ function NewItem({
   const openStages = board.stages.filter((s) => !s.closed)
   // A candidate is a person: their name is the title unless one was typed.
   const name = title.trim() || (person?.kind ? person.name.trim() : '')
+  // What it is for: what was used with this client before, then what is used most.
+  const forClient = title.trim()
+    ? items.filter((i) => i.detail && same(i.title, title)).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    : []
+  const usual = fresh([...forClient.map((i) => i.detail!), ...details], detail)
+  // Already one open with this client: logging on it beats a second one.
+  const already = title.trim() ? items.find((i) => isOpenStage(key, i.stage) && same(i.title, title)) : undefined
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -390,6 +448,14 @@ function NewItem({
           autoFocus
         />
       </label>
+      {already && (
+        <p className="tracker-already small">
+          {t('Already open: {what}.', { what: already.detail ? `${already.title} — ${already.detail}` : already.title })}{' '}
+          <button type="button" className="link small" onClick={() => onOpenExisting(already.id)}>
+            {t('Open it')}
+          </button>
+        </p>
+      )}
       {key !== 'hiring' && (
         <datalist id="tracker-workplaces">
           {workplaces.map((w) => (
@@ -399,8 +465,20 @@ function NewItem({
       )}
       <label>
         {t(board.detailLabel)}
-        <input value={detail} onChange={(e) => setDetail(e.target.value)} placeholder={t(board.detailPlaceholder)} maxLength={200} />
+        <input
+          value={detail}
+          onChange={(e) => setDetail(e.target.value)}
+          placeholder={t(board.detailPlaceholder)}
+          list="tracker-details"
+          maxLength={200}
+        />
       </label>
+      <datalist id="tracker-details">
+        {details.map((d) => (
+          <option key={d} value={d} />
+        ))}
+      </datalist>
+      <Suggest label={t('Used before')} options={usual} onPick={setDetail} />
 
       <PersonPicker people={people} value={person} onChange={setPerson} label={t(WORDS[key].person)} />
 
@@ -556,6 +634,7 @@ function TrackerCard({
           {item.valuePaise ? ` · ${formatRupees(item.valuePaise)}` : ''}
           {item.expectedCloseOn ? ` · ${t('closes {day}', { day: dayLabel(item.expectedCloseOn) })}` : ''}
         </span>
+        {item.lastUpdate && <span className="tracker-card-log">{lastUpdateLine(board, item.lastUpdate)}</span>}
         {item.next ? (
           <span className="tracker-card-next">
             {t('Next: {title} · {when}', { title: item.next.title, when: formatDateTime(item.next.dueAt) })}
@@ -574,12 +653,6 @@ function TrackerCard({
     </article>
   )
 }
-
-const NEXT_WHEN = [
-  { label: msg('Tomorrow'), days: 1 },
-  { label: msg('In 3 days'), days: 3 },
-  { label: msg('Next week'), days: 7 },
-]
 
 /** Who it is with: call, message, save to the phone — or pick someone. */
 function ContactBlock({
@@ -641,7 +714,7 @@ function ContactBlock({
 
   return (
     <div className="stack tight">
-      <PersonPicker people={people} value={choice} onChange={setChoice} label={t(WORDS[key].person)} />
+      <PersonPicker people={people} value={choice} onChange={setChoice} label={t(WORDS[key].person)} hideLabel />
       <div className="row">
         <button
           className="primary small-btn"
@@ -671,12 +744,14 @@ function ItemSheet({
   id,
   board: key,
   people,
+  nextSteps,
   onChanged,
   onDeleted,
 }: {
   id: string
   board: BoardKey
   people: PersonOption[]
+  nextSteps: string[]
   onChanged: () => void
   onDeleted: () => void
 }) {
@@ -691,6 +766,8 @@ function ItemSheet({
   /** A lost stage picked: asking why before it moves. */
   const [losing, setLosing] = useState<string | null>(null)
   const [reason, setReason] = useState('')
+  /** A visit or a call being logged. */
+  const [logging, setLogging] = useState<TrackerUpdateKind | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -780,24 +857,12 @@ function ItemSheet({
       }
       due = new Date(nextAt)
     } else {
-      due = new Date()
-      due.setDate(due.getDate() + days)
-      due.setHours(10, 0, 0, 0)
+      due = dueIn(days)
     }
     setBusy(true)
     setError(null)
     try {
-      await api('/commitments', {
-        method: 'POST',
-        body: {
-          title: nextText.trim(),
-          kind: /interview|meeting|call|meet/i.test(nextText) ? 'meeting' : 'task',
-          dueAt: due.toISOString(),
-          trackerItemId: id,
-          contactId: item?.contactId ?? null,
-          allowConflict: true,
-        },
-      })
+      await bookNext(id, item?.contactId ?? null, nextText.trim(), due)
       setNextText('')
       setNextAt('')
       await load()
@@ -807,6 +872,32 @@ function ItemSheet({
       setError(errorText(err))
     } finally {
       setBusy(false)
+    }
+  }
+
+  /** Logged: and when it ended in no, why it was lost is asked straight away. */
+  async function logged(saved: { outcome: string | null } | null) {
+    setLogging(null)
+    if (!saved) return
+    await load()
+    onChanged()
+    announceChange()
+    const why = saved.outcome ? LOST_FROM[saved.outcome] : undefined
+    const lostStage = board.stages.find((s) => s.closed === 'lost')
+    if (key === 'deals' && why && item && isOpenStage(key, item.stage) && lostStage) {
+      setLosing(lostStage.key)
+      setReason(why)
+    }
+  }
+
+  async function removeUpdate(updateId: string) {
+    try {
+      await api(`/tracker-items/${id}/updates/${updateId}`, { method: 'DELETE' })
+      await load()
+      onChanged()
+      announceChange()
+    } catch (err) {
+      setError(errorText(err))
     }
   }
 
@@ -851,6 +942,39 @@ function ItemSheet({
 
       <span className="label-text">{t(WORDS[key].person)}</span>
       <ContactBlock board={key} item={item} people={people} busy={busy} onLink={link} />
+
+      {key !== 'hiring' && (
+        <>
+          <span className="label-text">{t('Location')}</span>
+          <PlaceBlock place={item.place} busy={busy} onPatch={patch} />
+        </>
+      )}
+
+      <span className="label-text">{t('What happened')}</span>
+      {logging ? (
+        <UpdateForm
+          key={logging}
+          board={key}
+          item={item}
+          kind={logging}
+          people={people}
+          nextSteps={nextSteps}
+          onDone={(saved) => void logged(saved)}
+        />
+      ) : (
+        <div className="row">
+          <button className="ghost small-btn" onClick={() => setLogging('visit')}>
+            {key === 'deals' ? t('+ Log a visit') : t('+ Log a meeting')}
+          </button>
+          <button className="ghost small-btn" onClick={() => setLogging('call')}>
+            {t('+ Log a call')}
+          </button>
+        </div>
+      )}
+      {item.updates.length === 0 && !logging && (
+        <p className="muted small">{t('Nothing logged yet. Each visit or call, with how it went, shows here.')}</p>
+      )}
+      <UpdateList board={key} updates={item.updates} onRemove={(u) => void removeUpdate(u)} />
 
       <span className="label-text">{t('Stage')}</span>
       <div className="chips tracker-stages" role="group" aria-label={t('Stage')}>
@@ -937,6 +1061,7 @@ function ItemSheet({
             }
             aria-label={t('Next step')}
           />
+          <Suggest label={t('Used before')} options={fresh(nextSteps, nextText, 3)} onPick={setNextText} />
           <div className="row">
             {NEXT_WHEN.map((w) => (
               <button key={w.label} className="ghost small-btn" onClick={() => void addNext(w.days)} disabled={busy}>

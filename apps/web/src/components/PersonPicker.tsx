@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { t } from '../lib/i18n.tsx'
-import { canPickFromPhone, pickFromPhone } from '../lib/phoneContacts.ts'
+import { canPickFromPhone, nameAndNumber, pickFromPhone } from '../lib/phoneContacts.ts'
 
 /**
  * Who something is with: picked from People, typed in new (a name, a number,
@@ -26,11 +26,14 @@ export function PersonPicker({
   value,
   onChange,
   label,
+  hideLabel = false,
 }: {
   people: PersonOption[]
   value: PersonChoice | null
   onChange: (next: PersonChoice | null) => void
   label: string
+  /** The heading is already above it: the label only names it for screen readers. */
+  hideLabel?: boolean
 }) {
   const [query, setQuery] = useState('')
   const [picking, setPicking] = useState(false)
@@ -50,6 +53,7 @@ export function PersonPicker({
       .slice(0, 6)
   }, [people, query])
   const exact = matches.some((p) => p.name.toLowerCase() === query.trim().toLowerCase())
+  const typed = nameAndNumber(query)
 
   async function fromPhone() {
     setPicking(true)
@@ -75,7 +79,7 @@ export function PersonPicker({
   if (value?.kind === 'existing') {
     return (
       <div className="person-picker">
-        <span className="label-text">{label}</span>
+        {!hideLabel && <span className="label-text">{label}</span>}
         <div className="person-chosen">
           <span className="person-avatar" aria-hidden>
             {value.name.charAt(0).toUpperCase()}
@@ -96,7 +100,7 @@ export function PersonPicker({
     const set = (patch: Partial<Extract<PersonChoice, { kind: 'new' }>>) => onChange({ ...value, ...patch })
     return (
       <div className="person-picker">
-        <span className="label-text">{label}</span>
+        {!hideLabel && <span className="label-text">{label}</span>}
         <div className="person-new">
           <label>
             {t('Name')}
@@ -128,7 +132,7 @@ export function PersonPicker({
 
   return (
     <div className="person-picker">
-      <span className="label-text">{label}</span>
+      {!hideLabel && <span className="label-text">{label}</span>}
       <div className="person-search">
         <input
           value={query}
@@ -168,14 +172,12 @@ export function PersonPicker({
                 aria-selected={false}
                 className="person-option-new"
                 onClick={() => {
-                  // A number typed is a number, not a name.
-                  const typed = query.trim()
-                  const isNumber = /^[+\d][\d\s-]{5,}$/.test(typed)
-                  onChange({ kind: 'new', name: isNumber ? '' : typed, phone: isNumber ? typed : '', email: '' })
+                  // A number typed is a number, not a name: "Dr Sharma 98111 22233" is both.
+                  onChange({ kind: 'new', ...typed, email: '' })
                   setQuery('')
                 }}
               >
-                {t('+ Add “{name}” as someone new', { name: query.trim() })}
+                {t('+ Add “{name}” as someone new', { name: [typed.name, typed.phone].filter(Boolean).join(', ') })}
               </button>
             </li>
           )}

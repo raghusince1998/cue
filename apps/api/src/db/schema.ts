@@ -436,6 +436,8 @@ export const trackerItems = pgTable(
     closeReason: text('close_reason'),
     /** When it is expected to close (deals). */
     expectedCloseOn: date('expected_close_on'),
+    /** Where it is: the client's clinic, shop or office, saved from where you stood. */
+    placeId: uuid('place_id').references(() => places.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('tracker_items_user_board_idx').on(t.userId, t.board)],
@@ -665,6 +667,8 @@ export const interactions = pgTable(
     channel: text('channel').notNull().default('visit'),
     /** Whether you actually spoke. An unanswered call is not contact. */
     connected: boolean('connected').notNull().default(true),
+    /** The deal, application or candidate it was about, when logged on one. */
+    trackerItemId: uuid('tracker_item_id').references(() => trackerItems.id, { onDelete: 'set null' }),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

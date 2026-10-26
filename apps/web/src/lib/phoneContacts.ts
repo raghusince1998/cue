@@ -35,3 +35,19 @@ export async function pickFromPhone(): Promise<PhoneContact | null> {
   const email = picked.email?.find((n) => n.trim())?.trim() ?? ''
   return name || phone ? { name: name || phone, phone, email } : null
 }
+
+/**
+ * What was typed for someone new, as a name and a number: "Dr Sharma
+ * 98111 22233" is both, "98111 22233" only a number, "Dr Sharma" only a name.
+ */
+export function nameAndNumber(typed: string): { name: string; phone: string } {
+  const text = typed.trim()
+  const number = text.match(/\+?\d[\d\s-]{4,}\d/)
+  if (!number) return { name: text, phone: '' }
+  const name = (text.slice(0, number.index) + ' ' + text.slice(number.index! + number[0].length))
+    .replace(/[\s,;:–-]+$/, '')
+    .replace(/^[\s,;:–-]+/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return { name, phone: number[0].trim() }
+}

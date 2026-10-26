@@ -6234,6 +6234,150 @@ a.link-btn:hover {
   }
 }
 
+/* ---- Deals: visits and calls, where it is, what was typed before ------- */
+
+.tracker-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tracker-suggest .chip {
+  padding: 5px 10px;
+  font-size: 12.5px;
+  border-style: dashed;
+}
+
+.tracker-already {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.tracker-card-log {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.tracker-place {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.tracker-place.is-empty {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  border-style: dashed;
+}
+
+.tracker-place-pin {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.tracker-place-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tracker-place-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tracker-log-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.tracker-log-form > label:not(.checkbox) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tracker-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tracker-log-item {
+  position: relative;
+  padding: 10px 34px 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.tracker-log-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.tracker-log-outcome {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface-2);
+}
+
+.tracker-log-outcome.is-good {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.tracker-log-outcome.is-bad {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.tracker-log-outcome.is-missed {
+  color: var(--muted);
+}
+
+.tracker-log-remove {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.tracker-log-note {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .tracker-place-actions {
+    width: 100%;
+  }
+}
+
 /* ---- Exams ------------------------------------------------------------ */
 
 .exam-list {

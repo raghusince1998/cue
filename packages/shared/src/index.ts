@@ -762,6 +762,21 @@ export const setOwedStatusInput = z.object({
 
 export const owedIdsInput = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) })
 
+/** Someone not yet in People, typed in where they are needed. */
+const newPerson = z.object({
+  name: z.string().trim().min(1).max(200),
+  phone: z.string().trim().max(40).optional(),
+  email: z.string().trim().email().max(200).optional().or(z.literal('')),
+})
+
+/** Where the device is now: saved as the item's place. */
+const hereNow = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  accuracyM: z.number().nullable().optional(),
+  address: z.string().trim().max(500).optional(),
+})
+
 const trackerFields = {
   title: z.string().trim().min(1).max(160),
   detail: z.string().trim().max(200).nullable().optional(),
@@ -783,13 +798,11 @@ const trackerFields = {
    * Someone not yet in People: saved there as the item is (matched by phone,
    * then by name, so the same person is never added twice).
    */
-  person: z
-    .object({
-      name: z.string().trim().min(1).max(200),
-      phone: z.string().trim().max(40).optional(),
-      email: z.string().trim().email().max(200).optional().or(z.literal('')),
-    })
-    .optional(),
+  person: newPerson.optional(),
+  /** A saved place it is at; null takes it off. */
+  placeId: z.string().uuid().nullable().optional(),
+  /** Or where you stand now, saved as its place. */
+  here: hereNow.optional(),
 }
 
 const ymdString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -853,6 +866,54 @@ export const createTrackerItemInput = z.object({ ...trackerFields, stage: z.stri
 export const updateTrackerItemInput = z.object({ ...trackerFields, stage: z.string().max(40) }).partial()
 export const trackerBoardParam = z.object({ board: z.enum(TRACKER_BOARDS) })
 
+/** A visit or a call, the two ways People, the day's report and targets count contact. */
+export const TRACKER_UPDATE_KINDS = ['visit', 'call'] as const
+export type TrackerUpdateKind = (typeof TRACKER_UPDATE_KINDS)[number]
+
+/** What happened on a deal, an application or with a candidate: who, how it went, what was said. */
+export const trackerUpdateInput = z.object({
+  kind: z.enum(TRACKER_UPDATE_KINDS),
+  /** "Interested", "Already uses one", or in their own words. */
+  outcome: z.string().trim().max(200).nullable().optional(),
+  note: z.string().max(4000).nullable().optional(),
+  /** Whether you actually met or spoke: "no answer" is not contact. */
+  connected: z.boolean().optional(),
+  /** Who it was with; left out, whoever the item is with. */
+  contactId: z.string().uuid().nullable().optional(),
+  person: newPerson.optional(),
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+  accuracyM: z.number().nullable().optional(),
+  /** Save where you stand as the item's place, when it has none. */
+  savePlace: z.boolean().optional(),
+  at: z.string().datetime().optional(),
+})
+export type TrackerUpdateInput = z.infer<typeof trackerUpdateInput>
+
+export interface TrackerUpdateDTO {
+  id: string
+  kind: TrackerUpdateKind
+  outcome: string | null
+  notes: string | null
+  at: string
+  contactId: string | null
+  contactName: string | null
+}
+
+export interface TrackerPlace {
+  id: string
+  name: string
+  address: string | null
+  lat: number
+  lng: number
+}
+
+/** What is typed most on a board, so it is one tap the next time. */
+export interface TrackerSuggestions {
+  details: string[]
+  nextSteps: string[]
+}
+
 export interface TrackerNextStep {
   id: string
   title: string
@@ -877,6 +938,10 @@ export interface TrackerItemDTO {
   stageChangedAt: string
   closedAt: string | null
   createdAt: string
+  /** Where it is, when saved. */
+  place: TrackerPlace | null
+  /** The latest visit or call logged on it. */
+  lastUpdate: { kind: TrackerUpdateKind; outcome: string | null; at: string } | null
   /** The soonest open plan linked to it. */
   next: TrackerNextStep | null
   /** Days it has sat with nothing booked, past its stage's patience. */
