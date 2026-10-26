@@ -163,6 +163,7 @@ export async function itemHistory(userId: string, id: string) {
         at: i.startedAt,
         contactId: i.contactId,
         contactName: schema.contacts.name,
+        voiceNotes: sql<number>`(select count(*)::int from ${schema.voiceNotes} where ${schema.voiceNotes.interactionId} = ${i.id})`,
       })
       .from(i)
       .leftJoin(schema.contacts, eq(schema.contacts.id, i.contactId))
@@ -445,10 +446,33 @@ export async function addUpdate(
     ? await db.select({ name: schema.contacts.name }).from(schema.contacts).where(eq(schema.contacts.id, contactId))
     : []
   return {
-    update: { ...row!, kind: row!.kind as TrackerUpdateKind, at: row!.at.toISOString(), contactName: who?.name ?? null },
+    update: {
+      ...row!,
+      kind: row!.kind as TrackerUpdateKind,
+      at: row!.at.toISOString(),
+      contactName: who?.name ?? null,
+      voiceNotes: 0,
+    },
     contactCreated,
     placeSaved,
   }
+}
+
+/** What was said, or how it went, put right after it was logged. */
+export async function editUpdate(
+  userId: string,
+  itemId: string,
+  updateId: string,
+  input: { outcome?: string | null; note?: string | null },
+): Promise<boolean> {
+  const set: Partial<typeof i.$inferInsert> = {}
+  if (input.outcome !== undefined) set.outcome = input.outcome?.trim() || null
+  if (input.note !== undefined) set.notes = input.note?.trim() || null
+  const mine = and(eq(i.id, updateId), eq(i.userId, userId), eq(i.trackerItemId, itemId))
+  const rows = Object.keys(set).length
+    ? await db.update(i).set(set).where(mine).returning({ id: i.id })
+    : await db.select({ id: i.id }).from(i).where(mine)
+  return rows.length > 0
 }
 
 export async function removeUpdate(userId: string, itemId: string, updateId: string): Promise<boolean> {

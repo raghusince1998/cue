@@ -6366,6 +6366,26 @@ a.link-btn:hover {
   color: var(--muted);
 }
 
+.tracker-log-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 4px;
+}
+
+.tracker-said {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tracker-said > label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .tracker-log-note {
   margin: 6px 0 0;
   white-space: pre-wrap;

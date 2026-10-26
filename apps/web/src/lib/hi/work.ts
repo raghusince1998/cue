@@ -348,4 +348,12 @@ export const work: Record<string, string> = {
   '+ Log a meeting': '+ मीटिंग लिखें',
   '+ Log a call': '+ कॉल लिखें',
   'Nothing logged yet. Each visit or call, with how it went, shows here.': 'अभी कुछ लिखा नहीं गया। हर विज़िट या कॉल, और वह कैसी रही, यहाँ दिखेगी।',
+
+  // What was said on a visit or call: typed, spoken or recorded
+  'Voice note (optional)': 'वॉइस नोट (वैकल्पिक)',
+  'What was said': 'क्या बात हुई',
+  'Edit what was said': 'बात बदलें',
+  '+ What was said': '+ क्या बात हुई',
+  '▶ 1 voice note': '▶ 1 वॉइस नोट',
+  '▶ {n} voice notes': '▶ {n} वॉइस नोट',
 }

@@ -887,8 +887,18 @@ export const trackerUpdateInput = z.object({
   /** Save where you stand as the item's place, when it has none. */
   savePlace: z.boolean().optional(),
   at: z.string().datetime().optional(),
+  /** Clips recorded while logging it: what they said, in their words. */
+  voiceNoteIds: z.array(z.string().uuid()).max(10).optional(),
 })
 export type TrackerUpdateInput = z.infer<typeof trackerUpdateInput>
+
+/** What was said, or how it went, put right afterwards. */
+export const editTrackerUpdateInput = z
+  .object({
+    outcome: z.string().trim().max(200).nullable(),
+    note: z.string().max(4000).nullable(),
+  })
+  .partial()
 
 export interface TrackerUpdateDTO {
   id: string
@@ -898,6 +908,8 @@ export interface TrackerUpdateDTO {
   at: string
   contactId: string | null
   contactName: string | null
+  /** Clips recorded on it. */
+  voiceNotes: number
 }
 
 export interface TrackerPlace {

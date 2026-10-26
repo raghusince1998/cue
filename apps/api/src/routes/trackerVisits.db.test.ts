@@ -160,3 +160,35 @@ test('where a deal is: saved from where you stand, and taken off again', async (
   const cleared = await call('PATCH', `/tracker-items/${deal.body.id}`, { placeId: null })
   assert.equal(cleared.body.place, null)
 })
+
+test('what was said: spoken into a clip while logging, and put right afterwards', async () => {
+  const deal = await call('POST', '/trackers/deals', { title: 'Shanti Nursing Home', detail: 'Application demo' })
+  const [clip] = await h.sql<{ id: string }[]>`
+    insert into voice_notes (org_id, user_id, mime_type, size_bytes, audio)
+    values (${me.orgId}, ${me.userId}, 'audio/webm', 3, ${Buffer.from([1, 2, 3])}) returning id`
+  const visit = await call('POST', `/tracker-items/${deal.body.id}/updates`, {
+    kind: 'visit',
+    outcome: 'Interested',
+    voiceNoteIds: [clip!.id],
+  })
+  assert.equal(visit.status, 201)
+  assert.equal(visit.body.update.voiceNotes, 1)
+
+  const edited = await call('PATCH', `/tracker-items/${deal.body.id}/updates/${visit.body.update.id}`, {
+    note: 'Owner wants it in Hindi; will decide after Diwali',
+    outcome: 'Will think about it',
+  })
+  assert.equal(edited.status, 200)
+  const [entry] = (await call('GET', `/tracker-items/${deal.body.id}`)).body.updates
+  assert.equal(entry.notes, 'Owner wants it in Hindi; will decide after Diwali')
+  assert.equal(entry.outcome, 'Will think about it')
+  assert.equal(entry.voiceNotes, 1)
+
+  // Taken back: its clips go with it.
+  await call('DELETE', `/tracker-items/${deal.body.id}/updates/${visit.body.update.id}`)
+  const left = await h.sql<{ n: number }[]>`select count(*)::int as n from voice_notes where id = ${clip!.id}`
+  assert.equal(left[0]!.n, 0)
+
+  const missing = await call('PATCH', `/tracker-items/${deal.body.id}/updates/${visit.body.update.id}`, { note: 'x' })
+  assert.equal(missing.status, 404)
+})

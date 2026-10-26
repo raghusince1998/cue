@@ -6,7 +6,9 @@ import { getFix } from '../lib/geo.ts'
 import { msg, t } from '../lib/i18n.tsx'
 import { formatDateTime, relativeDay } from '../lib/time.ts'
 import { toast } from '../lib/toast.ts'
+import { DictateButton } from './DictateButton.tsx'
 import { PersonPicker, personBody, type PersonChoice, type PersonOption } from './PersonPicker.tsx'
+import { VoiceNotes } from './VoiceNotes.tsx'
 
 /**
  * What happened on a deal, an application or with a candidate: a visit or a
@@ -204,6 +206,7 @@ export function UpdateForm({
   )
   const [outcome, setOutcome] = useState('')
   const [note, setNote] = useState('')
+  const [clips, setClips] = useState<string[]>([])
   const canPlace = board !== 'hiring' && !item.place && 'geolocation' in navigator
   const [savePlace, setSavePlace] = useState(true)
   const [next, setNext] = useState('')
@@ -242,6 +245,7 @@ export function UpdateForm({
             connected: outcome !== MISSED[kind],
             ...(who ? personBody(who) : { contactId: null }),
             ...(fix ? { lat: fix.lat, lng: fix.lng, accuracyM: fix.accuracyM, savePlace: true } : {}),
+            ...(clips.length ? { voiceNoteIds: clips } : {}),
           },
         },
       )
@@ -307,6 +311,11 @@ export function UpdateForm({
         {t('What was said (optional)')}
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={4000} placeholder={t('e.g. Liked it; wants to talk again after the 10th')} />
       </label>
+      <div className="row">
+        <DictateButton value={note} onChange={setNote} label={t('Speak')} />
+      </div>
+      <span className="label-text">{t('Voice note (optional)')}</span>
+      <VoiceNotes onIdsChange={setClips} />
 
       {canPlace && kind === 'visit' && (
         <label className="checkbox">
@@ -359,17 +368,77 @@ export function UpdateForm({
   )
 }
 
+/** What was said on one entry, put right — typed, spoken, or recorded — after it was logged. */
+function SaidEditor({
+  itemId,
+  update,
+  onDone,
+}: {
+  itemId: string
+  update: TrackerUpdateDTO
+  /** Closed; true when anything changed. */
+  onDone: (changed: boolean) => void
+}) {
+  const [note, setNote] = useState(update.notes ?? '')
+  const [clipsChanged, setClipsChanged] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save() {
+    setBusy(true)
+    setError(null)
+    try {
+      if (note.trim() !== (update.notes ?? '')) {
+        await api(`/tracker-items/${itemId}/updates/${update.id}`, { method: 'PATCH', body: { note: note.trim() || null } })
+      }
+      onDone(true)
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="tracker-said">
+      <label>
+        {t('What was said')}
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} maxLength={4000} autoFocus />
+      </label>
+      <div className="row">
+        <DictateButton value={note} onChange={setNote} label={t('Speak')} />
+      </div>
+      <span className="label-text">{t('Voice notes')}</span>
+      <VoiceNotes interactionId={update.id} onIdsChange={() => setClipsChanged(true)} />
+      {error && <p className="error small">{error}</p>}
+      <div className="row">
+        <button className="primary small-btn" onClick={() => void save()} disabled={busy}>
+          {busy ? t('Saving…') : t('Save')}
+        </button>
+        <button className="ghost small-btn" onClick={() => onDone(clipsChanged)} disabled={busy}>
+          {t('Cancel')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /** Every visit and call on it, the latest first. */
 export function UpdateList({
   board,
+  itemId,
   updates,
   onRemove,
+  onChanged,
 }: {
   board: BoardKey
+  itemId: string
   updates: TrackerUpdateDTO[]
   onRemove: (id: string) => void
+  onChanged: () => void
 }) {
   const [all, setAll] = useState(false)
+  const [editing, setEditing] = useState<string | null>(null)
   if (updates.length === 0) return null
   const shown = all ? updates : updates.slice(0, 3)
   return (
@@ -395,7 +464,30 @@ export function UpdateList({
                 &times;
               </button>
             </div>
-            {u.notes && <p className="small tracker-log-note">{u.notes}</p>}
+            {editing === u.id ? (
+              <SaidEditor
+                itemId={itemId}
+                update={u}
+                onDone={(changed) => {
+                  setEditing(null)
+                  if (changed) onChanged()
+                }}
+              />
+            ) : (
+              <>
+                {u.notes && <p className="small tracker-log-note">{u.notes}</p>}
+                <div className="tracker-log-actions">
+                  <button className="link small" onClick={() => setEditing(u.id)}>
+                    {u.notes ? t('Edit what was said') : t('+ What was said')}
+                  </button>
+                  {u.voiceNotes > 0 && (
+                    <button className="link small" onClick={() => setEditing(u.id)}>
+                      {u.voiceNotes === 1 ? t('▶ 1 voice note') : t('▶ {n} voice notes', { n: u.voiceNotes })}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </li>
         ))}
       </ul>

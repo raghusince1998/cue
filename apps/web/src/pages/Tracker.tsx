@@ -974,7 +974,16 @@ function ItemSheet({
       {item.updates.length === 0 && !logging && (
         <p className="muted small">{t('Nothing logged yet. Each visit or call, with how it went, shows here.')}</p>
       )}
-      <UpdateList board={key} updates={item.updates} onRemove={(u) => void removeUpdate(u)} />
+      <UpdateList
+        board={key}
+        itemId={item.id}
+        updates={item.updates}
+        onRemove={(u) => void removeUpdate(u)}
+        onChanged={() => {
+          void load()
+          onChanged()
+        }}
+      />
 
       <span className="label-text">{t('Stage')}</span>
       <div className="chips tracker-stages" role="group" aria-label={t('Stage')}>

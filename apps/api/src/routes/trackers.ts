@@ -1,12 +1,19 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { createTrackerItemInput, trackerBoardParam, trackerUpdateInput, updateTrackerItemInput } from '@cue/shared'
+import {
+  createTrackerItemInput,
+  editTrackerUpdateInput,
+  trackerBoardParam,
+  trackerUpdateInput,
+  updateTrackerItemInput,
+} from '@cue/shared'
 import { scope } from '../auth.ts'
 import {
   addUpdate,
   boardItems,
   createItem,
   deleteItem,
+  editUpdate,
   itemById,
   itemHistory,
   openCounts,
@@ -14,6 +21,7 @@ import {
   suggestions,
   updateItem,
 } from '../services/trackers.ts'
+import { attachVoiceNotes } from './voiceNotes.ts'
 
 const idParam = z.object({ id: z.string().uuid() })
 const updateParam = z.object({ id: z.string().uuid(), updateId: z.string().uuid() })
@@ -65,9 +73,18 @@ export async function trackerRoutes(app: FastifyInstance) {
   app.post('/tracker-items/:id/updates', async (req, reply) => {
     const { orgId, sub } = scope(req)
     const { id } = idParam.parse(req.params)
-    const saved = await addUpdate(orgId, sub, id, trackerUpdateInput.parse(req.body))
+    const body = trackerUpdateInput.parse(req.body)
+    const saved = await addUpdate(orgId, sub, id, body)
     if (saved === 'not_found') return reply.code(404).send({ error: 'not_found' })
-    return reply.code(201).send(saved)
+    const clips = body.voiceNoteIds ?? []
+    await attachVoiceNotes(orgId, saved.update.id, clips)
+    return reply.code(201).send({ ...saved, update: { ...saved.update, voiceNotes: clips.length } })
+  })
+
+  app.patch('/tracker-items/:id/updates/:updateId', async (req, reply) => {
+    const { id, updateId } = updateParam.parse(req.params)
+    const done = await editUpdate(scope(req).sub, id, updateId, editTrackerUpdateInput.parse(req.body))
+    return done ? { ok: true } : reply.code(404).send({ error: 'not_found' })
   })
 
   app.delete('/tracker-items/:id/updates/:updateId', async (req, reply) => {
