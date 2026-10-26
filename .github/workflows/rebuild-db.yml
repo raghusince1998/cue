@@ -1,0 +1,84 @@
+name: Rebuild an emptied production database
+
+# A last resort, run by hand from the Actions tab. Production lost every table
+# twice (9 Oct and again around 25 Oct 2026); a deploy then stops at the
+# migration guard, by design, and Cue cannot sign anyone in. This rebuilds the
+# tables, empty, so Cue runs again — the old data is gone for good.
+#
+# It refuses unless the confirmation is typed exactly, and it refuses again on
+# the server unless Cue's tables really are missing: it can never run over a
+# database that still holds data. Restore from a backup instead, if one exists.
+#
+# Close port 5432 to the internet and change the database password as well,
+# or the same thing will happen again.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type REBUILD-EMPTY-DATABASE to rebuild an emptied database (old data is not recovered)'
+        required: true
+
+concurrency:
+  group: deploy-refs/heads/main
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    name: Rebuild the empty database
+    if: ${{ inputs.confirm == 'REBUILD-EMPTY-DATABASE' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rebuild on the server, restart, check sign-in works
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ vars.DEPLOY_HOST }}
+          USER: ${{ vars.DEPLOY_USER }}
+          APP_DIR: ${{ vars.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          APP_DIR="${APP_DIR:-/srv/cue}"
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          SSH="ssh -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes $USER@$HOST"
+
+          $SSH "bash -seu" <<REMOTE
+          cd '$APP_DIR/apps/api'
+
+          state=\$(npx tsx scripts/db-state.ts | tail -n 1)
+          echo "Database before: \$state"
+          case "\$state" in
+            *'"users":false'*) ;;
+            *) echo "Cue's tables are still there. Not rebuilding." >&2; exit 1 ;;
+          esac
+          case "\$state" in
+            *'"commitments":false'*) ;;
+            *) echo "Plans are still there. Not rebuilding." >&2; exit 1 ;;
+          esac
+
+          cd '$APP_DIR'
+          CUE_NEW_DATABASE=1 npm run db:migrate
+          sudo systemctl restart cue
+
+          for i in \$(seq 1 20); do
+            if curl -fsS --max-time 5 http://127.0.0.1:3002/health > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          # Sign-in reaches the database now: a made-up account is refused
+          # (401), not a server error (500).
+          code=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+            -H 'content-type: application/json' \
+            -d '{"email":"rebuild-check@example.invalid","password":"not-a-real-account"}' \
+            http://127.0.0.1:3002/api/auth/login)
+          echo "Sign-in check: \$code"
+          if [ "\$code" != "401" ]; then
+            echo "Sign-in still failing after the rebuild. Recent logs:" >&2
+            sudo journalctl -u cue -n 40 --no-pager >&2
+            exit 1
+          fi
+          echo "Rebuilt. Cue is answering sign-ins again."
+          REMOTE
