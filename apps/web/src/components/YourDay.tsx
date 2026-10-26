@@ -1,4 +1,4 @@
-import { stripWaitingOn } from '@cue/shared'
+import { isHappening, stripWaitingOn } from '@cue/shared'
 import { useEffect, useState } from 'react'
 import type { CommitmentDTO } from '@cue/shared'
 import { api } from '../lib/api.ts'
@@ -106,7 +106,9 @@ export function YourDay({
   if (cursor < windowEnd) addGap(cursor, windowEnd)
 
   const meetings = timed.filter((c) => c.kind === 'meeting').length
-  const toDo = timed.length - meetings + loose.length
+  // A wedding or a concert is somewhere to be, not something to do.
+  const events = timed.filter((c) => isHappening(c.kind)).length
+  const toDo = timed.length - meetings - events + loose.filter((c) => !isHappening(c.kind)).length
   const checkIns = waiting.filter((c) => new Date(c.dueAt) < dayEnd)
   const toWrap = justFinished.filter((c) => endOf(c) <= now)
 
@@ -117,6 +119,7 @@ export function YourDay({
         <span className="muted small">
           {[
             meetings ? (meetings === 1 ? t('1 meeting') : t('{n} meetings', { n: meetings })) : null,
+            events ? (events === 1 ? t('1 event') : t('{n} events', { n: events })) : null,
             toDo ? t('{n} to do', { n: toDo }) : null,
             t('{free} free between {start} am and {end} pm', {
               free: length(freeMinutes),
@@ -169,6 +172,7 @@ export function YourDay({
                 'timeline-item',
                 row.c.kind === 'meeting' ? 'is-meeting' : '',
                 row.c.kind === 'focus' ? 'is-focus' : '',
+                isHappening(row.c.kind) ? 'is-event' : '',
                 row.c.status === 'done' ? 'is-done' : '',
                 row.to <= now ? 'is-past' : '',
                 row.from <= now && row.to > now ? 'is-now' : '',

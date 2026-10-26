@@ -1,4 +1,4 @@
-import { stripWaitingOn } from '@cue/shared'
+import { isHappening, stripWaitingOn } from '@cue/shared'
 import { and, asc, desc, eq, gte, inArray, isNotNull, lt, lte, sql } from 'drizzle-orm'
 import { db, schema } from '../db/index.ts'
 import { sendToUser } from '../push.ts'
@@ -184,7 +184,7 @@ export async function weekReview(userId: string, now = new Date()): Promise<Week
     done: {
       total: done.length,
       meetings: done.filter((d) => d.kind === 'meeting').length,
-      tasks: done.filter((d) => d.kind !== 'meeting').length,
+      tasks: done.filter((d) => d.kind !== 'meeting' && !isHappening(d.kind)).length,
       titles: done.slice(0, 12).map((d) => d.title),
     },
     meetings: { count: meetings.length, minutes: meetings.reduce((s, m) => s + m.minutes, 0) },

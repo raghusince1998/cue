@@ -3,6 +3,8 @@ import { and, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   DEFAULT_DURATION_MINUTES,
+  happeningKind,
+  isHappening,
   parseWhen,
   mealTime,
   allClockTimes,
@@ -430,7 +432,7 @@ export async function quickAddRoutes(app: FastifyInstance) {
     // ------------------------------------------------------- a single plan
     const dueAt = new Date(plan.dueAt!)
 
-    if (!allowConflict && plan.flexibility === 'fixed') {
+    if (!allowConflict && plan.flexibility === 'fixed' && !plan.allDay) {
       const report = await checkConflicts(userId, {
         startsAt: dueAt,
         durationMinutes: plan.durationMinutes,
@@ -499,6 +501,9 @@ export async function quickAddRoutes(app: FastifyInstance) {
             kind: plan.commitmentKind,
             dueAt,
             durationMinutes: plan.durationMinutes,
+            allDay: Boolean(plan.allDay),
+            // A whole day runs to its close, as one added by hand does.
+            endsAt: plan.allDay ? new Date(dueAt.getFullYear(), dueAt.getMonth(), dueAt.getDate(), 23, 59, 59) : null,
             notes: plan.notes ?? null,
             placeLabel: plan.placeLabel ?? null,
             placeId: plan.placeId ?? null,
@@ -682,12 +687,13 @@ export function applyEdits(plan: QuickPlan, edits: NonNullable<z.infer<typeof qu
     const before = plan.dueAt ? new Date(plan.dueAt) : null
     const at = new Date(edits.dueAt)
     plan.kind = 'commitment'
+    if (plan.allDay && before && before.getTime() !== at.getTime()) plan.allDay = false
     plan.dueAt = at.toISOString()
     plan.flexibility = edits.flexibility ?? 'fixed'
     plan.preferredWindow = plan.flexibility === 'flexible' ? (edits.preferredWindow ?? plan.preferredWindow ?? null) : null
     if (plan.trip && (!before || before.toDateString() !== at.toDateString())) plan.trip = null
   }
-  if (plan.dueAt) plan.summary = `${plan.title} — ${new Date(plan.dueAt).toLocaleString(inLocale(lang, []), WHEN)}`
+  if (plan.dueAt) plan.summary = summaryOf(plan.title, new Date(plan.dueAt), Boolean(plan.allDay), lang)
 }
 
 export interface QuickPlan {
@@ -708,6 +714,8 @@ export interface QuickPlan {
   /** Things to tick off once this is under way. */
   checklist: string[]
   dueAt: string | null
+  /** A festival or an occasion with no time said: the whole day, reminded at its start. */
+  allDay?: boolean
   startsOn: string | null
   endsOn: string | null
   hour: number | null
@@ -1153,6 +1161,26 @@ const LEAVING_FOR: Record<string, [string, string]> = {
 
 /** Day and time in a summary, as they have always been written. */
 const WHEN: Intl.DateTimeFormatOptions = { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }
+const DAY: Intl.DateTimeFormatOptions = { weekday: 'short', day: 'numeric', month: 'short' }
+
+/**
+ * What kind of plan a line is. An occasion when its words name one — they win
+ * over history; otherwise what lines like it were before — but never an
+ * occasion the words no longer name: "buy diwali sweets" is not Diwali.
+ */
+function kindFrom(title: string, learned: string | null | undefined, otherwise: CommitmentKind): CommitmentKind {
+  const reads = happeningKind(title)
+  if (reads) return reads
+  if (learned && !isHappening(learned)) return learned as CommitmentKind
+  return otherwise
+}
+
+/** "Diwali — Sun 1 Nov, all day", "Dentist — Fri 30 Oct, 5:00 pm". */
+function summaryOf(title: string, at: Date, allDay: boolean, lang: Lang): string {
+  return allDay
+    ? `${title} — ${t(lang, '{day}, all day', { day: at.toLocaleDateString(inLocale(lang, []), DAY) })}`
+    : `${title} — ${at.toLocaleString(inLocale(lang, []), WHEN)}`
+}
 
 /** The locale a date is written in: the one it always was, or Hindi's day and month names. */
 function inLocale(lang: Lang, en?: string | string[]): string | string[] | undefined {
@@ -1844,7 +1872,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       ...base,
       kind: 'recurrence',
       title,
-      commitmentKind: (learned?.kind as CommitmentKind) ?? 'task',
+      commitmentKind: kindFrom(title, learned?.kind, 'task'),
       durationMinutes: learned?.durationMinutes ?? 30,
       startsOn: ymd(firstAt),
       hour,
@@ -2011,7 +2039,7 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
       demo: 'meeting',
       interview: 'meeting',
     }
-    const commitmentKind = roles.kind ? (kindMap[roles.kind] ?? 'meeting') : 'meeting'
+    const commitmentKind = roles.kind ? (kindMap[roles.kind] ?? 'meeting') : (happeningKind(roles.title) ?? 'meeting')
 
     // No date in the sentence is the one thing history cannot supply, so it is
     // the one thing worth asking about — rather than inventing a time.
@@ -2203,8 +2231,14 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     }
   }
 
+  // "Diwali on Sunday", "Ravi's wedding on the 12th": an occasion, not a job —
+  // and with no time said, the whole day, reminded at its start.
+  const kind = kindFrom(title, learned?.kind, APPOINTMENT_WORD.test(title) ? 'meeting' : 'task')
+  const allDay = isHappening(kind) && when.timeAssumed && !when.window && !when.deadline && !prep
+
   if (learned?.because) assumptions.push(learnedWhy(learned, lang))
   if (prep) assumptions.push(prepNote(prep, lang))
+  else if (allDay) assumptions.push(t(lang, 'No time given, so all day, with a reminder that morning.'))
   else if (when.timeAssumed && !when.window) assumptions.push(t(lang, 'No time given, so 9am.'))
   assumptions.push(...timeNotes(when, now, lang))
 
@@ -2213,7 +2247,6 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
 
   // "meeting with the builder", "dentist": an appointment, an hour long and
   // somewhere to be, unless history says otherwise.
-  const kind = (learned?.kind as CommitmentKind) ?? (APPOINTMENT_WORD.test(title) ? 'meeting' : 'task')
   const duration =
     when.durationMinutes ?? learned?.durationMinutes ?? DEFAULT_DURATION_MINUTES[kind]
 
@@ -2229,12 +2262,13 @@ export async function interpret(userId: string, orgId: string, raw: string, now 
     placeId: parsedPlace ? null : (learned?.placeId ?? null),
     contactId: parsedPlace ? null : (learned?.contactId ?? null),
     dueAt: dueAt.toISOString(),
+    allDay,
     notes: originalIfInformative(text, title),
     assumptions,
-    summary: `${title} — ${dueAt.toLocaleString(inLocale(lang, []), WHEN)}`,
+    summary: summaryOf(title, dueAt, allDay, lang),
     // "meeting tomorrow": a day, a 9am nobody said, and a word or two. A
-    // careful reading may well ask what time instead.
-    unsure: when.timeAssumed && !when.window && !when.deadline && !prep && title.split(/\s+/).length <= 2,
+    // careful reading may well ask what time instead. "Diwali sunday" is sure.
+    unsure: !allDay && when.timeAssumed && !when.window && !when.deadline && !prep && title.split(/\s+/).length <= 2,
     deadline: Boolean(when.deadline),
   }
 }

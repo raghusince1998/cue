@@ -1,5 +1,9 @@
-import { isNull, sql } from 'drizzle-orm'
+import { isNull, notInArray, sql } from 'drizzle-orm'
+import { HAPPENING_KINDS } from '@cue/shared'
 import * as schema from '../db/schema.ts'
+
+/** Kinds that are time, not a promise: never overdue, never a job left undone. */
+export const NOT_OWED = ['focus', ...HAPPENING_KINDS]
 
 /**
  * When a mirrored calendar became Cue's business: the moment it was connected.
@@ -91,8 +95,9 @@ export function canBeOverdue(now: Date) {
   // Nor something you are waiting on from someone else: it has its own list,
   // where a check-in that is due says so.
   // Nor a focus block: when it is over, it is over — it was time set aside,
-  // not something promised.
+  // not something promised. Nor an event or a festival: once the day has
+  // passed, it has passed.
   const c = schema.commitments
   // Nor a booking: once the train has left, it has left.
-  return sql`(${managedByCue()} and not ${isAwaitingWrapUp(now)} and ${c.waitingOn} is null and ${c.kind} <> 'focus' and ${c.booking} is null)`
+  return sql`(${managedByCue()} and not ${isAwaitingWrapUp(now)} and ${c.waitingOn} is null and ${notInArray(c.kind, NOT_OWED)} and ${c.booking} is null)`
 }

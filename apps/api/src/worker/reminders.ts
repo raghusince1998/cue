@@ -1,5 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm'
-import { examLineHi, splitExamStep, type Lang } from '@cue/shared'
+import { examLineHi, isHappening, splitExamStep, type Lang } from '@cue/shared'
 import { langOf, localeOf, msg, t } from '../i18n.ts'
 import { db, schema } from '../db/index.ts'
 import { env } from '../env.ts'
@@ -168,6 +168,8 @@ async function processOne(claim: ClaimedReminder) {
   const waiting = commitment.waitingOn !== null
   // A booking: ahead of time, with the reference to hand, and never chased.
   const booked = commitment.booking !== null
+  // An event or a festival: said once. There is nothing to have done.
+  const happening = isHappening(commitment.kind)
   // An exam's date: said as what to do. Only the last day to apply or pay is
   // chased, and only once that day has come; days ahead, it is said once.
   const exam = commitment.examStep !== null
@@ -236,7 +238,7 @@ async function processOne(claim: ClaimedReminder) {
 
   // Keep chasing. Once the chain is exhausted the item simply stays in the
   // Overdue list until the user closes it — it is never silently dropped.
-  if (!mirrored && !waiting && !focusing && !booked && (!exam || chaseExam) && nextAttempt < env.maxEscalations) {
+  if (!mirrored && !waiting && !focusing && !booked && !happening && (!exam || chaseExam) && nextAttempt < env.maxEscalations) {
     await db.insert(schema.reminders).values({
       orgId: claim.org_id,
       commitmentId: commitment.id,

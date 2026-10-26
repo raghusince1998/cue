@@ -5,6 +5,8 @@ export const plans: Record<string, string> = {
   'Phone call': 'फ़ोन कॉल',
   Task: 'टास्क',
   'Follow up': 'फ़ॉलो-अप',
+  'Event or function': 'इवेंट या समारोह',
+  'Festival or celebration': 'त्योहार या जश्न',
   'Focus time': 'फ़ोकस का समय',
   Critical: 'बहुत ज़रूरी',
   High: 'ज़रूरी',

@@ -3991,6 +3991,10 @@ button:disabled {
   border-left-color: #8b5cf6;
 }
 
+.timeline-item.is-event .timeline-body {
+  border-left-color: #f59e0b;
+}
+
 .timeline-item.is-now .timeline-body {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);

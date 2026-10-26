@@ -1,4 +1,4 @@
-import { stripWaitingOn } from '@cue/shared'
+import { HAPPENING_KINDS, stripWaitingOn } from '@cue/shared'
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, ne, notInArray, sql } from 'drizzle-orm'
 import type { Lang } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
@@ -173,7 +173,8 @@ export async function dayReport(
       and(
         mine,
         eq(c.status, 'done'),
-        notInArray(c.kind, ['meeting', 'focus']),
+        // Done work: not a meeting, focus time, an event or a festival.
+        notInArray(c.kind, ['meeting', 'focus', ...HAPPENING_KINDS]),
         gte(c.completedAt, start),
         lt(c.completedAt, until),
       ),

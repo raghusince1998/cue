@@ -1,5 +1,5 @@
 import { and, eq, gte, inArray, ne, or } from 'drizzle-orm'
-import { nameParts } from '@cue/shared'
+import { isHappening, nameParts } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 
 /**
@@ -101,7 +101,7 @@ function linksFor(personId: string, m: Matcher, rows: Row[], now: Date): PersonL
     .filter((r) => r.dueAt >= now && r.status === 'pending')
     .sort((a, b) => +a.dueAt - +b.dueAt)
 
-  const pending = rows.filter((r) => r.status === 'pending' && r.kind !== 'meeting' && r.kind !== 'focus')
+  const pending = rows.filter((r) => r.status === 'pending' && r.kind !== 'meeting' && r.kind !== 'focus' && !isHappening(r.kind))
   const waitingOnThem = pending.filter((r) => r.waitingOn && m.isName(r.waitingOn))
   const youOwe = pending.filter(
     (r) =>

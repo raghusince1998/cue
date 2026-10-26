@@ -40,6 +40,8 @@ export function sphereOf(title: string, hints: SphereHints = {}): Sphere | null 
   const personal = hits(PERSONAL_WORDS, title)
   if (hints.booking) return work > 0 ? 'work' : 'personal'
   if (hints.kind === 'focus' && personal === 0) return 'work'
+  // A festival is home life, unless the words say it is the office's.
+  if (hints.kind === 'celebration' && work === 0) return 'personal'
   if (work > personal) return 'work'
   if (personal > work) return 'personal'
   return null

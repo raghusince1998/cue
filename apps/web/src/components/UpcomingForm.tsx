@@ -5,6 +5,8 @@ import {
   DEFAULT_DURATION_MINUTES,
   DURATION_CHOICES,
   KIND_LABELS,
+  happeningKind,
+  isHappening,
   type CommitmentKind,
   type ConflictReport,
   type ContactDTO,
@@ -169,6 +171,8 @@ export function UpcomingForm({
 
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState<CommitmentKind>('meeting')
+  /** Picked by hand: from then on the title no longer chooses the type. */
+  const [kindPicked, setKindPicked] = useState(false)
   const [dueAt, setDueAtRaw] = useState<Date>(() => duePresets[2]!.at())
   /**
    * False until the time is actually the user's choice.
@@ -234,6 +238,26 @@ export function UpcomingForm({
   useEffect(() => {
     setDurationMinutes(DEFAULT_DURATION_MINUTES[kind])
   }, [kind])
+
+  // A festival is a whole day; anything else goes back to a time.
+  function chooseKind(next: CommitmentKind) {
+    if (next === 'celebration' && kind !== 'celebration') {
+      setAllDay(true)
+      setEndsOn(new Date(dueAt))
+    } else if (kind === 'celebration' && next !== 'celebration') {
+      setAllDay(false)
+    }
+    setKind(next)
+  }
+
+  // "Diwali", "Ravi's wedding": the type follows the words until one is picked.
+  function typeTitle(next: string) {
+    setTitle(next)
+    if (kindPicked) return
+    const reads = happeningKind(next)
+    if (reads && reads !== kind) chooseKind(reads)
+    else if (!reads && isHappening(kind)) chooseKind('meeting')
+  }
 
   // An all-day item reminds at 9am on its first day and runs to the close of
   // its last — midnight would be a useless moment to be buzzed.
@@ -758,8 +782,8 @@ ${original}` : original))
           {t('What is it?')}
           <input
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={t('Dentist appointment, client call, submit the report…')}
+            onChange={(e) => typeTitle(e.target.value)}
+            placeholder={t('Dentist appointment, client call, Diwali puja, a wedding…')}
           />
         </label>
 
@@ -769,9 +793,12 @@ ${original}` : original))
             <button
               key={k}
               className={`chip${kind === k ? ' selected' : ''}`}
-              onClick={() => setKind(k)}
+              onClick={() => {
+                setKindPicked(true)
+                chooseKind(k)
+              }}
             >
-              {KIND_LABELS[k]}
+              {t(KIND_LABELS[k])}
             </button>
           ))}
         </div>

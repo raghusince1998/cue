@@ -1,5 +1,5 @@
 import { and, eq, gte, lt, notInArray, sql } from 'drizzle-orm'
-import { TARGET_METRICS, type TargetMetric, type TargetProgress } from '@cue/shared'
+import { HAPPENING_KINDS, TARGET_METRICS, type TargetMetric, type TargetProgress } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { mondayOf } from './weeklyReview.ts'
 
@@ -77,7 +77,7 @@ export async function countsBetween(userId: string, orgId: string, from: Date, t
       and(
         eq(c.userId, userId),
         eq(c.status, 'done'),
-        notInArray(c.kind, ['meeting', 'focus']),
+        notInArray(c.kind, ['meeting', 'focus', ...HAPPENING_KINDS]),
         gte(c.completedAt, from),
         lt(c.completedAt, to),
       ),

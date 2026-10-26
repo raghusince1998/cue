@@ -3,6 +3,7 @@ import {
   DEFAULT_DURATION_MINUTES,
   DURATION_CHOICES,
   KIND_LABELS,
+  isHappening,
   OUTCOME_OPTIONS,
   SELECTABLE_KINDS,
   type CommitmentKind,
@@ -904,13 +905,14 @@ export function AddPanel({
             {hasNextStep && (
               <div className="stack tight">
                 <div className="chips">
-                  {SELECTABLE_KINDS.map((k) => (
+                  {/* Something to do after a visit: not a festival or an event. */}
+                  {SELECTABLE_KINDS.filter((k) => !isHappening(k)).map((k) => (
                     <button
                       key={k}
                       className={`chip${kind === k ? ' selected' : ''}`}
                       onClick={() => setKind(k)}
                     >
-                      {KIND_LABELS[k]}
+                      {t(KIND_LABELS[k])}
                     </button>
                   ))}
                 </div>

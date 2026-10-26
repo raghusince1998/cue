@@ -69,7 +69,8 @@ async function statsFor(userId: string, timezone: string): Promise<DayStats> {
            -- Nor a meeting from the last week: it is waiting to be wrapped up.
            -- Nor something waiting on someone else.
            and c.waiting_on is null
-           and c.kind <> 'focus'
+           -- Nor focus time, an event or a festival: once over, it is over.
+           and c.kind not in ('focus', 'event', 'celebration')
            and c.booking is null
            and not (c.kind = 'meeting' and not c.all_day
              and coalesce(c.ends_at, c.due_at + c.duration_minutes * interval '1 minute')

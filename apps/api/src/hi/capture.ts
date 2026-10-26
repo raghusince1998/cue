@@ -165,4 +165,7 @@ export const capture: Record<string, string> = {
   'Remind me {day}, 8 pm': '{day}, रात 8 बजे याद दिलाएँ',
   'A reminder the evening before leaves time for a gift or a call.': 'एक शाम पहले का रिमाइंडर, ताकि तोहफ़े या कॉल का समय रहे।',
   'Remind me the evening before': 'एक शाम पहले याद दिलाएँ',
+  // Festivals and occasions: the whole day, not a slot
+  '{day}, all day': '{day}, पूरा दिन',
+  'No time given, so all day, with a reminder that morning.': 'कोई समय नहीं दिया, इसलिए पूरा दिन, और उस सुबह एक रिमाइंडर।',
 }

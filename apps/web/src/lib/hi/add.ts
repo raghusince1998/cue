@@ -159,7 +159,7 @@ export const add: Record<string, string> = {
     '“{text}” को समय के रूप में नहीं पढ़ पाए, इसलिए {time} रखा है। गलत हो तो नीचे बदल दें।',
   'Use this': 'यही लें',
   'What is it?': 'यह क्या है?',
-  'Dentist appointment, client call, submit the report…': 'डेंटिस्ट अपॉइंटमेंट, क्लाइंट कॉल, रिपोर्ट जमा करनी है…',
+  'Dentist appointment, client call, Diwali puja, a wedding…': 'डेंटिस्ट अपॉइंटमेंट, क्लाइंट कॉल, दिवाली पूजा, कोई शादी…',
   'Is this at a set time?': 'क्या इसका समय तय है?',
   'Yes, a set time': 'हाँ, तय समय',
   'Sometime around then': 'उसी के आसपास कभी',

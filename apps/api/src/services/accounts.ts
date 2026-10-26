@@ -1,5 +1,5 @@
 import { and, eq, isNotNull, sql } from 'drizzle-orm'
-import type { AccountStage } from '@cue/shared'
+import { isHappening, type AccountStage } from '@cue/shared'
 import { db, schema } from '../db/index.ts'
 import { keepInTouch, lastTouches } from './keepInTouch.ts'
 import { matchersFor, peopleOf, relevantRows, wordRe } from './people.ts'
@@ -99,7 +99,7 @@ export async function listAccounts(orgId: string, userId: string, now = new Date
       .filter((r) => r.dueAt >= now && r.status === 'pending')
       .sort((a, b) => +a.dueAt - +b.dueAt)
 
-    const pending = rows.filter((r) => r.status === 'pending' && r.kind !== 'meeting' && r.kind !== 'focus')
+    const pending = rows.filter((r) => r.status === 'pending' && r.kind !== 'meeting' && r.kind !== 'focus' && !isHappening(r.kind))
     const waiting = pending
       .filter((r) => r.waitingOn && (accountKey(r.waitingOn) === key || ms.some((m) => m.isName(r.waitingOn))))
       .sort((a, b) => +a.dueAt - +b.dueAt)
